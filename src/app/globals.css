@@ -1,0 +1,362 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Nunito:wght@400;700;800&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Primary Colors */
+  --color-primary: #2930A6;
+  --color-primary-light: #3B42B8;
+  --color-primary-dark: #1E2485;
+  --color-secondary: #FFCF0D;
+  --color-secondary-light: #FFD93D;
+  --color-secondary-dark: #E6BA00;
+
+  /* Text Colors */
+  --color-text-primary: #000000;
+  --color-text-secondary: #595959;
+  --color-text-muted: #6D5B5B;
+  --color-text-dark: #333333;
+  --color-text-near-black: #1A1A1A;
+
+  /* Background Colors */
+  --color-bg-white: #FFFFFF;
+  --color-bg-off-white: #F5F5F5;
+  --color-bg-light: #F8F9FA;
+  --color-bg-card: #E1E1E1;
+  --color-bg-chat: #ECE5DD;
+
+  /* Status Colors */
+  --color-success: #22C55E;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #007AFF;
+
+  /* Message Colors */
+  --color-message-user: #0084FF;
+  --color-message-astrologer: #FEF3C7;
+  --color-message-read-tick: #34B7F1;
+
+  /* Font Families */
+  --font-lexend: 'Lexend', sans-serif;
+  --font-nunito: 'Nunito', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: var(--font-lexend);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  color: var(--color-text-primary);
+  background: var(--color-bg-white);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-off-white);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+/* Utility classes for fonts */
+.font-lexend {
+  font-family: var(--font-lexend);
+}
+
+.font-nunito {
+  font-family: var(--font-nunito);
+}
+
+.font-poppins {
+  font-family: var(--font-poppins);
+}
+
+/* Animation utilities */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  /* Glassmorphism effect (from mobile bottom nav) */
+  .glass {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Gradient text */
+  .text-gradient-primary {
+    background: linear-gradient(135deg, #2930A6 0%, #3B42B8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text truncation */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Mobile-like touch interactions */
+@media (hover: none) {
+  button:active,
+  a:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Responsive breakpoints matching common mobile/tablet/desktop */
+@layer base {
+  /* Base mobile styles */
+  html {
+    font-size: 16px;
+  }
+
+  /* Tablet */
+  @media (min-width: 768px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
+  /* Desktop */
+  @media (min-width: 1024px) {
+    html {
+      font-size: 16px;
+    }
+  }
+}
+
+/* Component base styles */
+@layer components {
+  /* Card component */
+  .card {
+    @apply bg-white rounded-lg shadow-card p-4;
+  }
+
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-card-hover;
+  }
+
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center font-medium transition-all duration-200 rounded-xl;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-dark;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-text-primary hover:bg-secondary-dark;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary text-primary hover:bg-primary hover:text-white;
+  }
+
+  /* Input base */
+  .input-base {
+    @apply w-full h-12 px-4 rounded-md border border-gray-300 text-base font-lexend;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    @apply placeholder:text-text-muted;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-online {
+    @apply bg-status-success/10 text-status-success;
+  }
+
+  .badge-offline {
+    @apply bg-gray-100 text-text-muted;
+  }
+
+  /* Avatar */
+  .avatar {
+    @apply rounded-full object-cover border-2 border-secondary;
+  }
+
+  /* Message bubble */
+  .message-bubble {
+    @apply max-w-[80%] rounded-[20px] px-3 py-2 shadow-sm;
+  }
+
+  .message-bubble-user {
+    @apply bg-message-user text-white;
+  }
+
+  .message-bubble-astrologer {
+    @apply bg-message-astrologer text-text-primary border border-black/5;
+  }
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(41, 48, 166, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(41, 48, 166, 0.5);
+  }
+}
+
+/* Toast notifications */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Loading spinner */
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-bg-off-white);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "nakshatratalks-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NakshatraTalks - Astrology Consultation Platform",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Magicalprince/NakshatraTalks-Website.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Magicalprince/NakshatraTalks-Website/issues"
+  },
+  "homepage": "https://github.com/Magicalprince/NakshatraTalks-Website#readme",
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@supabase/supabase-js": "^2.93.3",
+    "@tanstack/react-query": "^5.90.20",
+    "@tanstack/react-query-devtools": "^5.91.3",
+    "axios": "^1.13.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.29.2",
+    "isomorphic-dompurify": "^2.35.0",
+    "lucide-react": "^0.563.0",
+    "next": "^15.5.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.71.1",
+    "tailwind-merge": "^3.4.0",
+    "typescript": "^5.5.4",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^15.5.11",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}
