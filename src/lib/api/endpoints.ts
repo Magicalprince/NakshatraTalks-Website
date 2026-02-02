@@ -29,12 +29,16 @@ export const API_ENDPOINTS = {
 
   // Astrologers
   ASTROLOGERS: {
+    LIST: '/api/v1/astrologers',
     LIVE: '/api/v1/astrologers/live',
     TOP_RATED: '/api/v1/astrologers/top-rated',
-    DETAILS: (id: string) => `/api/v1/astrologers/${id}`,
+    DETAIL: (id: string) => `/api/v1/astrologers/${id}`,
+    DETAILS: (id: string) => `/api/v1/astrologers/${id}`, // Alias for DETAIL
     SEARCH: '/api/v1/astrologers/search',
     AVAILABLE: '/api/v1/astrologers/available',
+    FILTERS: '/api/v1/astrologers/filters',
     REVIEWS: (id: string) => `/api/v1/astrologers/${id}/reviews`,
+    AVAILABILITY: (id: string) => `/api/v1/astrologers/${id}/availability`,
     FOLLOW: (id: string) => `/api/v1/astrologers/${id}/follow`,
     UNFOLLOW: (id: string) => `/api/v1/astrologers/${id}/unfollow`,
     PHOTOS: (id: string) => `/api/v1/astrologers/${id}/photos`,

@@ -23,14 +23,8 @@ const astrologerRoutes = [
   '/call-session',
 ];
 
-// Define public routes that don't need auth
-const publicRoutes = [
-  '/login',
-  '/verify-otp',
-  '/horoscope',
-  '/kundli',
-  '/kundli-matching',
-];
+// Public routes that don't need auth (for reference/future use)
+// '/login', '/verify-otp', '/horoscope', '/kundli', '/kundli-matching'
 
 // Cookie name for auth check (httpOnly cookie check via existence)
 const AUTH_COOKIE_NAME = 'refresh_token';
@@ -52,11 +46,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith(route)
   );
 
-  // Check if the current path is a public route (used for future logic)
-  const _isPublicRoute = publicRoutes.some(route =>
-    pathname.startsWith(route)
-  );
-
+  
   // If trying to access protected route without auth, redirect to login
   if ((isProtectedRoute || isAstrologerRoute) && !isAuthenticated) {
     const loginUrl = new URL('/login', request.url);

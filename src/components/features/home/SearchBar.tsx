@@ -6,25 +6,50 @@ import { motion } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
-export function SearchBar() {
+interface SearchBarProps {
+  placeholder?: string;
+  onSearch?: (query: string) => void;
+  className?: string;
+  showQuickFilters?: boolean;
+}
+
+export function SearchBar({
+  placeholder = "Search astrologers by name, specialization...",
+  onSearch,
+  className,
+  showQuickFilters = true,
+}: SearchBarProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      router.push(`/browse-chat?q=${encodeURIComponent(query.trim())}`);
+      if (onSearch) {
+        onSearch(query.trim());
+      } else {
+        router.push(`/browse-chat?q=${encodeURIComponent(query.trim())}`);
+      }
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setQuery(value);
+    // If onSearch callback is provided, call it on each change
+    if (onSearch) {
+      onSearch(value);
     }
   };
 
   return (
     <motion.form
-      onSubmit={handleSearch}
+      onSubmit={handleSubmit}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.1 }}
-      className="relative max-w-2xl mx-auto"
+      className={cn("relative max-w-2xl mx-auto", className)}
     >
       <div
         className={cn(
@@ -36,27 +61,29 @@ export function SearchBar() {
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleChange}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder="Search astrologers by name, specialization..."
+          placeholder={placeholder}
           className="w-full h-14 pl-12 pr-4 rounded-2xl border-0 text-base font-lexend text-text-primary placeholder:text-text-muted focus:outline-none"
         />
       </div>
 
       {/* Quick filters */}
-      <div className="flex flex-wrap justify-center gap-2 mt-4">
-        {['Love & Relationship', 'Career', 'Marriage', 'Health', 'Finance'].map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            onClick={() => router.push(`/browse-chat?specialization=${encodeURIComponent(filter)}`)}
-            className="px-4 py-2 rounded-full bg-white text-sm font-medium text-text-secondary hover:bg-primary hover:text-white transition-colors font-lexend shadow-sm"
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
+      {showQuickFilters && (
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
+          {['Love & Relationship', 'Career', 'Marriage', 'Health', 'Finance'].map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => router.push(`/browse-chat?specialization=${encodeURIComponent(filter)}`)}
+              className="px-4 py-2 rounded-full bg-white text-sm font-medium text-text-secondary hover:bg-primary hover:text-white transition-colors font-lexend shadow-sm"
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+      )}
     </motion.form>
   );
 }

@@ -29,6 +29,17 @@ export interface Pagination {
   hasPrev: boolean;
 }
 
+// Paginated Response
+export interface PaginatedResponse<T> {
+  data: T[];
+  page: number;
+  limit: number;
+  totalPages: number;
+  totalItems: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 // User Model
 export interface User {
   id: string;
@@ -113,6 +124,26 @@ export interface Astrologer {
   reviews?: Review[];
   createdAt?: string;
   updatedAt?: string;
+  // Computed aliases for compatibility
+  profileImage?: string;  // Alias for image
+  specializations?: string[];  // Alias for specialization
+  isOnline?: boolean;  // Alias for isAvailable
+  chatPrice?: number;  // Alias for chatPricePerMinute
+  callPrice?: number;  // Alias for callPricePerMinute
+  reviewCount?: number;  // Alias for totalReviews
+  totalConsultations?: number;  // Alias for totalCalls
+  isVerified?: boolean;  // Verification status
+}
+
+// Astrologer Filters for search/browse
+export interface AstrologerFilters {
+  specializations?: string[];
+  languages?: string[];
+  minRating?: number;
+  maxPrice?: number;
+  minPrice?: number;
+  isOnline?: boolean;
+  minExperience?: number;
 }
 
 // Review Model
@@ -184,8 +215,10 @@ export interface WalletBalance {
 export interface Transaction {
   id: string;
   userId?: string;
-  type: 'recharge' | 'debit' | 'refund';
+  type: 'recharge' | 'debit' | 'refund' | 'credit' | 'bonus' | 'session_debit';
+  category?: 'chat' | 'call' | 'chat_session' | 'call_session' | 'recharge' | 'refund' | 'bonus';
   amount: number;
+  balance?: number;
   description: string;
   astrologerId?: string | null;
   astrologerName?: string | null;
@@ -223,10 +256,13 @@ export interface WalletSummary {
 
 // Recharge Option
 export interface RechargeOption {
+  id: string;
   amount: number;
   label?: string;
   bonus?: number;
   isPopular?: boolean;
+  tag?: string;
+  description?: string;
 }
 
 // Initiate Recharge Response
