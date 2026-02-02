@@ -330,10 +330,13 @@ export interface ChatMessage {
   sessionId: string;
   senderId: string;
   senderType: 'user' | 'astrologer';
-  message: string;
-  type: 'text' | 'image' | 'file';
-  isRead: boolean;
+  message?: string;
+  content?: string;  // Alias for message
+  type: 'text' | 'image' | 'file' | 'audio';
+  isRead?: boolean;
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   createdAt: string;
+  updatedAt?: string;
 }
 
 // Notification Model
