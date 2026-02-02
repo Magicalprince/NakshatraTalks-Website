@@ -5,6 +5,13 @@
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { ApiResponse, Transaction, RechargeOption, WalletSummary } from '@/types/api.types';
+import {
+  shouldUseMockData,
+  MOCK_USER,
+  MOCK_TRANSACTIONS,
+  MOCK_WALLET_SUMMARY,
+  MOCK_RECHARGE_OPTIONS,
+} from '@/lib/mock';
 
 export interface RechargeInitiateParams {
   amount: number;
@@ -36,6 +43,14 @@ class WalletService {
    * Get wallet balance
    */
   async getBalance(): Promise<ApiResponse<{ balance: number }>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: { balance: MOCK_USER.walletBalance || 1250 },
+      };
+    }
+
     return apiClient.get<ApiResponse<{ balance: number }>>(API_ENDPOINTS.WALLET.BALANCE);
   }
 
@@ -43,6 +58,14 @@ class WalletService {
    * Get wallet summary (balance + recent transactions)
    */
   async getSummary(): Promise<ApiResponse<WalletSummary>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: MOCK_WALLET_SUMMARY,
+      };
+    }
+
     return apiClient.get<ApiResponse<WalletSummary>>(API_ENDPOINTS.WALLET.SUMMARY);
   }
 
@@ -50,6 +73,14 @@ class WalletService {
    * Get recharge options
    */
   async getRechargeOptions(): Promise<ApiResponse<RechargeOption[]>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: MOCK_RECHARGE_OPTIONS,
+      };
+    }
+
     return apiClient.get<ApiResponse<RechargeOption[]>>(API_ENDPOINTS.WALLET.RECHARGE_OPTIONS);
   }
 
@@ -61,6 +92,29 @@ class WalletService {
     limit: number = 20,
     type?: 'all' | 'credit' | 'debit'
   ): Promise<ApiResponse<{ transactions: Transaction[]; totalPages: number; page: number }>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      let transactions = [...MOCK_TRANSACTIONS];
+
+      // Filter by type
+      if (type && type !== 'all') {
+        if (type === 'credit') {
+          transactions = transactions.filter(t => t.amount > 0);
+        } else if (type === 'debit') {
+          transactions = transactions.filter(t => t.amount < 0);
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          transactions,
+          totalPages: 1,
+          page,
+        },
+      };
+    }
+
     return apiClient.get<ApiResponse<{ transactions: Transaction[]; totalPages: number; page: number }>>(
       API_ENDPOINTS.WALLET.TRANSACTIONS,
       { params: { page, limit, type } }

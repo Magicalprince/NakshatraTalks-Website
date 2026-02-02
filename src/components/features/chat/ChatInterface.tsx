@@ -16,9 +16,11 @@ import { useAuthStore } from '@/stores/auth-store';
 
 interface ChatInterfaceProps {
   sessionId: string;
-  astrologerId: string;
-  astrologerName: string;
+  astrologerId?: string;
+  astrologerName?: string;
   astrologerImage?: string;
+  userName?: string;
+  userImage?: string;
   isOnline?: boolean;
   messages: ChatMessage[];
   isLoading?: boolean;
@@ -34,19 +36,23 @@ interface ChatInterfaceProps {
     totalCost: number;
   };
   isTyping?: boolean;
+  isAstrologer?: boolean;
   onSendMessage: (content: string, type?: 'text' | 'image' | 'audio') => void;
   onTyping?: () => void;
   onImageUpload?: (file: File) => void;
   onEndSession?: () => void;
   onLoadMore?: () => void;
   onStartNewChat?: () => void;
+  onSessionEnd?: () => void;
 }
 
 export function ChatInterface({
   sessionId,
   astrologerId,
-  astrologerName,
+  astrologerName = 'Astrologer',
   astrologerImage,
+  userName = 'User',
+  userImage,
   isOnline = true,
   messages,
   isLoading,
@@ -57,13 +63,17 @@ export function ChatInterface({
   pricePerMinute,
   sessionSummary,
   isTyping,
+  isAstrologer = false,
   onSendMessage,
   onTyping,
   onImageUpload,
   onEndSession,
   onLoadMore,
   onStartNewChat,
+  onSessionEnd,
 }: ChatInterfaceProps) {
+  // onSessionEnd is handled by parent component
+  void onSessionEnd;
   const { user } = useAuthStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -147,12 +157,13 @@ export function ChatInterface({
     <div className="flex flex-col h-full bg-background-chat">
       {/* Header */}
       <SessionHeader
-        astrologerName={astrologerName}
-        astrologerImage={astrologerImage}
+        astrologerName={isAstrologer ? userName : astrologerName}
+        astrologerImage={isAstrologer ? userImage : astrologerImage}
         isOnline={isOnline}
         sessionStartTime={sessionStartTime}
-        pricePerMinute={pricePerMinute}
+        pricePerMinute={isAstrologer ? undefined : pricePerMinute}
         onEndSession={isSessionActive ? onEndSession : undefined}
+        isAstrologer={isAstrologer}
       />
 
       {/* Messages Area */}
@@ -192,8 +203,11 @@ export function ChatInterface({
               <div key={group.date}>
                 {renderDateSeparator(group.date)}
                 {group.messages.map((message, index) => {
-                  const isCurrentUser = message.senderType === 'user' ||
-                    message.senderId === user?.id;
+                  // For astrologer view: astrologer's messages are on the right
+                  // For user view: user's messages are on the right
+                  const isCurrentUser = isAstrologer
+                    ? message.senderType === 'astrologer'
+                    : message.senderType === 'user' || message.senderId === user?.id;
                   const showAvatar = index === 0 ||
                     group.messages[index - 1]?.senderType !== message.senderType;
 
@@ -203,8 +217,8 @@ export function ChatInterface({
                       message={message}
                       isCurrentUser={isCurrentUser}
                       showAvatar={showAvatar && !isCurrentUser}
-                      astrologerImage={astrologerImage}
-                      astrologerName={astrologerName}
+                      astrologerImage={isAstrologer ? userImage : astrologerImage}
+                      astrologerName={isAstrologer ? userName : astrologerName}
                     />
                   );
                 })}
@@ -213,7 +227,7 @@ export function ChatInterface({
 
             {/* Typing Indicator */}
             <AnimatePresence>
-              {isTyping && <TypingIndicator name={astrologerName} />}
+              {isTyping && <TypingIndicator name={isAstrologer ? userName : astrologerName} />}
             </AnimatePresence>
           </>
         )}

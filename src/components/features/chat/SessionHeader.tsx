@@ -18,6 +18,7 @@ interface SessionHeaderProps {
   onCallClick?: () => void;
   showCallButton?: boolean;
   className?: string;
+  isAstrologer?: boolean;
 }
 
 export function SessionHeader({
@@ -30,6 +31,7 @@ export function SessionHeader({
   onCallClick,
   showCallButton = false,
   className,
+  isAstrologer = false,
 }: SessionHeaderProps) {
   const [duration, setDuration] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
@@ -73,7 +75,7 @@ export function SessionHeader({
     >
       <div className="flex items-center gap-3">
         {/* Back Button */}
-        <Link href="/">
+        <Link href={isAstrologer ? '/astrologer/chat' : '/'}>
           <Button variant="ghost" size="sm" className="p-2">
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -176,13 +178,15 @@ export function SessionHeader({
                     End Session
                   </button>
                 )}
-                <Link
-                  href={`/astrologer/${astrologerName}`}
-                  className="block px-4 py-2 text-sm text-text-primary hover:bg-gray-50"
-                  onClick={() => setShowMenu(false)}
-                >
-                  View Profile
-                </Link>
+                {!isAstrologer && (
+                  <Link
+                    href={`/astrologer/${astrologerName}`}
+                    className="block px-4 py-2 text-sm text-text-primary hover:bg-gray-50"
+                    onClick={() => setShowMenu(false)}
+                  >
+                    View Profile
+                  </Link>
+                )}
               </div>
             </>
           )}

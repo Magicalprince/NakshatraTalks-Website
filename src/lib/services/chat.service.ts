@@ -5,6 +5,13 @@
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { ApiResponse, ChatSession, ChatMessage } from '@/types/api.types';
+import {
+  shouldUseMockData,
+  MOCK_CHAT_SESSIONS,
+  MOCK_CHAT_MESSAGES,
+  MOCK_ASTROLOGERS,
+  MOCK_USER,
+} from '@/lib/mock';
 
 export interface SendMessageParams {
   sessionId: string;
@@ -39,6 +46,11 @@ export interface ChatSessionResponse {
     image: string;
     isOnline: boolean;
   };
+  user?: {
+    id: string;
+    name: string;
+    image?: string;
+  };
 }
 
 class ChatService {
@@ -46,6 +58,19 @@ class ChatService {
    * Initiate a chat session with an astrologer
    */
   async initiateChat(params: InitiateChatParams): Promise<ApiResponse<InitiateChatResponse>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: {
+          requestId: `chat-req-${Date.now()}`,
+          status: 'accepted',
+          expiresAt: new Date(Date.now() + 120000).toISOString(),
+          remainingSeconds: 120,
+        },
+      };
+    }
+
     return apiClient.post<ApiResponse<InitiateChatResponse>>(
       API_ENDPOINTS.CHAT.INITIATE,
       params
@@ -56,6 +81,31 @@ class ChatService {
    * Get chat session details
    */
   async getSession(sessionId: string): Promise<ApiResponse<ChatSessionResponse>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      const session = MOCK_CHAT_SESSIONS.find(s => s.id === sessionId) || MOCK_CHAT_SESSIONS[0];
+      const astrologer = MOCK_ASTROLOGERS.find(a => a.id === session.astrologerId) || MOCK_ASTROLOGERS[0];
+
+      return {
+        success: true,
+        data: {
+          session,
+          messages: MOCK_CHAT_MESSAGES,
+          astrologer: {
+            id: astrologer.id,
+            name: astrologer.name,
+            image: astrologer.image,
+            isOnline: astrologer.isAvailable,
+          },
+          user: {
+            id: MOCK_USER.id,
+            name: MOCK_USER.name || 'User',
+            image: MOCK_USER.profileImage || undefined,
+          },
+        },
+      };
+    }
+
     return apiClient.get<ApiResponse<ChatSessionResponse>>(
       API_ENDPOINTS.CHAT.SESSION(sessionId)
     );
@@ -69,6 +119,17 @@ class ChatService {
     hasMore: boolean;
     nextCursor?: string;
   }>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: {
+          messages: MOCK_CHAT_MESSAGES,
+          hasMore: false,
+        },
+      };
+    }
+
     const { sessionId, page = 1, limit = 50, before } = params;
     return apiClient.get<ApiResponse<{
       messages: ChatMessage[];
@@ -84,6 +145,27 @@ class ChatService {
    * Send a message
    */
   async sendMessage(params: SendMessageParams): Promise<ApiResponse<ChatMessage>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      const { sessionId, content, type = 'text' } = params;
+      const newMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sessionId,
+        senderId: MOCK_USER.id,
+        senderType: 'user',
+        message: content,
+        content,
+        type,
+        isRead: false,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        success: true,
+        data: newMessage,
+      };
+    }
+
     const { sessionId, content, type = 'text' } = params;
     return apiClient.post<ApiResponse<ChatMessage>>(
       API_ENDPOINTS.CHAT.SEND(sessionId),
@@ -111,6 +193,28 @@ class ChatService {
       totalCost: number;
     };
   }>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      const session = MOCK_CHAT_SESSIONS.find(s => s.id === sessionId) || MOCK_CHAT_SESSIONS[0];
+      return {
+        success: true,
+        data: {
+          session: {
+            ...session,
+            status: 'completed',
+            endTime: new Date().toISOString(),
+            duration: 15,
+            totalCost: 375,
+          },
+          summary: {
+            duration: 15,
+            totalMessages: MOCK_CHAT_MESSAGES.length,
+            totalCost: 375,
+          },
+        },
+      };
+    }
+
     return apiClient.post<ApiResponse<{
       session: ChatSession;
       summary: {
@@ -132,6 +236,18 @@ class ChatService {
     totalPages: number;
     page: number;
   }>> {
+    // Use mock data in development
+    if (shouldUseMockData()) {
+      return {
+        success: true,
+        data: {
+          sessions: MOCK_CHAT_SESSIONS,
+          totalPages: 1,
+          page,
+        },
+      };
+    }
+
     return apiClient.get<ApiResponse<{
       sessions: ChatSession[];
       totalPages: number;

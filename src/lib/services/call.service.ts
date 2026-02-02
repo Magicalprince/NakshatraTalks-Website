@@ -26,6 +26,11 @@ export interface CallSessionResponse {
     image: string;
     isOnline: boolean;
   };
+  user?: {
+    id: string;
+    name: string;
+    image?: string;
+  };
   twilio: {
     roomName: string;
     token: string;

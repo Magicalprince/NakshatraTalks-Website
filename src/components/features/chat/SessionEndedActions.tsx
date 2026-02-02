@@ -15,8 +15,8 @@ interface SessionSummary {
 
 interface SessionEndedActionsProps {
   sessionId: string;
-  astrologerId: string;
-  astrologerName: string;
+  astrologerId?: string;
+  astrologerName?: string;
   summary: SessionSummary;
   onStartNewChat?: () => void;
 }
@@ -24,7 +24,7 @@ interface SessionEndedActionsProps {
 export function SessionEndedActions({
   sessionId,
   astrologerId,
-  astrologerName,
+  astrologerName = 'Astrologer',
   summary,
   onStartNewChat,
 }: SessionEndedActionsProps) {
@@ -115,11 +115,13 @@ export function SessionEndedActions({
           </Button>
         )}
 
-        <Link href={`/astrologer/${astrologerId}`} className="block">
-          <Button variant="outline" className="w-full">
-            View Profile
-          </Button>
-        </Link>
+        {astrologerId && (
+          <Link href={`/astrologer/${astrologerId}`} className="block">
+            <Button variant="outline" className="w-full">
+              View Profile
+            </Button>
+          </Link>
+        )}
 
         <Link href="/" className="block">
           <Button variant="ghost" className="w-full">
