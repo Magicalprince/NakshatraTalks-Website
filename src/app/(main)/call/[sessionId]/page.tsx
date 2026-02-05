@@ -8,8 +8,10 @@ import {
   useEndCallSession,
   useCallTimer,
 } from '@/hooks/useCallSession';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 type CallStatus = 'connecting' | 'ringing' | 'connected' | 'ended';
@@ -19,6 +21,9 @@ export default function CallSessionPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+
+  // Auth check
+  const { isReady } = useRequireAuth();
 
   // Local state
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -196,6 +201,17 @@ export default function CallSessionPage() {
       router.push(`/astrologer/${astrologer.id}`);
     }
   }, [astrologer?.id, router]);
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-4">
+        <Skeleton className="w-24 h-24 rounded-full mb-4" />
+        <Skeleton className="w-32 h-6 mb-2" />
+        <Skeleton className="w-20 h-4" />
+      </div>
+    );
+  }
 
   // Error state
   if (sessionError && !isSessionLoading) {

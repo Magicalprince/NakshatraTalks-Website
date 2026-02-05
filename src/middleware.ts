@@ -1,64 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Define protected routes that require authentication
-const protectedRoutes = [
-  '/wallet',
-  '/recharge',
-  '/profile',
-  '/settings',
-  '/chat',
-  '/call',
-  '/rating',
-  '/history',
-];
-
-// Define astrologer routes
-const astrologerRoutes = [
-  '/dashboard',
-  '/earnings',
-  '/live',
-  '/astrologer-profile',
-  '/chat-session',
-  '/call-session',
-];
-
-// Public routes that don't need auth (for reference/future use)
-// '/login', '/verify-otp', '/horoscope', '/kundli', '/kundli-matching'
-
-// Cookie name for auth check (httpOnly cookie check via existence)
-const AUTH_COOKIE_NAME = 'refresh_token';
+/**
+ * Middleware for security headers only.
+ *
+ * NOTE: Auth protection is handled client-side via useRequireAuth hook
+ * because auth state is stored in localStorage (not cookies).
+ * The middleware cannot access localStorage, so auth checks happen
+ * after the page loads on the client.
+ */
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Get auth cookie
-  const authCookie = request.cookies.get(AUTH_COOKIE_NAME);
-  const isAuthenticated = !!authCookie?.value;
-
-  // Check if the current path is a protected route
-  const isProtectedRoute = protectedRoutes.some(route =>
-    pathname.startsWith(route)
-  );
-
-  // Check if the current path is an astrologer route
-  const isAstrologerRoute = astrologerRoutes.some(route =>
-    pathname.startsWith(route)
-  );
-
-  
-  // If trying to access protected route without auth, redirect to login
-  if ((isProtectedRoute || isAstrologerRoute) && !isAuthenticated) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // If authenticated and trying to access login page, redirect to home
-  if (isAuthenticated && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
   // Add security headers
   const response = NextResponse.next();
 

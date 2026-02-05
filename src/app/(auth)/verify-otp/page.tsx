@@ -5,122 +5,59 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button, OTPInput } from '@/components/ui';
-import { authService } from '@/lib/services/auth.service';
 import { useAuthStore } from '@/stores/auth-store';
-import { useToast } from '@/stores/ui-store';
+import { MOCK_USER } from '@/lib/mock/data';
 
 function VerifyOTPContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const phone = searchParams.get('phone') || '';
+  const phone = searchParams.get('phone') || '9876543210';
   const redirect = searchParams.get('redirect') || '/';
-  const toast = useToast();
   const { setAuth } = useAuthStore();
+
+  // Get auth state directly
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
 
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [error, setError] = useState('');
-  const [resendTimer, setResendTimer] = useState(30);
-  const [canResend, setCanResend] = useState(false);
 
-  // Redirect if no phone number
+  // Redirect if already authenticated (after hydration)
   useEffect(() => {
-    if (!phone) {
-      router.replace('/login');
+    if (isHydrated && isAuthenticated) {
+      router.replace(redirect);
     }
-  }, [phone, router]);
-
-  // Resend timer countdown
-  useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    } else {
-      setCanResend(true);
-    }
-  }, [resendTimer]);
+  }, [isHydrated, isAuthenticated, router, redirect]);
 
   const handleOtpChange = (value: string) => {
     setOtp(value);
-    setError('');
   };
 
-  const handleVerify = async (otpValue?: string) => {
-    const otpToVerify = otpValue || otp;
-    setError('');
-
-    if (!otpToVerify || otpToVerify.length !== 6) {
-      setError('Please enter the complete 6-digit OTP');
-      return;
-    }
-
+  const handleVerify = async () => {
     setIsLoading(true);
 
-    try {
-      const response = await authService.verifyOtp({
-        phone,
-        otp: otpToVerify,
-      });
+    // Simulate brief loading
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      if (response.success && response.data) {
-        // Set auth state
-        setAuth({
-          user: response.data.user,
-          astrologer: response.data.astrologer,
-          accessToken: response.data.access_token,
-          userType: response.data.userType,
-        });
+    // Always log in with mock user data (no validation required)
+    setAuth({
+      user: {
+        ...MOCK_USER,
+        phone: phone,
+      },
+      accessToken: 'mock-access-token-12345',
+      userType: 'user',
+    });
 
-        toast.success('Welcome!', 'You have successfully logged in');
-
-        // Redirect based on user type
-        if (response.data.userType === 'astrologer') {
-          router.replace('/dashboard');
-        } else {
-          router.replace(redirect);
-        }
-      } else {
-        setError(response.message || 'Invalid OTP. Please try again.');
-      }
-    } catch (err: unknown) {
-      console.error('Verify OTP error:', err);
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    if (!canResend) return;
-
-    setIsResending(true);
-    setError('');
-
-    try {
-      const response = await authService.sendOtp({ phone });
-
-      if (response.success) {
-        toast.success('OTP Sent', 'A new OTP has been sent to your phone');
-        setResendTimer(30);
-        setCanResend(false);
-        setOtp('');
-      } else {
-        setError(response.message || 'Failed to resend OTP');
-      }
-    } catch (err: unknown) {
-      console.error('Resend OTP error:', err);
-      setError('Failed to resend OTP. Please try again.');
-    } finally {
-      setIsResending(false);
-    }
+    // Navigate to home or redirect
+    router.replace(redirect);
   };
 
   const formattedPhone = phone
     ? `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`
-    : '';
+    : '+91 98765 43210';
 
   return (
     <motion.div
@@ -172,47 +109,21 @@ function VerifyOTPContent() {
           value={otp}
           onChange={handleOtpChange}
           onComplete={handleVerify}
-          error={error}
           disabled={isLoading}
         />
 
+        <p className="text-xs text-text-muted text-center font-lexend">
+          Leave empty and click button for demo mode
+        </p>
+
         <Button
-          onClick={() => handleVerify()}
+          onClick={handleVerify}
           fullWidth
           size="lg"
           isLoading={isLoading}
-          disabled={otp.length !== 6}
         >
-          Verify & Continue
+          {otp.length === 0 ? 'Skip & Continue (Demo)' : 'Verify & Continue'}
         </Button>
-
-        {/* Resend OTP */}
-        <div className="text-center">
-          {canResend ? (
-            <button
-              onClick={handleResend}
-              disabled={isResending}
-              className="inline-flex items-center gap-2 text-primary hover:text-primary-dark font-medium font-lexend disabled:opacity-50"
-            >
-              {isResending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4" />
-                  Resend OTP
-                </>
-              )}
-            </button>
-          ) : (
-            <p className="text-text-secondary font-lexend">
-              Resend OTP in{' '}
-              <span className="text-primary font-medium">{resendTimer}s</span>
-            </p>
-          )}
-        </div>
 
         {/* Change number */}
         <div className="text-center">

@@ -1,9 +1,18 @@
 'use client';
 
+/**
+ * SearchBar Component
+ * Design matches mobile app with:
+ * - Rounded pill shape
+ * - Primary color border on focus
+ * - Search icon and filter icon
+ * - Subtle shadow
+ */
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface SearchBarProps {
@@ -14,10 +23,10 @@ interface SearchBarProps {
 }
 
 export function SearchBar({
-  placeholder = "Search astrologers by name, specialization...",
+  placeholder = "Search astrologers...",
   onSearch,
   className,
-  showQuickFilters = true,
+  showQuickFilters = false,
 }: SearchBarProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -37,7 +46,6 @@ export function SearchBar({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setQuery(value);
-    // If onSearch callback is provided, call it on each change
     if (onSearch) {
       onSearch(value);
     }
@@ -49,15 +57,27 @@ export function SearchBar({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.1 }}
-      className={cn("relative max-w-2xl mx-auto", className)}
+      className={cn("relative", className)}
     >
       <div
         className={cn(
-          'relative rounded-2xl bg-white shadow-card transition-all duration-300',
-          isFocused && 'shadow-lg ring-2 ring-primary/20'
+          'relative flex items-center h-[46px] rounded-full bg-white px-4 transition-all duration-200',
+          isFocused
+            ? 'border-2 border-secondary shadow-lg'
+            : 'border border-primary shadow-md'
         )}
+        style={{
+          boxShadow: isFocused
+            ? '0 4px 16px rgba(255, 207, 13, 0.3)'
+            : '0 4px 16px rgba(41, 48, 166, 0.1)',
+        }}
       >
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted" />
+        <Search
+          className={cn(
+            'h-5 w-5 flex-shrink-0 transition-colors',
+            isFocused ? 'text-secondary' : 'text-primary'
+          )}
+        />
         <input
           type="text"
           value={query}
@@ -65,11 +85,18 @@ export function SearchBar({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
-          className="w-full h-14 pl-12 pr-4 rounded-2xl border-0 text-base font-lexend text-text-primary placeholder:text-text-muted focus:outline-none"
+          className="flex-1 h-full ml-2.5 text-[13px] font-nunito text-primary placeholder:text-primary/60 bg-transparent focus:outline-none"
         />
+        <button
+          type="button"
+          className="flex-shrink-0 p-1"
+          onClick={() => router.push('/browse-chat?filter=true')}
+        >
+          <SlidersHorizontal className="h-[18px] w-[18px] text-primary" />
+        </button>
       </div>
 
-      {/* Quick filters */}
+      {/* Quick filters - optional */}
       {showQuickFilters && (
         <div className="flex flex-wrap justify-center gap-2 mt-4">
           {['Love & Relationship', 'Career', 'Marriage', 'Health', 'Finance'].map((filter) => (

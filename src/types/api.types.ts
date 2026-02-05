@@ -691,6 +691,7 @@ export interface VerifyOtpResponse {
 export interface GetMeResponse {
   success: boolean;
   user: User;
+  astrologer?: AstrologerData;
 }
 
 // Error Codes
@@ -727,6 +728,7 @@ export interface HoroscopeSign {
   symbol: string;
   element: 'fire' | 'earth' | 'air' | 'water';
   dateRange: string;
+  image?: string;
 }
 
 export interface DailyHoroscope {
@@ -791,6 +793,7 @@ export interface LiveSession {
   astrologerId: string;
   astrologerName: string;
   astrologerImage: string;
+  thumbnailUrl?: string;
   title: string;
   description?: string;
   status: 'scheduled' | 'live' | 'ended';

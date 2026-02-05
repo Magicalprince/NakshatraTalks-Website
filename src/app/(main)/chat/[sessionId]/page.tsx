@@ -10,6 +10,7 @@ import {
   useEndChatSession,
   useChatState,
 } from '@/hooks/useChatSession';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +21,9 @@ export default function ChatSessionPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+
+  // Auth check
+  const { isReady } = useRequireAuth();
 
   // Fetch session data
   const {
@@ -155,6 +159,41 @@ export default function ChatSessionPage() {
     //   supabase.removeChannel(channel);
     // };
   }, [sessionId, addMessage, updateMessageStatus]);
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="flex flex-col h-screen bg-background-chat">
+        {/* Header Skeleton */}
+        <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+          <Skeleton className="w-10 h-10 rounded-full" />
+          <div>
+            <Skeleton className="w-32 h-4 mb-1" />
+            <Skeleton className="w-16 h-3" />
+          </div>
+        </div>
+
+        {/* Messages Skeleton */}
+        <div className="flex-1 p-4 space-y-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}
+            >
+              <Skeleton
+                className={`h-12 ${i % 2 === 0 ? 'w-48 rounded-bl-sm' : 'w-36 rounded-br-sm'} rounded-2xl`}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Input Skeleton */}
+        <div className="bg-white border-t p-3">
+          <Skeleton className="w-full h-10 rounded-full" />
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (isSessionLoading) {

@@ -1,10 +1,20 @@
 'use client';
 
+/**
+ * MessageBubble Component
+ * Design matches mobile app with:
+ * - Blue (#0084FF) background for user messages
+ * - Yellow (#FEF3C7) background for astrologer messages
+ * - WhatsApp-style tick marks for read status
+ * - Rounded corners with tail effect
+ */
+
 import { ChatMessage } from '@/types/api.types';
 import { cn } from '@/utils/cn';
-import { Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
+
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -12,149 +22,112 @@ interface MessageBubbleProps {
   showAvatar?: boolean;
   astrologerImage?: string;
   astrologerName?: string;
+  showTimestamp?: boolean;
+  isConsecutive?: boolean;
+  status?: MessageStatus;
 }
 
 export function MessageBubble({
   message,
   isCurrentUser,
-  showAvatar = false,
-  astrologerImage,
-  astrologerName,
+  showTimestamp = true,
+  isConsecutive = false,
+  status,
 }: MessageBubbleProps) {
   // Get message content (handle both content and message fields)
   const content = message.content || message.message || '';
-  const status = message.status;
 
-  // Format time
-  const formatTime = (timestamp: string) => {
+  // Format time like mobile app (12:30 pm)
+  const formatTime = (timestamp: string | undefined | null) => {
+    if (!timestamp) return '--:--';
+
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if (isNaN(date.getTime())) return '--:--';
+
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
+    return `${hours}:${minutesStr} ${ampm}`;
   };
 
-  // Render status icon
-  const renderStatusIcon = () => {
+  // Determine message status based on isRead field or passed status
+  const getMessageStatus = (): MessageStatus => {
+    if (status) return status;
+    if (message.status) return message.status as MessageStatus;
+    if (message.isRead) return 'read';
+    if (message.id) return 'delivered';
+    return 'sent';
+  };
+
+  // Render tick marks for user messages (WhatsApp style)
+  const renderTickMarks = () => {
     if (!isCurrentUser) return null;
 
-    switch (status) {
+    const currentStatus = getMessageStatus();
+    const tickColor = currentStatus === 'read' ? '#34B7F1' : 'rgba(255, 255, 255, 0.7)';
+
+    switch (currentStatus) {
       case 'sending':
-        return <Clock className="w-3 h-3 text-text-muted" />;
+        return <Check className="w-3.5 h-3.5 opacity-50" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'sent':
-        return <Check className="w-3 h-3 text-text-muted" />;
+        return <Check className="w-3.5 h-3.5" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'delivered':
-        return <CheckCheck className="w-3 h-3 text-text-muted" />;
+        return <CheckCheck className="w-3.5 h-3.5" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'read':
-        return <CheckCheck className="w-3 h-3 text-message-readTick" />;
-      case 'failed':
-        return <AlertCircle className="w-3 h-3 text-status-error" />;
+        return <CheckCheck className="w-3.5 h-3.5" style={{ color: '#34B7F1' }} strokeWidth={2.5} />;
       default:
-        // Default to sent if isRead is true
-        if (message.isRead) {
-          return <CheckCheck className="w-3 h-3 text-message-readTick" />;
-        }
-        return <Check className="w-3 h-3 text-text-muted" />;
+        return null;
     }
-  };
-
-  // Render image message
-  const renderImageMessage = () => {
-    if (message.type !== 'image' || !content) return null;
-
-    return (
-      <div className="relative w-48 h-48 rounded-lg overflow-hidden">
-        <Image
-          src={content}
-          alt="Image message"
-          fill
-          className="object-cover"
-        />
-      </div>
-    );
-  };
-
-  // Render audio message
-  const renderAudioMessage = () => {
-    if (message.type !== 'audio' || !content) return null;
-
-    return (
-      <audio controls className="max-w-full">
-        <source src={content} type="audio/mpeg" />
-        Your browser does not support the audio element.
-      </audio>
-    );
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        'flex gap-2 mb-2',
-        isCurrentUser ? 'flex-row-reverse' : 'flex-row'
+        'w-full px-2',
+        isCurrentUser ? 'flex justify-end' : 'flex justify-start',
+        isConsecutive ? 'mb-0.5' : 'mb-2'
       )}
     >
-      {/* Avatar */}
-      {showAvatar && !isCurrentUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200">
-          {astrologerImage ? (
-            <Image
-              src={astrologerImage}
-              alt={astrologerName || 'Astrologer'}
-              width={32}
-              height={32}
-              className="object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs font-medium text-text-secondary">
-              {astrologerName?.charAt(0) || 'A'}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Bubble */}
       <div
         className={cn(
-          'max-w-[75%] rounded-2xl px-4 py-2 relative',
+          'max-w-[80%] px-3 py-2 shadow-sm',
           isCurrentUser
-            ? 'bg-message-user text-white rounded-br-sm'
-            : 'bg-message-astrologer text-text-primary rounded-bl-sm',
-          status === 'failed' && 'opacity-70'
+            ? cn(
+                'bg-[#0084FF] text-white',
+                'rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px]',
+                isConsecutive ? 'rounded-tr-[8px]' : 'rounded-tr-[20px]'
+              )
+            : cn(
+                'bg-[#FEF3C7] text-black border border-black/5',
+                'rounded-tr-[20px] rounded-br-[20px] rounded-bl-[20px]',
+                isConsecutive ? 'rounded-tl-[8px]' : 'rounded-tl-[20px]'
+              )
         )}
       >
-        {/* Message Content */}
-        {message.type === 'text' && (
-          <p className="text-sm whitespace-pre-wrap break-words">{content}</p>
-        )}
-        {message.type === 'image' && renderImageMessage()}
-        {message.type === 'audio' && renderAudioMessage()}
+        {/* Message Text */}
+        <p className="text-[15px] leading-5 font-lexend whitespace-pre-wrap break-words">
+          {content}
+        </p>
 
-        {/* Time and Status */}
-        <div
-          className={cn(
-            'flex items-center gap-1 mt-1',
-            isCurrentUser ? 'justify-end' : 'justify-start'
-          )}
-        >
-          <span
-            className={cn(
-              'text-[10px]',
-              isCurrentUser ? 'text-white/70' : 'text-text-muted'
-            )}
-          >
-            {formatTime(message.createdAt)}
-          </span>
-          {renderStatusIcon()}
-        </div>
-
-        {/* Failed message retry hint */}
-        {status === 'failed' && (
-          <p className="text-[10px] text-status-error mt-1">
-            Failed to send. Tap to retry.
-          </p>
+        {/* Timestamp and Tick Marks */}
+        {showTimestamp && (
+          <div className="flex items-center justify-end gap-1 mt-1">
+            <span
+              className={cn(
+                'text-[11px] font-lexend',
+                isCurrentUser ? 'text-white/70' : 'text-black/50'
+              )}
+            >
+              {formatTime(message.createdAt)}
+            </span>
+            {renderTickMarks()}
+          </div>
         )}
       </div>
     </motion.div>

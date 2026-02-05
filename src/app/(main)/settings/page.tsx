@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useUIStore } from '@/stores/ui-store';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useDeleteAccount } from '@/hooks/useUserProfile';
 import {
   ArrowLeft,
@@ -36,6 +38,9 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // Auth protection
+  const { isReady } = useRequireAuth();
 
   const { mutate: deleteAccount, isPending: isDeleting } = useDeleteAccount();
 
@@ -115,6 +120,27 @@ export default function SettingsPage() {
       },
     ],
   ];
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background-offWhite">
+        <div className="bg-white sticky top-0 z-10 border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-10 h-10 rounded-md" />
+              <Skeleton className="w-24 h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-6 max-w-2xl space-y-6">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background-offWhite">

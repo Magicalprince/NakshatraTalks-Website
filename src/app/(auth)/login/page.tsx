@@ -1,65 +1,49 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Phone, ArrowRight } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
-import { authService } from '@/lib/services/auth.service';
-import { useToast } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
-  const toast = useToast();
+
+  // Get auth state directly
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
 
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+
+  // Redirect if already authenticated (after hydration)
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) {
+      router.replace(redirect);
+    }
+  }, [isHydrated, isAuthenticated, router, redirect]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow digits
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPhone(value);
-    setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    // Validate phone
-    if (!phone || phone.length !== 10) {
-      setError('Please enter a valid 10-digit phone number');
-      return;
-    }
-
-    if (!authService.validatePhone(phone)) {
-      setError('Please enter a valid Indian phone number');
-      return;
-    }
-
     setIsLoading(true);
 
-    try {
-      const response = await authService.sendOtp({ phone });
+    // Simulate brief loading
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      if (response.success) {
-        toast.success('OTP Sent', 'Please check your phone for the verification code');
-        // Navigate to OTP page with phone number
-        router.push(`/verify-otp?phone=${phone}&redirect=${encodeURIComponent(redirect)}`);
-      } else {
-        setError(response.message || 'Failed to send OTP. Please try again.');
-      }
-    } catch (err: unknown) {
-      console.error('Send OTP error:', err);
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    // Always proceed to OTP screen (use default phone if empty)
+    const phoneToUse = phone || '9876543210';
+    router.push(`/verify-otp?phone=${phoneToUse}&redirect=${encodeURIComponent(redirect)}`);
   };
 
   return (
@@ -107,15 +91,17 @@ function LoginContent() {
               type="tel"
               value={phone}
               onChange={handlePhoneChange}
-              placeholder="Enter 10-digit number"
+              placeholder="Enter number (optional)"
               leftIcon={<Phone className="h-5 w-5" />}
-              error={error}
               disabled={isLoading}
               className="flex-1"
               autoComplete="tel"
               inputMode="numeric"
             />
           </div>
+          <p className="text-xs text-text-muted mt-1 font-lexend">
+            Leave empty for demo mode
+          </p>
         </div>
 
         <Button
@@ -125,7 +111,7 @@ function LoginContent() {
           isLoading={isLoading}
           rightIcon={<ArrowRight className="h-5 w-5" />}
         >
-          Send OTP
+          Continue
         </Button>
 
         <p className="text-center text-sm text-text-secondary font-lexend">

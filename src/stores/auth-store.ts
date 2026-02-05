@@ -1,6 +1,10 @@
 /**
  * Auth Store - Zustand store for authentication state
  * Handles user authentication, tokens, and user data
+ *
+ * IMPORTANT: This store uses Zustand persist middleware.
+ * The `isHydrated` flag indicates when localStorage data has been loaded.
+ * Always check `isHydrated` before making auth decisions.
  */
 
 import { create } from 'zustand';
@@ -13,7 +17,7 @@ interface AuthState {
   user: User | null;
   astrologer: AstrologerData | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
+  isHydrated: boolean;
   userType: 'user' | 'astrologer' | null;
 
   // Actions
@@ -28,7 +32,7 @@ interface AuthState {
   updateUser: (updates: Partial<User>) => void;
   updateAstrologer: (updates: Partial<AstrologerData>) => void;
   logout: () => void;
-  setLoading: (loading: boolean) => void;
+  _setHydrated: () => void;
 
   // Wallet
   updateWalletBalance: (balance: number) => void;
@@ -37,11 +41,11 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // Initial state
+      // Initial state - isHydrated starts false
       user: null,
       astrologer: null,
       isAuthenticated: false,
-      isLoading: true,
+      isHydrated: false,
       userType: null,
 
       // Set user
@@ -62,7 +66,6 @@ export const useAuthStore = create<AuthState>()(
           astrologer: astrologer || null,
           isAuthenticated: true,
           userType,
-          isLoading: false,
         });
       },
 
@@ -98,41 +101,51 @@ export const useAuthStore = create<AuthState>()(
           astrologer: null,
           isAuthenticated: false,
           userType: null,
-          isLoading: false,
         });
       },
 
-      // Set loading state
-      setLoading: (loading) => {
-        set({ isLoading: loading });
+      // Internal: Set hydrated state (called by persist middleware)
+      _setHydrated: () => {
+        set({ isHydrated: true });
       },
     }),
     {
-      name: 'auth-storage',
+      name: 'nakshatratalks-auth',
       storage: createJSONStorage(() => {
-        // Only use localStorage for non-sensitive data
-        // Access token is kept in memory only
         if (typeof window !== 'undefined') {
           return localStorage;
         }
+        // SSR fallback
         return {
           getItem: () => null,
           setItem: () => {},
           removeItem: () => {},
         };
       }),
+      // Only persist these fields
       partialize: (state) => ({
-        // Only persist user data and userType, not tokens
         user: state.user,
         astrologer: state.astrologer,
         userType: state.userType,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Called when rehydration is complete
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state._setHydrated();
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[AuthStore] Rehydrated:', {
+              isAuthenticated: state.isAuthenticated,
+              userName: state.user?.name,
+            });
+          }
+        }
+      },
     }
   )
 );
 
-// Subscribe to auth events
+// Subscribe to auth events (client-side only)
 if (typeof window !== 'undefined') {
   authEvents.on('logout_required', (reason) => {
     console.log('[AuthStore] Logout required:', reason);
@@ -150,4 +163,4 @@ export const selectUser = (state: AuthState) => state.user;
 export const selectAstrologer = (state: AuthState) => state.astrologer;
 export const selectIsAuthenticated = (state: AuthState) => state.isAuthenticated;
 export const selectUserType = (state: AuthState) => state.userType;
-export const selectIsLoading = (state: AuthState) => state.isLoading;
+export const selectIsHydrated = (state: AuthState) => state.isHydrated;

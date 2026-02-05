@@ -1,10 +1,17 @@
 'use client';
 
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Star, Clock, IndianRupee, MessageSquare } from 'lucide-react';
+/**
+ * SessionEndedActions Component
+ * Design matches mobile app with:
+ * - Session ended message
+ * - Rate & Review primary button (60%)
+ * - Home secondary button (40%)
+ * - Clean layout matching mobile design
+ */
+
+import { Star, Home } from 'lucide-react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface SessionSummary {
   duration: number;
@@ -17,118 +24,97 @@ interface SessionEndedActionsProps {
   sessionId: string;
   astrologerId?: string;
   astrologerName?: string;
-  summary: SessionSummary;
+  summary?: SessionSummary;
+  variant?: 'user' | 'astrologer';
+  onReview?: () => void;
+  onSummary?: () => void;
+  onHome?: () => void;
   onStartNewChat?: () => void;
 }
 
 export function SessionEndedActions({
   sessionId,
-  astrologerId,
-  astrologerName = 'Astrologer',
-  summary,
-  onStartNewChat,
+  variant = 'user',
+  onReview,
+  onHome,
 }: SessionEndedActionsProps) {
-  // Format duration if not provided
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (mins < 60) {
-      return `${mins} min ${secs} sec`;
+  const router = useRouter();
+
+  const handleReview = () => {
+    if (onReview) {
+      onReview();
+    } else {
+      router.push(`/rating/${sessionId}`);
     }
-    const hours = Math.floor(mins / 60);
-    const remainingMins = mins % 60;
-    return `${hours}h ${remainingMins}m`;
   };
 
-  const durationText = summary.durationFormatted || formatDuration(summary.duration);
+  const handleHome = () => {
+    if (onHome) {
+      onHome();
+    } else {
+      router.push('/');
+    }
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 bg-background-offWhite"
-    >
-      {/* Session Summary Card */}
-      <Card className="p-6 mb-4">
-        <h3 className="text-lg font-semibold text-text-primary mb-4 text-center">
-          Session Ended
-        </h3>
+    <div className="bg-white border-t border-gray-100">
+      <div className="px-4 py-3 space-y-3">
+        {/* Session ended message */}
+        <p className="text-sm text-[#6B7280] text-center font-lexend">
+          {variant === 'user'
+            ? 'Session has ended. Would you like to rate your experience?'
+            : 'Session has ended.'}
+        </p>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {/* Duration */}
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-              <Clock className="w-6 h-6 text-primary" />
-            </div>
-            <p className="text-sm font-medium text-text-primary">{durationText}</p>
-            <p className="text-xs text-text-muted">Duration</p>
-          </div>
+        {/* Buttons container */}
+        <div className="flex gap-3">
+          {variant === 'user' ? (
+            <>
+              {/* Rate & Review Button - 60% width */}
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleReview}
+                className="flex-[6] py-3.5 px-4 bg-primary rounded-xl flex items-center justify-center gap-2"
+                style={{
+                  boxShadow: '0 4px 12px rgba(41, 48, 166, 0.3)',
+                }}
+              >
+                <Star className="w-[18px] h-[18px] text-white" fill="white" />
+                <span className="text-[15px] font-semibold text-white font-lexend">
+                  Rate & Review
+                </span>
+              </motion.button>
 
-          {/* Messages */}
-          {summary.totalMessages !== undefined && (
-            <div className="text-center">
-              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                <MessageSquare className="w-6 h-6 text-primary" />
-              </div>
-              <p className="text-sm font-medium text-text-primary">
-                {summary.totalMessages}
-              </p>
-              <p className="text-xs text-text-muted">Messages</p>
-            </div>
+              {/* Home Button - 40% width */}
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleHome}
+                className="flex-[4] py-3.5 px-4 bg-white border-2 border-primary rounded-xl flex items-center justify-center gap-1.5"
+              >
+                <Home className="w-[18px] h-[18px] text-primary" />
+                <span className="text-[15px] font-semibold text-primary font-lexend">
+                  Home
+                </span>
+              </motion.button>
+            </>
+          ) : (
+            /* Astrologer variant - just Home button full width */
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleHome}
+              className="flex-1 py-3.5 px-4 bg-primary rounded-xl flex items-center justify-center gap-2"
+              style={{
+                boxShadow: '0 4px 12px rgba(41, 48, 166, 0.3)',
+              }}
+            >
+              <Home className="w-[18px] h-[18px] text-white" />
+              <span className="text-[15px] font-semibold text-white font-lexend">
+                Back to Dashboard
+              </span>
+            </motion.button>
           )}
-
-          {/* Cost */}
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-2">
-              <IndianRupee className="w-6 h-6 text-primary" />
-            </div>
-            <p className="text-sm font-medium text-text-primary">
-              ₹{summary.totalCost.toFixed(2)}
-            </p>
-            <p className="text-xs text-text-muted">Total Cost</p>
-          </div>
         </div>
-
-        {/* Rate Experience */}
-        <div className="text-center mb-4">
-          <p className="text-sm text-text-secondary mb-2">
-            How was your experience with {astrologerName}?
-          </p>
-          <Link href={`/rating/${sessionId}`}>
-            <Button variant="outline" className="gap-2">
-              <Star className="w-4 h-4" />
-              Rate & Review
-            </Button>
-          </Link>
-        </div>
-      </Card>
-
-      {/* Action Buttons */}
-      <div className="space-y-3">
-        {onStartNewChat && (
-          <Button
-            variant="primary"
-            className="w-full"
-            onClick={onStartNewChat}
-          >
-            Start New Chat with {astrologerName}
-          </Button>
-        )}
-
-        {astrologerId && (
-          <Link href={`/astrologer/${astrologerId}`} className="block">
-            <Button variant="outline" className="w-full">
-              View Profile
-            </Button>
-          </Link>
-        )}
-
-        <Link href="/" className="block">
-          <Button variant="ghost" className="w-full">
-            Back to Home
-          </Button>
-        </Link>
       </div>
-    </motion.div>
+    </div>
   );
 }

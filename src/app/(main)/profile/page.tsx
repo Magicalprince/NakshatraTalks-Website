@@ -5,6 +5,7 @@ import { ProfileHeader, PersonalDetails, EditProfileForm } from '@/components/fe
 import { useUserProfile, useUpdateProfile, useUploadProfileImage } from '@/hooks/useUserProfile';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -27,6 +28,9 @@ export default function ProfilePage() {
   const { user, logout } = useAuthStore();
   const { addToast } = useUIStore();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Auth protection - redirects to login if not authenticated
+  const { isReady } = useRequireAuth();
 
   // Fetch profile data
   const { data: profile, isLoading: isProfileLoading } = useUserProfile();
@@ -84,11 +88,10 @@ export default function ProfilePage() {
     }
   };
 
-  // Loading state
-  if (isProfileLoading) {
+  // Show skeleton while auth is being checked or redirecting
+  if (!isReady) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        {/* Header Skeleton */}
         <div className="bg-primary rounded-b-3xl px-4 pt-6 pb-8">
           <div className="flex flex-col items-center">
             <Skeleton className="w-24 h-24 rounded-full mb-4" />
@@ -96,7 +99,25 @@ export default function ProfilePage() {
             <Skeleton className="w-24 h-4" />
           </div>
         </div>
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
+  // Profile data loading state
+  if (isProfileLoading) {
+    return (
+      <div className="min-h-screen bg-background-offWhite">
+        <div className="bg-primary rounded-b-3xl px-4 pt-6 pb-8">
+          <div className="flex flex-col items-center">
+            <Skeleton className="w-24 h-24 rounded-full mb-4" />
+            <Skeleton className="w-32 h-6 mb-2" />
+            <Skeleton className="w-24 h-4" />
+          </div>
+        </div>
         <div className="p-4 space-y-4">
           <Skeleton className="h-48 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />

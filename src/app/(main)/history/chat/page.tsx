@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useChatHistory } from '@/hooks/useChatSession';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -19,6 +20,9 @@ import { motion } from 'framer-motion';
 import { ChatSession } from '@/types/api.types';
 
 export default function ChatHistoryPage() {
+  // Auth check
+  const { isReady } = useRequireAuth();
+
   // Fetch chat history
   const {
     data: historyData,
@@ -33,6 +37,43 @@ export default function ChatHistoryPage() {
     if (!historyData?.pages) return [];
     return historyData.pages.flatMap((page) => page?.sessions || []);
   }, [historyData]);
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background-offWhite">
+        <div className="bg-white sticky top-0 z-10 border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-10 h-10 rounded-md" />
+              <Skeleton className="w-32 h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white border-b">
+          <div className="container mx-auto px-4">
+            <div className="flex gap-4 py-3">
+              <Skeleton className="w-20 h-6" />
+              <Skeleton className="w-16 h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-6 max-w-2xl space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Card key={i} className="p-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-12 h-12 rounded-full" />
+                <div className="flex-1">
+                  <Skeleton className="w-32 h-4 mb-2" />
+                  <Skeleton className="w-24 h-3" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background-offWhite">

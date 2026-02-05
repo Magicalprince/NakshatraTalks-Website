@@ -41,18 +41,18 @@ export const horoscopeService = new HoroscopeService();
 
 // Zodiac signs data (static for SEO)
 export const ZODIAC_SIGNS: HoroscopeSign[] = [
-  { id: 'aries', name: 'Aries', symbol: '♈', element: 'fire', dateRange: 'Mar 21 - Apr 19' },
-  { id: 'taurus', name: 'Taurus', symbol: '♉', element: 'earth', dateRange: 'Apr 20 - May 20' },
-  { id: 'gemini', name: 'Gemini', symbol: '♊', element: 'air', dateRange: 'May 21 - Jun 20' },
-  { id: 'cancer', name: 'Cancer', symbol: '♋', element: 'water', dateRange: 'Jun 21 - Jul 22' },
-  { id: 'leo', name: 'Leo', symbol: '♌', element: 'fire', dateRange: 'Jul 23 - Aug 22' },
-  { id: 'virgo', name: 'Virgo', symbol: '♍', element: 'earth', dateRange: 'Aug 23 - Sep 22' },
-  { id: 'libra', name: 'Libra', symbol: '♎', element: 'air', dateRange: 'Sep 23 - Oct 22' },
-  { id: 'scorpio', name: 'Scorpio', symbol: '♏', element: 'water', dateRange: 'Oct 23 - Nov 21' },
-  { id: 'sagittarius', name: 'Sagittarius', symbol: '♐', element: 'fire', dateRange: 'Nov 22 - Dec 21' },
-  { id: 'capricorn', name: 'Capricorn', symbol: '♑', element: 'earth', dateRange: 'Dec 22 - Jan 19' },
-  { id: 'aquarius', name: 'Aquarius', symbol: '♒', element: 'air', dateRange: 'Jan 20 - Feb 18' },
-  { id: 'pisces', name: 'Pisces', symbol: '♓', element: 'water', dateRange: 'Feb 19 - Mar 20' },
+  { id: 'aries', name: 'Aries', symbol: '♈', element: 'fire', dateRange: 'Mar 21 - Apr 19', image: '/images/zodiac-signs/Aries.webp' },
+  { id: 'taurus', name: 'Taurus', symbol: '♉', element: 'earth', dateRange: 'Apr 20 - May 20', image: '/images/zodiac-signs/Taurus.webp' },
+  { id: 'gemini', name: 'Gemini', symbol: '♊', element: 'air', dateRange: 'May 21 - Jun 20', image: '/images/zodiac-signs/Gemini.webp' },
+  { id: 'cancer', name: 'Cancer', symbol: '♋', element: 'water', dateRange: 'Jun 21 - Jul 22', image: '/images/zodiac-signs/Cancer.webp' },
+  { id: 'leo', name: 'Leo', symbol: '♌', element: 'fire', dateRange: 'Jul 23 - Aug 22', image: '/images/zodiac-signs/Leo.webp' },
+  { id: 'virgo', name: 'Virgo', symbol: '♍', element: 'earth', dateRange: 'Aug 23 - Sep 22', image: '/images/zodiac-signs/Virgo.webp' },
+  { id: 'libra', name: 'Libra', symbol: '♎', element: 'air', dateRange: 'Sep 23 - Oct 22', image: '/images/zodiac-signs/Libra.webp' },
+  { id: 'scorpio', name: 'Scorpio', symbol: '♏', element: 'water', dateRange: 'Oct 23 - Nov 21', image: '/images/zodiac-signs/Scorpio.webp' },
+  { id: 'sagittarius', name: 'Sagittarius', symbol: '♐', element: 'fire', dateRange: 'Nov 22 - Dec 21', image: '/images/zodiac-signs/Sagittarius.webp' },
+  { id: 'capricorn', name: 'Capricorn', symbol: '♑', element: 'earth', dateRange: 'Dec 22 - Jan 19', image: '/images/zodiac-signs/Capricorn.webp' },
+  { id: 'aquarius', name: 'Aquarius', symbol: '♒', element: 'air', dateRange: 'Jan 20 - Feb 18', image: '/images/zodiac-signs/Aquarius.webp' },
+  { id: 'pisces', name: 'Pisces', symbol: '♓', element: 'water', dateRange: 'Feb 19 - Mar 20', image: '/images/zodiac-signs/Pisces.webp' },
 ];
 
 // Element colors

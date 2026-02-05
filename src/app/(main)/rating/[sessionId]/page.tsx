@@ -6,6 +6,7 @@ import { ReviewForm } from '@/components/features/rating';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useUIStore } from '@/stores/ui-store';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useChatSession } from '@/hooks/useChatSession';
 import { useCallSession } from '@/hooks/useCallSession';
 import { useMutation } from '@tanstack/react-query';
@@ -30,6 +31,9 @@ export default function RatingPage() {
   const { addToast } = useUIStore();
   const [sessionType, setSessionType] = useState<'chat' | 'call' | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // Auth check
+  const { isReady } = useRequireAuth();
 
   // Try fetching as chat session first
   const {
@@ -117,6 +121,23 @@ export default function RatingPage() {
 
   // Loading state
   const isLoading = isChatLoading && isCallLoading;
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background-offWhite">
+        <div className="bg-white border-b px-4 py-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-10 h-10 rounded" />
+            <Skeleton className="w-32 h-6" />
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-6 max-w-md">
+          <Skeleton className="h-96 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

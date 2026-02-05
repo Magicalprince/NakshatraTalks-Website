@@ -1,67 +1,33 @@
 'use client';
 
+/**
+ * CategoryIcons Component
+ * Design matches mobile app with:
+ * - Image icons in white cards with yellow border
+ * - Yellow shadow glow effect
+ * - Ripple animation on press
+ * - Three main categories: Daily Horoscope, Kundli, Kundli Matching
+ */
+
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import {
-  MessageCircle,
-  Phone,
-  Radio,
-  Star,
-  FileText,
-  Users,
-  Sparkles,
-  Heart,
-} from 'lucide-react';
 
 const categories = [
   {
-    icon: MessageCircle,
-    label: 'Chat',
-    href: '/browse-chat',
-    color: 'bg-blue-100 text-blue-600',
-  },
-  {
-    icon: Phone,
-    label: 'Call',
-    href: '/browse-call',
-    color: 'bg-green-100 text-green-600',
-  },
-  {
-    icon: Radio,
-    label: 'Live',
-    href: '/live-sessions',
-    color: 'bg-red-100 text-red-600',
-    badge: 'LIVE',
-  },
-  {
-    icon: Star,
-    label: 'Horoscope',
+    image: '/images/icons/icon-horoscope.png',
+    label: 'Daily Horoscope',
     href: '/horoscope',
-    color: 'bg-yellow-100 text-yellow-600',
   },
   {
-    icon: FileText,
+    image: '/images/icons/icon-kundli.png',
     label: 'Kundli',
     href: '/kundli',
-    color: 'bg-purple-100 text-purple-600',
   },
   {
-    icon: Users,
-    label: 'Matching',
+    image: '/images/icons/icon-kundli-matching.png',
+    label: 'Kundli Matching',
     href: '/kundli-matching',
-    color: 'bg-pink-100 text-pink-600',
-  },
-  {
-    icon: Sparkles,
-    label: 'Panchang',
-    href: '/panchang',
-    color: 'bg-orange-100 text-orange-600',
-  },
-  {
-    icon: Heart,
-    label: 'Remedies',
-    href: '/remedies',
-    color: 'bg-teal-100 text-teal-600',
   },
 ];
 
@@ -70,14 +36,23 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
+      staggerChildren: 0.1,
     },
   },
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
+  hidden: { opacity: 0, scale: 0.8, y: 20 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      type: 'spring' as const,
+      stiffness: 200,
+      damping: 15,
+    },
+  },
 };
 
 export function CategoryIcons() {
@@ -86,33 +61,48 @@ export function CategoryIcons() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-4 md:grid-cols-8 gap-4"
+      className="flex justify-evenly items-start"
     >
-      {categories.map((category) => {
-        const Icon = category.icon;
-        return (
-          <motion.div key={category.label} variants={itemVariants}>
-            <Link
-              href={category.href}
-              className="flex flex-col items-center gap-2 group"
+      {categories.map((category) => (
+        <motion.div
+          key={category.label}
+          variants={itemVariants}
+          className="flex flex-col items-center"
+        >
+          <Link href={category.href} className="flex flex-col items-center group">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95, rotate: [-4, 4, 0] }}
+              className="relative"
             >
+              {/* Ripple effect placeholder */}
+              <div className="absolute inset-0 bg-secondary/30 rounded-2xl opacity-0 group-active:opacity-100 group-active:scale-150 transition-all duration-300" />
+
+              {/* Icon container with yellow border and shadow */}
               <div
-                className={`relative w-14 h-14 md:w-16 md:h-16 rounded-2xl ${category.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}
+                className="relative w-[74px] h-[74px] bg-white rounded-2xl flex items-center justify-center border-2 border-secondary transition-all duration-200 group-hover:shadow-xl"
+                style={{
+                  boxShadow: '0 6px 20px rgba(255, 207, 13, 0.4)',
+                  borderColor: '#FFCF0D',
+                }}
               >
-                <Icon className="w-6 h-6 md:w-7 md:h-7" />
-                {category.badge && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full animate-pulse">
-                    {category.badge}
-                  </span>
-                )}
+                <Image
+                  src={category.image}
+                  alt={category.label}
+                  width={42}
+                  height={42}
+                  className="object-contain"
+                />
               </div>
-              <span className="text-xs md:text-sm font-medium text-text-secondary group-hover:text-text-primary font-lexend text-center">
-                {category.label}
-              </span>
-            </Link>
-          </motion.div>
-        );
-      })}
+            </motion.div>
+
+            {/* Label */}
+            <span className="text-[10px] text-text-muted font-medium font-poppins text-center mt-2 max-w-[74px] leading-tight">
+              {category.label}
+            </span>
+          </Link>
+        </motion.div>
+      ))}
     </motion.div>
   );
 }

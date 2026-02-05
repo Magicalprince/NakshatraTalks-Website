@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 export default function AstrologerProfilePage() {
-  const { astrologer, isLoading } = useAuthStore();
+  const { astrologer, isHydrated } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     bio: astrologer?.bio || '',
@@ -36,7 +36,7 @@ export default function AstrologerProfilePage() {
     setIsEditing(false);
   };
 
-  if (isLoading) {
+  if (!isHydrated) {
     return (
       <div className="p-4 lg:p-6 space-y-6">
         <Skeleton className="w-full h-48" />

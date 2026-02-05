@@ -9,29 +9,44 @@ import {
   Menu,
   Search,
   Bell,
-  Wallet,
-  X,
-  ChevronDown,
+  IndianRupee,
+  User,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
-import { Avatar } from '@/components/ui';
 import { Button } from '@/components/ui';
 
 interface HeaderProps {
   variant?: 'default' | 'transparent' | 'yellow';
 }
 
+// Format wallet amount like mobile app
+const formatWalletAmount = (amount: number): string => {
+  if (amount <= 9999) {
+    return amount.toFixed(0);
+  } else if (amount < 100000) {
+    return `${(amount / 1000).toFixed(amount % 1000 >= 100 ? 1 : 0)}K`;
+  } else if (amount < 10000000) {
+    return `${(amount / 100000).toFixed(amount % 100000 >= 10000 ? 1 : 0)}L`;
+  } else {
+    return `${(amount / 10000000).toFixed(amount % 10000000 >= 1000000 ? 1 : 0)}Cr`;
+  }
+};
+
 export function Header({ variant = 'default' }: HeaderProps) {
   const pathname = usePathname();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isHydrated } = useAuthStore();
   const { openSidebar } = useUIStore();
-  const [showSearch, setShowSearch] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // Only treat as authenticated after hydration is complete
+  const isLoggedIn = isHydrated && isAuthenticated;
 
   const bgClass = {
-    default: 'bg-white shadow-sm',
+    default: 'bg-white border-b border-gray-100/50',
     transparent: 'bg-transparent',
     yellow: 'bg-secondary',
   };
@@ -53,214 +68,210 @@ export function Header({ variant = 'default' }: HeaderProps) {
       )}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Left section - Logo and menu */}
+        <div className="flex h-[60px] items-center justify-between">
+          {/* Left section - Profile button with menu badge (mobile app style) */}
           <div className="flex items-center gap-4">
-            {/* Mobile menu button */}
+            {/* Profile button with hamburger menu badge */}
             <button
               onClick={openSidebar}
-              className="lg:hidden rounded-full p-2 text-text-primary hover:bg-background-offWhite transition-colors"
+              className="relative group"
               aria-label="Open menu"
             >
-              <Menu className="h-6 w-6" />
-            </button>
-
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-2">
-              <div className="relative h-10 w-10">
-                <Image
-                  src="/images/logo.png"
-                  alt="NakshatraTalks"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+              <div className="w-11 h-11 rounded-full bg-gray-200 border-2 border-primary/20 flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105 group-active:scale-95">
+                {isLoggedIn && user?.profileImage ? (
+                  <Image
+                    src={user.profileImage}
+                    alt={user.name || 'User'}
+                    width={44}
+                    height={44}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-5 h-5 text-primary" />
+                )}
               </div>
-              <span className="hidden sm:block text-xl font-semibold text-primary font-lexend">
-                NakshatraTalks
-              </span>
-            </Link>
+              {/* Hamburger menu badge */}
+              <div className="absolute -right-0.5 -bottom-0.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center border-2 border-white shadow-md">
+                <Menu className="w-2.5 h-2.5 text-white" strokeWidth={2.5} />
+              </div>
+            </button>
           </div>
 
-          {/* Center section - Navigation (desktop only) */}
-          <nav className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium font-lexend transition-colors',
-                  pathname === link.href
-                    ? 'bg-primary text-white'
-                    : 'text-text-secondary hover:bg-background-offWhite hover:text-text-primary'
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          {/* Center section - Logo */}
+          <Link
+            href="/"
+            className="absolute left-1/2 transform -translate-x-1/2 flex items-center"
+            style={{ paddingRight: '40px' }} // Slight offset like mobile app
+          >
+            <div className="relative h-[38px] w-[160px]">
+              <Image
+                src="/images/logo.png"
+                alt="NakshatraTalks"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          </Link>
 
-          {/* Right section - Actions */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Search button */}
-            <button
-              onClick={() => setShowSearch(!showSearch)}
-              className="rounded-full p-2 text-text-primary hover:bg-background-offWhite transition-colors"
-              aria-label="Search"
-            >
-              <Search className="h-5 w-5" />
-            </button>
-
-            {isAuthenticated ? (
+          {/* Right section - Wallet + Notifications */}
+          <div className="flex items-center gap-3">
+            {isLoggedIn ? (
               <>
-                {/* Notifications */}
-                <button
-                  className="relative rounded-full p-2 text-text-primary hover:bg-background-offWhite transition-colors"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-status-error" />
-                </button>
-
-                {/* Wallet */}
+                {/* Wallet button - matching mobile app style */}
                 <Link
                   href="/wallet"
-                  className="hidden sm:flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-secondary-dark transition-colors font-lexend"
+                  className="flex items-center gap-1 h-[34px] px-3 rounded-full bg-primary text-white hover:bg-primary-dark transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
                 >
-                  <Wallet className="h-4 w-4" />
-                  <span>₹{user?.walletBalance?.toFixed(0) || 0}</span>
+                  <IndianRupee className="w-3.5 h-3.5" />
+                  <span className="text-sm font-lexend font-normal">
+                    {formatWalletAmount(user?.walletBalance || 0)}
+                  </span>
                 </Link>
 
-                {/* User menu */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 rounded-full p-1 hover:bg-background-offWhite transition-colors"
-                  >
-                    <Avatar
-                      src={user?.profileImage}
-                      alt={user?.name || 'User'}
-                      fallback={user?.name || undefined}
-                      size="sm"
-                      bordered
-                    />
-                    <ChevronDown className="hidden sm:block h-4 w-4 text-text-secondary" />
-                  </button>
-
-                  {/* Dropdown menu */}
-                  <AnimatePresence>
-                    {showUserMenu && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setShowUserMenu(false)}
-                        />
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 10 }}
-                          className="absolute right-0 mt-2 w-48 rounded-xl bg-white shadow-modal z-50 overflow-hidden"
-                        >
-                          <div className="p-3 border-b border-gray-100">
-                            <p className="font-medium text-text-primary font-lexend truncate">
-                              {user?.name || 'User'}
-                            </p>
-                            <p className="text-sm text-text-secondary font-lexend truncate">
-                              {user?.phone}
-                            </p>
-                          </div>
-                          <div className="py-1">
-                            <Link
-                              href="/profile"
-                              className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              My Profile
-                            </Link>
-                            <Link
-                              href="/wallet"
-                              className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend sm:hidden"
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              Wallet (₹{user?.walletBalance?.toFixed(0) || 0})
-                            </Link>
-                            <Link
-                              href="/history/chat"
-                              className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              Chat History
-                            </Link>
-                            <Link
-                              href="/history/call"
-                              className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              Call History
-                            </Link>
-                            <Link
-                              href="/settings"
-                              className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              Settings
-                            </Link>
-                          </div>
-                          <div className="border-t border-gray-100 py-1">
-                            <button
-                              className="block w-full px-4 py-2 text-left text-sm text-status-error hover:bg-background-offWhite font-lexend"
-                              onClick={() => {
-                                setShowUserMenu(false);
-                                useAuthStore.getState().logout();
-                              }}
-                            >
-                              Sign Out
-                            </button>
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* Notifications */}
+                <Link
+                  href="/notifications"
+                  className="relative w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell className="h-6 w-6" />
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-status-error" />
+                </Link>
               </>
             ) : (
               <Link href="/login">
-                <Button variant="primary" size="sm">
+                <Button variant="primary" size="sm" className="rounded-full">
                   Sign In
                 </Button>
               </Link>
             )}
           </div>
         </div>
+
+        {/* Desktop navigation - hidden on mobile */}
+        <nav className="hidden lg:flex items-center justify-center gap-1 pb-2 -mt-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium font-lexend transition-all duration-200',
+                pathname === link.href
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-text-secondary hover:bg-background-offWhite hover:text-text-primary'
+              )}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
-      {/* Search overlay */}
+      {/* Search bar - styled like mobile app */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-4 pt-2">
+        <div
+          className={cn(
+            'flex items-center justify-between h-[46px] rounded-full px-4 transition-all duration-200',
+            'bg-white border shadow-sm',
+            searchFocused
+              ? 'border-secondary border-2 shadow-[0_4px_12px_rgba(255,207,13,0.15)]'
+              : 'border-primary/80 shadow-[0_4px_8px_rgba(41,48,166,0.1)]'
+          )}
+        >
+          <div className="flex items-center gap-2.5 flex-1">
+            <Search
+              className={cn(
+                "w-5 h-5 transition-colors",
+                searchFocused ? "text-secondary" : "text-primary"
+              )}
+            />
+            <input
+              type="text"
+              placeholder="Search astrologers..."
+              className="flex-1 text-sm font-nunito text-primary placeholder:text-primary/60 bg-transparent outline-none"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+          </div>
+          <button className="p-1 hover:opacity-70 transition-opacity">
+            <SlidersHorizontal className="w-[18px] h-[18px] text-primary" />
+          </button>
+        </div>
+      </div>
+
+      {/* User menu dropdown (desktop) */}
       <AnimatePresence>
-        {showSearch && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="border-t border-gray-100 bg-white overflow-hidden"
-          >
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  placeholder="Search astrologers, specializations..."
-                  className="w-full h-12 pl-12 pr-12 rounded-xl border border-gray-200 text-base font-lexend focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  autoFocus
-                />
-                <button
-                  onClick={() => setShowSearch(false)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-text-muted hover:text-text-primary"
+        {showUserMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowUserMenu(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute right-4 top-16 w-48 rounded-xl bg-white shadow-modal z-50 overflow-hidden"
+            >
+              <div className="p-3 border-b border-gray-100">
+                <p className="font-medium text-text-primary font-lexend truncate">
+                  {user?.name || 'User'}
+                </p>
+                <p className="text-sm text-text-secondary font-lexend truncate">
+                  {user?.phone}
+                </p>
+              </div>
+              <div className="py-1">
+                <Link
+                  href="/profile"
+                  className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
+                  onClick={() => setShowUserMenu(false)}
                 >
-                  <X className="h-5 w-5" />
+                  My Profile
+                </Link>
+                <Link
+                  href="/wallet"
+                  className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend sm:hidden"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  Wallet (₹{user?.walletBalance?.toFixed(0) || 0})
+                </Link>
+                <Link
+                  href="/history/chat"
+                  className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  Chat History
+                </Link>
+                <Link
+                  href="/history/call"
+                  className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  Call History
+                </Link>
+                <Link
+                  href="/settings"
+                  className="block px-4 py-2 text-sm text-text-primary hover:bg-background-offWhite font-lexend"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  Settings
+                </Link>
+              </div>
+              <div className="border-t border-gray-100 py-1">
+                <button
+                  className="block w-full px-4 py-2 text-left text-sm text-status-error hover:bg-background-offWhite font-lexend"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    useAuthStore.getState().logout();
+                  }}
+                >
+                  Sign Out
                 </button>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </header>

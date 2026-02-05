@@ -1,23 +1,37 @@
 'use client';
 
+/**
+ * Wallet Page
+ * Design matches mobile app with:
+ * - Yellow header background with rounded bottom
+ * - Balance card at top
+ * - Filter tabs with rounded pill style
+ * - Transaction history list
+ */
+
 import { useState, useMemo } from 'react';
 import { WalletBalance, TransactionList } from '@/components/features/wallet';
 import { useWalletBalance, useWalletSummary, useTransactions } from '@/hooks/useWalletData';
-import { Button } from '@/components/ui/Button';
-import { ArrowLeft } from 'lucide-react';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { cn } from '@/utils/cn';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 type FilterType = 'all' | 'credit' | 'debit';
 
 const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'credit', label: 'Credits' },
-  { value: 'debit', label: 'Debits' },
+  { value: 'credit', label: 'Funds Added' },
+  { value: 'debit', label: 'Money Spent' },
 ];
 
 export default function WalletPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+
+  // Auth protection
+  const { isReady } = useRequireAuth();
 
   // Fetch wallet data
   const { data: balance, isLoading: isBalanceLoading } = useWalletBalance();
@@ -38,25 +52,53 @@ export default function WalletPage() {
     return transactionsData.pages.flatMap((page) => page?.transactions || []);
   }, [transactionsData]);
 
-  return (
-    <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-10 border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-bold text-text-primary">My Wallet</h1>
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] pb-24">
+        <div className="bg-secondary rounded-b-[28px] pb-5">
+          <div className="flex items-center justify-between px-4 pt-2 pb-3">
+            <Skeleton className="w-10 h-10 rounded-full" />
+            <Skeleton className="w-24 h-6" />
+            <div className="w-10" />
+          </div>
+          <div className="px-5">
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
+          <div className="mx-5 mt-5">
+            <Skeleton className="h-12 rounded-[25px]" />
           </div>
         </div>
+        <div className="px-5 mt-4 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
       </div>
+    );
+  }
 
-      {/* Content */}
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
-        {/* Wallet Balance Card */}
+  return (
+    <div className="min-h-screen bg-[#F5F5F5] pb-24">
+      {/* Yellow Header Background */}
+      <div className="bg-secondary rounded-b-[28px] pb-5">
+        {/* Header Row */}
+        <div className="flex items-center justify-between px-4 pt-2 pb-3">
+          <Link href="/">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="w-10 h-10 flex items-center justify-center"
+            >
+              <ChevronLeft className="w-[26px] h-[26px] text-[#333333]" strokeWidth={2} />
+            </motion.button>
+          </Link>
+
+          <h1 className="text-xl font-semibold text-[#333333] font-lexend">My Wallet</h1>
+
+          <div className="w-10" />
+        </div>
+
+        {/* Balance Section */}
         <WalletBalance
           balance={balance ?? 0}
           isLoading={isBalanceLoading || isSummaryLoading}
@@ -64,46 +106,46 @@ export default function WalletPage() {
           totalDebits={summary?.stats?.last30Days?.totalSpent}
         />
 
-        {/* Transaction History */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text-primary">
-              Transaction History
-            </h2>
-          </div>
-
-          {/* Filter Tabs */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex gap-2 mb-4 overflow-x-auto"
-          >
-            {FILTER_OPTIONS.map((option) => (
-              <Button
-                key={option.value}
-                variant={activeFilter === option.value ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => setActiveFilter(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </motion.div>
-
-          {/* Transaction List */}
-          <TransactionList
-            transactions={transactions}
-            isLoading={isTransactionsLoading}
-            isFetchingNextPage={isFetchingNextPage}
-            hasNextPage={hasNextPage}
-            fetchNextPage={fetchNextPage}
-          />
-        </div>
+        {/* Filter Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex mx-5 mt-5 bg-white rounded-[25px] p-1"
+          style={{
+            boxShadow: '0 2px 16px rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          {FILTER_OPTIONS.map((option, index) => (
+            <motion.button
+              key={option.value}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setActiveFilter(option.value)}
+              className={cn(
+                'flex-1 py-2.5 text-[13px] font-medium font-lexend transition-colors',
+                index === 0 && 'rounded-l-[21px]',
+                index === FILTER_OPTIONS.length - 1 && 'rounded-r-[21px]',
+                activeFilter === option.value
+                  ? 'bg-primary text-white rounded-[21px]'
+                  : 'text-[#666666]'
+              )}
+            >
+              {option.label}
+            </motion.button>
+          ))}
+        </motion.div>
       </div>
 
-      {/* Bottom padding for mobile nav */}
-      <div className="h-24" />
+      {/* Transaction History */}
+      <div className="px-5 mt-4">
+        <TransactionList
+          transactions={transactions}
+          isLoading={isTransactionsLoading}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
+        />
+      </div>
     </div>
   );
 }

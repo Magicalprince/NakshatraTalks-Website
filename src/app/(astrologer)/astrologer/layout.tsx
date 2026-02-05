@@ -14,20 +14,20 @@ export default function AstrologerLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const { isAuthenticated, user, isHydrated } = useAuthStore();
 
   // Send heartbeat to maintain online status
   useHeartbeat(isAuthenticated && user?.role === 'astrologer');
 
   // Redirect if not authenticated or not an astrologer
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || user?.role !== 'astrologer')) {
+    if (isHydrated && (!isAuthenticated || user?.role !== 'astrologer')) {
       router.push('/login');
     }
-  }, [isAuthenticated, user, isLoading, router]);
+  }, [isAuthenticated, user, isHydrated, router]);
 
   // Loading state
-  if (isLoading) {
+  if (!isHydrated) {
     return (
       <div className="min-h-screen bg-background-offWhite flex items-center justify-center">
         <div className="space-y-4 text-center">

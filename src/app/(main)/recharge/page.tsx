@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { RechargeGrid, CustomAmountInput } from '@/components/features/wallet';
 import { useRechargeOptions, useInitiateRecharge, useVerifyRecharge, useWalletBalance } from '@/hooks/useWalletData';
 import { useUIStore } from '@/stores/ui-store';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { RechargeOption } from '@/types/api.types';
 import { ArrowLeft, Shield, CheckCircle, XCircle, Loader2, IndianRupee } from 'lucide-react';
 import Link from 'next/link';
@@ -57,6 +59,9 @@ export default function RechargePage() {
   const router = useRouter();
   const { addToast } = useUIStore();
   const { refetch: refetchBalance } = useWalletBalance();
+
+  // Auth check
+  const { isReady } = useRequireAuth();
 
   // State
   const [selectedOption, setSelectedOption] = useState<RechargeOption | null>(null);
@@ -190,6 +195,32 @@ export default function RechargePage() {
       router.push('/wallet');
     }
   };
+
+  // Auth loading state
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background-offWhite">
+        <div className="bg-white sticky top-0 z-10 border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-10 h-10 rounded-md" />
+              <Skeleton className="w-24 h-6" />
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-6 max-w-2xl">
+          <Skeleton className="w-32 h-6 mb-4" />
+          <div className="grid grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-12 mt-6 rounded-xl" />
+          <Skeleton className="h-32 mt-6 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background-offWhite">

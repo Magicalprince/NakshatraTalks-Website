@@ -1,106 +1,61 @@
 'use client';
 
+/**
+ * CTABanner Component
+ * Design matches mobile app with:
+ * - Semi-transparent white background
+ * - Yellow border with shadow
+ * - Banner decoration image on right
+ * - Chat Now button
+ */
+
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Wallet, ArrowRight, Gift } from 'lucide-react';
-import { useAuthStore } from '@/stores/auth-store';
 
 export function CTABanner() {
-  const { isAuthenticated, user } = useAuthStore();
-
-  // Show different banners based on auth state
-  if (!isAuthenticated) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary-dark p-6 lg:p-8"
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h3 className="text-xl lg:text-2xl font-bold text-white font-lexend mb-2">
-              Get Your First Consultation Free!
-            </h3>
-            <p className="text-white/80 font-lexend">
-              Sign up now and get ₹50 wallet credit
-            </p>
-          </div>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center gap-2 bg-secondary text-text-primary px-6 py-3 rounded-xl font-semibold font-lexend hover:bg-secondary-dark transition-colors"
-          >
-            <Gift className="h-5 w-5" />
-            Claim Now
-            <ArrowRight className="h-5 w-5" />
-          </Link>
-        </div>
-
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-      </motion.div>
-    );
-  }
-
-  // Low balance banner
-  if (user && (user.walletBalance || 0) < 100) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-secondary to-secondary-dark p-6 lg:p-8"
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h3 className="text-xl lg:text-2xl font-bold text-text-primary font-lexend mb-2">
-              Low Wallet Balance
-            </h3>
-            <p className="text-text-secondary font-lexend">
-              Recharge now to continue consulting with astrologers
-            </p>
-          </div>
-          <Link
-            href="/recharge"
-            className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-semibold font-lexend hover:bg-primary-dark transition-colors"
-          >
-            <Wallet className="h-5 w-5" />
-            Recharge Now
-            <ArrowRight className="h-5 w-5" />
-          </Link>
-        </div>
-
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-      </motion.div>
-    );
-  }
-
-  // Default promotional banner
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 to-secondary/20 p-6 lg:p-8 border border-primary/20"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.2 }}
+      className="relative overflow-hidden rounded-2xl h-[115px]"
+      style={{
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        borderWidth: '3px',
+        borderStyle: 'solid',
+        borderColor: '#FFCF0D',
+        boxShadow: '0 4px 20px rgba(255, 207, 13, 0.2)',
+      }}
     >
-      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h3 className="text-xl lg:text-2xl font-bold text-text-primary font-lexend mb-2">
-            Explore Live Sessions
-          </h3>
-          <p className="text-text-secondary font-lexend">
-            Watch free live astrology sessions from top astrologers
-          </p>
-        </div>
-        <Link
-          href="/live-sessions"
-          className="inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-semibold font-lexend hover:bg-primary-dark transition-colors"
-        >
-          Watch Now
-          <ArrowRight className="h-5 w-5" />
+      {/* Content */}
+      <div className="relative z-10 p-4 h-full flex flex-col justify-center">
+        <h3 className="text-[17px] leading-5 font-medium text-[#371B34] font-lexend">
+          Talk to astrologer and{'\n'}clear your doubts
+        </h3>
+        <p className="text-[10px] text-[#371B34] font-lexend mt-1.5 max-w-[180px]">
+          Open up to the thing that matters among the people
+        </p>
+        <Link href="/browse-chat">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="mt-2 h-7 px-4 bg-primary rounded-[10px] text-white text-sm font-bold font-lexend inline-flex items-center justify-center"
+          >
+            Chat Now
+          </motion.button>
         </Link>
+      </div>
+
+      {/* Banner Decoration Image */}
+      <div className="absolute right-0 bottom-0 w-[193px] h-[115px]">
+        <Image
+          src="/images/banner-decoration.png"
+          alt="Banner decoration"
+          width={193}
+          height={115}
+          className="object-contain"
+        />
       </div>
     </motion.div>
   );

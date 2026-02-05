@@ -106,7 +106,7 @@ export default function RootLayout({
       className={`${lexend.variable} ${nunito.variable} ${poppins.variable}`}
       suppressHydrationWarning
     >
-      <body className="font-lexend antialiased">
+      <body className="font-lexend antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>
