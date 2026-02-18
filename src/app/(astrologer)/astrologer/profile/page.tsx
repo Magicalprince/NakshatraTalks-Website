@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuthStore } from '@/stores/auth-store';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import {
   Mail,
   Phone,
@@ -19,7 +21,28 @@ import {
   Edit,
   Camera,
   IndianRupee,
+  BarChart3,
+  Settings,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { QuickLinks, type QuickLinkItem } from '@/components/shared';
+
+const SIDEBAR_LINKS: QuickLinkItem[] = [
+  {
+    icon: BarChart3,
+    label: 'Earnings',
+    href: '/astrologer/earnings',
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+  },
+  {
+    icon: Settings,
+    label: 'Settings',
+    href: '/astrologer/settings',
+    color: 'text-text-secondary',
+    bgColor: 'bg-gray-100',
+  },
+];
 
 export default function AstrologerProfilePage() {
   const { astrologer, isHydrated } = useAuthStore();
@@ -38,213 +61,294 @@ export default function AstrologerProfilePage() {
 
   if (!isHydrated) {
     return (
-      <div className="p-4 lg:p-6 space-y-6">
-        <Skeleton className="w-full h-48" />
-        <Skeleton className="w-full h-32" />
-        <Skeleton className="w-full h-32" />
+      <div className="min-h-screen bg-background-offWhite">
+        <PageContainer size="lg">
+          <div className="py-4">
+            <Skeleton className="w-48 h-5 mb-6 rounded-lg skeleton-shimmer" />
+            <Skeleton className="w-40 h-8 mb-8 rounded-lg skeleton-shimmer" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-xl overflow-hidden shadow-web-sm">
+                  <div className="bg-gradient-to-br from-primary/20 to-primary/10 p-6">
+                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                      <Skeleton className="w-24 h-24 rounded-full skeleton-shimmer" />
+                      <div className="space-y-2">
+                        <Skeleton className="w-40 h-6 rounded skeleton-shimmer" />
+                        <Skeleton className="w-60 h-4 rounded skeleton-shimmer" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-3">
+                    <Skeleton className="w-48 h-4 rounded skeleton-shimmer" />
+                    <Skeleton className="w-52 h-4 rounded skeleton-shimmer" />
+                    <Skeleton className="w-40 h-4 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+                <Skeleton className="w-full h-32 rounded-xl skeleton-shimmer" />
+              </div>
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-white rounded-xl p-4 shadow-web-sm">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-10 h-10 rounded-full skeleton-shimmer" />
+                      <Skeleton className="h-4 w-28 rounded skeleton-shimmer" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Profile</h1>
-          <p className="text-text-secondary text-sm">Manage your public profile</p>
-        </div>
-        <Button onClick={() => setIsEditing(true)}>
-          <Edit className="w-4 h-4 mr-2" />
-          Edit Profile
-        </Button>
-      </div>
+    <div className="min-h-screen bg-background-offWhite">
+      <PageContainer size="lg">
+        <Breadcrumbs items={[
+          { label: 'Dashboard', href: '/astrologer/dashboard' },
+          { label: 'Profile' },
+        ]} />
 
-      {/* Profile Card */}
-      <Card className="p-6">
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Avatar */}
-          <div className="flex flex-col items-center">
-            <div className="relative">
-              <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
-                {astrologer?.image ? (
-                  <Image
-                    src={astrologer.image}
-                    alt={astrologer.name}
-                    width={96}
-                    height={96}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="text-3xl font-bold text-primary">
-                    {astrologer?.name?.charAt(0) || 'A'}
-                  </span>
-                )}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-text-primary font-lexend">Profile</h1>
+          <Button onClick={() => setIsEditing(true)} className="shadow-web-sm">
+            <Edit className="w-4 h-4 mr-2" />
+            Edit Profile
+          </Button>
+        </div>
+
+        {/* 2-column layout (like user profile) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Profile Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card className="overflow-hidden shadow-web-sm" padding="none">
+                {/* Gradient Header */}
+                <div className="bg-gradient-to-br from-primary/20 to-primary/10 px-6 pt-6 pb-8">
+                  <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                    {/* Avatar */}
+                    <div className="relative">
+                      <div className="w-24 h-24 rounded-full bg-white/80 flex items-center justify-center overflow-hidden shadow-web-sm">
+                        {astrologer?.image ? (
+                          <Image
+                            src={astrologer.image}
+                            alt={astrologer.name}
+                            width={96}
+                            height={96}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-3xl font-bold text-primary">
+                            {astrologer?.name?.charAt(0) || 'A'}
+                          </span>
+                        )}
+                      </div>
+                      <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors">
+                        <Camera className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Name & Quick Info */}
+                    <div className="text-center md:text-left">
+                      <div className="flex items-center gap-2 justify-center md:justify-start mb-1">
+                        <h2 className="text-xl font-bold text-text-primary font-lexend">{astrologer?.name}</h2>
+                        {astrologer?.status === 'approved' && (
+                          <Badge variant="success" className="text-xs">Verified</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 justify-center md:justify-start">
+                        <Star className="w-4 h-4 text-secondary fill-secondary" />
+                        <span className="font-semibold text-sm">{astrologer?.rating?.toFixed(1) || '0.0'}</span>
+                        <span className="text-text-muted text-xs">
+                          ({astrologer?.totalReviews || 0} reviews)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="p-6 space-y-3">
+                  <div className="flex items-center gap-3 text-sm text-text-secondary">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Award className="w-4 h-4 text-primary" />
+                    </div>
+                    {astrologer?.specialization?.join(', ') || 'Not specified'}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-text-secondary">
+                    <div className="w-8 h-8 rounded-full bg-status-info/10 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-status-info" />
+                    </div>
+                    {astrologer?.experience || 0} years experience
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-text-secondary">
+                    <div className="w-8 h-8 rounded-full bg-status-warning/10 flex items-center justify-center">
+                      <Languages className="w-4 h-4 text-status-warning" />
+                    </div>
+                    {astrologer?.languages?.join(', ') || 'Not specified'}
+                  </div>
+                </div>
+
+                {/* Bio */}
+                <div className="px-6 pb-6 pt-0">
+                  <div className="border-t border-gray-100 pt-4">
+                    <h3 className="font-semibold text-text-primary font-lexend mb-2">About</h3>
+                    <p className="text-text-secondary text-sm leading-relaxed">
+                      {astrologer?.bio || 'No bio added yet. Click Edit Profile to add your bio.'}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Rates */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4 shadow-web-sm hover:shadow-web-md transition-shadow">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-status-info/10 flex items-center justify-center">
+                      <Mail className="w-4 h-4 text-status-info" />
+                    </div>
+                    <span className="font-medium font-lexend">Chat</span>
+                  </div>
+                  <p className="text-xl font-bold text-text-primary font-lexend flex items-center">
+                    <IndianRupee className="w-4 h-4" />
+                    {astrologer?.chatPricePerMinute || 0}
+                    <span className="text-sm text-text-muted font-normal ml-1">/min</span>
+                  </p>
+                </Card>
+
+                <Card className="p-4 shadow-web-sm hover:shadow-web-md transition-shadow">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-status-success/10 flex items-center justify-center">
+                      <Phone className="w-4 h-4 text-status-success" />
+                    </div>
+                    <span className="font-medium font-lexend">Call</span>
+                  </div>
+                  <p className="text-xl font-bold text-text-primary font-lexend flex items-center">
+                    <IndianRupee className="w-4 h-4" />
+                    {astrologer?.callPricePerMinute || 0}
+                    <span className="text-sm text-text-muted font-normal ml-1">/min</span>
+                  </p>
+                </Card>
               </div>
-              <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg">
-                <Camera className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-1 mt-3">
-              <Star className="w-4 h-4 text-secondary fill-secondary" />
-              <span className="font-semibold">{astrologer?.rating?.toFixed(1) || '0.0'}</span>
-              <span className="text-text-muted text-sm">
-                ({astrologer?.totalReviews || 0} reviews)
-              </span>
-            </div>
+            </motion.div>
           </div>
 
-          {/* Info */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-xl font-bold text-text-primary">{astrologer?.name}</h2>
-              {astrologer?.status === 'approved' && (
-                <Badge variant="success" className="text-xs">Verified</Badge>
-              )}
-            </div>
+          {/* Sidebar */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Contact Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
+                <div className="flex items-center gap-3 p-4 border-b border-gray-100">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-text-muted">Email</p>
+                    <p className="text-sm font-medium">{astrologer?.email || 'Not added'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-10 h-10 rounded-full bg-status-success/10 flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-status-success" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-text-muted">Phone</p>
+                    <p className="text-sm font-medium">{astrologer?.phone || 'Not added'}</p>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
 
-            <div className="space-y-2 text-sm">
-              <p className="flex items-center gap-2 text-text-secondary">
-                <Award className="w-4 h-4" />
-                {astrologer?.specialization?.join(', ') || 'Not specified'}
-              </p>
-              <p className="flex items-center gap-2 text-text-secondary">
-                <Clock className="w-4 h-4" />
-                {astrologer?.experience || 0} years experience
-              </p>
-              <p className="flex items-center gap-2 text-text-secondary">
-                <Languages className="w-4 h-4" />
-                {astrologer?.languages?.join(', ') || 'Not specified'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Bio */}
-        <div className="mt-6 pt-6 border-t">
-          <h3 className="font-semibold text-text-primary mb-2">About</h3>
-          <p className="text-text-secondary text-sm">
-            {astrologer?.bio || 'No bio added yet. Click Edit Profile to add your bio.'}
-          </p>
-        </div>
-      </Card>
-
-      {/* Rates */}
-      <Card className="p-6">
-        <h3 className="font-semibold text-text-primary mb-4">Consultation Rates</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Mail className="w-4 h-4 text-status-info" />
-              <span className="font-medium">Chat</span>
-            </div>
-            <p className="text-xl font-bold text-text-primary flex items-center">
-              <IndianRupee className="w-4 h-4" />
-              {astrologer?.chatPricePerMinute || 0}
-              <span className="text-sm text-text-muted font-normal ml-1">/min</span>
-            </p>
-          </div>
-
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Phone className="w-4 h-4 text-status-success" />
-              <span className="font-medium">Call</span>
-            </div>
-            <p className="text-xl font-bold text-text-primary flex items-center">
-              <IndianRupee className="w-4 h-4" />
-              {astrologer?.callPricePerMinute || 0}
-              <span className="text-sm text-text-muted font-normal ml-1">/min</span>
-            </p>
+            {/* Quick Links */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <QuickLinks items={SIDEBAR_LINKS} />
+            </motion.div>
           </div>
         </div>
-      </Card>
 
-      {/* Contact Info */}
-      <Card className="p-6">
-        <h3 className="font-semibold text-text-primary mb-4">Contact Information</h3>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-text-muted" />
-            </div>
+        {/* Edit Modal */}
+        <Modal
+          isOpen={isEditing}
+          onClose={() => setIsEditing(false)}
+          title="Edit Profile"
+        >
+          <div className="space-y-4">
             <div>
-              <p className="text-xs text-text-muted">Email</p>
-              <p className="text-sm font-medium">{astrologer?.email || 'Not added'}</p>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Bio</label>
+              <textarea
+                value={editData.bio}
+                onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
+                placeholder="Tell users about yourself..."
+              />
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-              <Phone className="w-5 h-5 text-text-muted" />
-            </div>
-            <div>
-              <p className="text-xs text-text-muted">Phone</p>
-              <p className="text-sm font-medium">{astrologer?.phone || 'Not added'}</p>
-            </div>
-          </div>
-        </div>
-      </Card>
 
-      {/* Edit Modal */}
-      <Modal
-        isOpen={isEditing}
-        onClose={() => setIsEditing(false)}
-        title="Edit Profile"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Bio</label>
-            <textarea
-              value={editData.bio}
-              onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
-              placeholder="Tell users about yourself..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">
-              Years of Experience
-            </label>
-            <Input
-              type="number"
-              value={editData.experience}
-              onChange={(e) => setEditData({ ...editData, experience: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">
-                Chat Rate (₹/min)
+                Years of Experience
               </label>
               <Input
                 type="number"
-                value={editData.chatRate}
-                onChange={(e) => setEditData({ ...editData, chatRate: e.target.value })}
+                value={editData.experience}
+                onChange={(e) => setEditData({ ...editData, experience: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Call Rate (₹/min)
-              </label>
-              <Input
-                type="number"
-                value={editData.callRate}
-                onChange={(e) => setEditData({ ...editData, callRate: e.target.value })}
-              />
-            </div>
-          </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={handleSave}>
-              Save Changes
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Chat Rate (₹/min)
+                </label>
+                <Input
+                  type="number"
+                  value={editData.chatRate}
+                  onChange={(e) => setEditData({ ...editData, chatRate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Call Rate (₹/min)
+                </label>
+                <Input
+                  type="number"
+                  value={editData.callRate}
+                  onChange={(e) => setEditData({ ...editData, callRate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleSave}>
+                Save Changes
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      </PageContainer>
     </div>
   );
 }

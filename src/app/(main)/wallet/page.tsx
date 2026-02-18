@@ -14,18 +14,17 @@ import { useState, useMemo } from 'react';
 import { WalletBalance, TransactionList } from '@/components/features/wallet';
 import { useWalletBalance, useWalletSummary, useTransactions } from '@/hooks/useWalletData';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { motion } from 'framer-motion';
-import { cn } from '@/utils/cn';
+import { AnimatedTabs } from '@/components/shared';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 type FilterType = 'all' | 'credit' | 'debit';
 
-const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'credit', label: 'Funds Added' },
-  { value: 'debit', label: 'Money Spent' },
+const FILTER_OPTIONS: { key: FilterType; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'credit', label: 'Funds Added' },
+  { key: 'debit', label: 'Money Spent' },
 ];
 
 export default function WalletPage() {
@@ -112,39 +111,14 @@ export default function WalletPage() {
           {/* Main Content - Transactions */}
           <div className="lg:col-span-2">
             {/* Underline-style Filter Tabs */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="flex border-b border-gray-200 mb-6"
-              role="tablist"
-              aria-label="Transaction filter tabs"
-            >
-              {FILTER_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  role="tab"
-                  aria-selected={activeFilter === option.value}
-                  aria-controls={`tabpanel-${option.value}`}
-                  onClick={() => setActiveFilter(option.value)}
-                  className={cn(
-                    'py-3 px-5 text-sm font-medium font-lexend transition-colors relative',
-                    activeFilter === option.value
-                      ? 'text-primary'
-                      : 'text-text-secondary hover:text-text-primary'
-                  )}
-                >
-                  {option.label}
-                  {activeFilter === option.value && (
-                    <motion.div
-                      layoutId="wallet-tab-underline"
-                      className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full"
-                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                    />
-                  )}
-                </button>
-              ))}
-            </motion.div>
+            <AnimatedTabs
+              tabs={FILTER_OPTIONS}
+              activeKey={activeFilter}
+              onTabChange={(key) => setActiveFilter(key as FilterType)}
+              layoutId="wallet-tab-underline"
+              className="mb-6"
+              ariaLabel="Transaction filter tabs"
+            />
 
             {/* Transaction History */}
             <div role="tabpanel" id={`tabpanel-${activeFilter}`}>

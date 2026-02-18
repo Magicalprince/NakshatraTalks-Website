@@ -148,12 +148,12 @@ export const useAuthStore = create<AuthState>()(
 // Subscribe to auth events (client-side only)
 if (typeof window !== 'undefined') {
   authEvents.on('logout_required', (reason) => {
-    console.log('[AuthStore] Logout required:', reason);
+    if (process.env.NODE_ENV === 'development') console.log('[AuthStore] Logout required:', reason);
     useAuthStore.getState().logout();
   });
 
   authEvents.on('session_invalid', (reason) => {
-    console.log('[AuthStore] Session invalid:', reason);
+    if (process.env.NODE_ENV === 'development') console.log('[AuthStore] Session invalid:', reason);
     useAuthStore.getState().logout();
   });
 }

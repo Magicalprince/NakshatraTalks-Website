@@ -31,7 +31,7 @@ const socialLinks = [
 
 export function WebFooter() {
   return (
-    <footer className="relative bg-gray-900 text-white">
+    <footer className="relative bg-gray-900 text-white mt-12">
       {/* Gradient top border */}
       <div
         className="h-1"

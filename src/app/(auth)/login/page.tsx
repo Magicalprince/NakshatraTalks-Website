@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Phone, ArrowRight } from 'lucide-react';
+import { Phone, ArrowRight, Star } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -41,8 +41,12 @@ function LoginContent() {
     // Simulate brief loading
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Always proceed to OTP screen (use default phone if empty)
-    const phoneToUse = phone || '9876543210';
+    // Validate phone number
+    const phoneToUse = phone || (process.env.NODE_ENV === 'development' ? '9876543210' : '');
+    if (!phoneToUse || phoneToUse.length < 10) {
+      setIsLoading(false);
+      return;
+    }
     router.push(`/verify-otp?phone=${phoneToUse}&redirect=${encodeURIComponent(redirect)}`);
   };
 
@@ -124,6 +128,17 @@ function LoginContent() {
             Privacy Policy
           </Link>
         </p>
+
+        {/* Astrologer Login */}
+        <div className="text-center pt-4 border-t border-gray-100">
+          <Link
+            href="/verify-otp?phone=9876543210&role=astrologer&redirect=/astrologer/dashboard"
+            className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-primary font-lexend transition-colors"
+          >
+            <Star className="h-4 w-4" />
+            Login as Astrologer (Demo)
+          </Link>
+        </div>
       </form>
 
       {/* Additional info for mobile */}

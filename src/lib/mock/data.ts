@@ -5,6 +5,7 @@
 
 import {
   Astrologer,
+  AstrologerData,
   User,
   ChatMessage,
   ChatSession,
@@ -203,11 +204,37 @@ export const MOCK_USER: User = {
 export const MOCK_ASTROLOGER_USER: User = {
   id: 'astrologer-1',
   phone: '+919876543210',
-  name: 'Pt. Rajesh Sharma',
-  email: 'rajesh.sharma@example.com',
-  profileImage: 'https://randomuser.me/api/portraits/men/32.jpg',
+  name: 'Chandradev',
+  email: 'chandradev@example.com',
+  profileImage: '/images/astrologer/chandradev.png',
   role: 'astrologer',
   isActive: true,
+  createdAt: '2020-01-15T00:00:00.000Z',
+  updatedAt: '2024-01-15T00:00:00.000Z',
+};
+
+export const MOCK_ASTROLOGER_DATA: AstrologerData = {
+  id: '1',
+  name: 'Chandradev',
+  phone: '+919876543210',
+  email: 'chandradev@example.com',
+  image: '/images/astrologer/chandradev.png',
+  bio: 'Expert in Vedic Astrology and Kundli reading with 15+ years of experience. I have helped thousands of clients find clarity through the ancient wisdom of astrology.',
+  specialization: ['Vedic', 'Kundli', 'Marriage'],
+  languages: ['Hindi', 'English'],
+  experience: 15,
+  education: ['PhD in Astrology', 'Jyotish Acharya'],
+  chatPricePerMinute: 25,
+  callPricePerMinute: 30,
+  rating: 5.0,
+  totalCalls: 2000,
+  totalReviews: 1845,
+  isAvailable: true,
+  chatAvailable: true,
+  callAvailable: true,
+  isLive: false,
+  workingHours: {},
+  status: 'approved',
   createdAt: '2020-01-15T00:00:00.000Z',
   updatedAt: '2024-01-15T00:00:00.000Z',
 };

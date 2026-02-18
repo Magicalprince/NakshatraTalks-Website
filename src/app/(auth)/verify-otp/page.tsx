@@ -8,13 +8,14 @@ import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { Button, OTPInput } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
-import { MOCK_USER } from '@/lib/mock/data';
+import { MOCK_USER, MOCK_ASTROLOGER_USER, MOCK_ASTROLOGER_DATA } from '@/lib/mock/data';
 
 function VerifyOTPContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone') || '9876543210';
-  const redirect = searchParams.get('redirect') || '/';
+  const role = searchParams.get('role');
+  const redirect = searchParams.get('redirect') || (role === 'astrologer' ? '/astrologer/dashboard' : '/');
   const { setAuth } = useAuthStore();
 
   // Get auth state directly
@@ -41,15 +42,28 @@ function VerifyOTPContent() {
     // Simulate brief loading
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Always log in with mock user data (no validation required)
-    setAuth({
-      user: {
-        ...MOCK_USER,
-        phone: phone,
-      },
-      accessToken: 'mock-access-token-12345',
-      userType: 'user',
-    });
+    if (role === 'astrologer') {
+      // Log in as astrologer with mock data
+      setAuth({
+        user: {
+          ...MOCK_ASTROLOGER_USER,
+          phone: phone,
+        },
+        astrologer: MOCK_ASTROLOGER_DATA,
+        accessToken: 'mock-astrologer-token-12345',
+        userType: 'astrologer',
+      });
+    } else {
+      // Log in as regular user with mock data
+      setAuth({
+        user: {
+          ...MOCK_USER,
+          phone: phone,
+        },
+        accessToken: 'mock-access-token-12345',
+        userType: 'user',
+      });
+    }
 
     // Navigate to home or redirect
     router.replace(redirect);

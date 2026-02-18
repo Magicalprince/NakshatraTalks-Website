@@ -76,12 +76,7 @@ class UserService {
 
     return apiClient.post<ApiResponse<{ imageUrl: string }>>(
       `${API_ENDPOINTS.USER.PROFILE}/image`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
+      formData
     );
   }
 

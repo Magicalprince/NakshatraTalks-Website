@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AstrologerSidebar } from '@/components/layout/AstrologerSidebar';
-import { AstrologerBottomNav } from '@/components/layout/AstrologerBottomNav';
+import { AstrologerWebNavbar } from '@/components/layout/AstrologerWebNavbar';
+import { AstrologerMobileMenu } from '@/components/layout/AstrologerMobileMenu';
+import { WebFooter } from '@/components/layout/WebFooter';
+import { ToastContainer } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useHeartbeat } from '@/hooks/useAstrologerDashboard';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -14,17 +16,17 @@ export default function AstrologerLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, user, isHydrated } = useAuthStore();
+  const { isAuthenticated, userType, isHydrated } = useAuthStore();
 
   // Send heartbeat to maintain online status
-  useHeartbeat(isAuthenticated && user?.role === 'astrologer');
+  useHeartbeat(isAuthenticated && userType === 'astrologer');
 
   // Redirect if not authenticated or not an astrologer
   useEffect(() => {
-    if (isHydrated && (!isAuthenticated || user?.role !== 'astrologer')) {
+    if (isHydrated && (!isAuthenticated || userType !== 'astrologer')) {
       router.push('/login');
     }
-  }, [isAuthenticated, user, isHydrated, router]);
+  }, [isAuthenticated, userType, isHydrated, router]);
 
   // Loading state
   if (!isHydrated) {
@@ -39,22 +41,21 @@ export default function AstrologerLayout({
   }
 
   // Not authorized
-  if (!isAuthenticated || user?.role !== 'astrologer') {
+  if (!isAuthenticated || userType !== 'astrologer') {
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-background-offWhite">
-      {/* Sidebar (Desktop) */}
-      <AstrologerSidebar />
+    <div className="min-h-screen bg-background-offWhite flex flex-col">
+      <AstrologerWebNavbar />
+      <AstrologerMobileMenu />
 
-      {/* Main Content */}
-      <main className="lg:pl-64 min-h-screen pb-20 lg:pb-0">
+      <main className="flex-1">
         {children}
       </main>
 
-      {/* Bottom Nav (Mobile) */}
-      <AstrologerBottomNav />
+      <WebFooter />
+      <ToastContainer />
     </div>
   );
 }

@@ -14,34 +14,15 @@ import {
   Globe,
   Shield,
   Trash2,
-  ChevronRight,
   Loader2,
   Sliders,
   FileText,
   AlertTriangle,
 } from 'lucide-react';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
-
-interface SettingItem {
-  icon: React.ElementType;
-  label: string;
-  description?: string;
-  action?: () => void;
-  href?: string;
-  toggle?: boolean;
-  value?: boolean;
-  onToggle?: (value: boolean) => void;
-  danger?: boolean;
-}
-
-interface SettingSection {
-  title: string;
-  icon: React.ElementType;
-  items: SettingItem[];
-}
+import { SectionHeader, SettingRow } from '@/components/shared';
 
 export default function SettingsPage() {
   const { addToast } = useUIStore();
@@ -73,72 +54,6 @@ export default function SettingsPage() {
       },
     });
   };
-
-  const settingSections: SettingSection[] = [
-    {
-      title: 'Preferences',
-      icon: Sliders,
-      items: [
-        {
-          icon: Bell,
-          label: 'Push Notifications',
-          description: 'Receive notifications for messages and updates',
-          toggle: true,
-          value: notifications,
-          onToggle: setNotifications,
-        },
-        {
-          icon: Moon,
-          label: 'Dark Mode',
-          description: 'Switch to dark theme',
-          toggle: true,
-          value: darkMode,
-          onToggle: setDarkMode,
-        },
-        {
-          icon: Globe,
-          label: 'Language',
-          description: 'English',
-          action: () => {
-            addToast({
-              type: 'info',
-              title: 'Coming Soon',
-              message: 'Language selection will be available soon.',
-            });
-          },
-        },
-      ],
-    },
-    {
-      title: 'Legal & Privacy',
-      icon: FileText,
-      items: [
-        {
-          icon: Shield,
-          label: 'Privacy Policy',
-          href: '/privacy',
-        },
-        {
-          icon: Shield,
-          label: 'Terms of Service',
-          href: '/terms',
-        },
-      ],
-    },
-    {
-      title: 'Danger Zone',
-      icon: AlertTriangle,
-      items: [
-        {
-          icon: Trash2,
-          label: 'Delete Account',
-          description: 'Permanently delete your account and data',
-          action: () => setIsDeleteModalOpen(true),
-          danger: true,
-        },
-      ],
-    },
-  ];
 
   // Auth loading state
   if (!isReady) {
@@ -189,34 +104,86 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="space-y-6">
-          {settingSections.map((section, sectionIndex) => (
-            <motion.div
-              key={section.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: sectionIndex * 0.1 }}
-            >
-              {/* Section Header */}
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <section.icon className={`w-4 h-4 ${section.title === 'Danger Zone' ? 'text-status-error' : 'text-text-muted'}`} />
-                <h2 className={`text-sm font-semibold font-lexend uppercase tracking-wider ${
-                  section.title === 'Danger Zone' ? 'text-status-error' : 'text-text-muted'
-                }`}>
-                  {section.title}
-                </h2>
-              </div>
+          {/* Preferences Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0 }}
+          >
+            <SectionHeader icon={Sliders} title="Preferences" />
+            <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
+              <SettingRow
+                icon={Bell}
+                label="Push Notifications"
+                description="Receive notifications for messages and updates"
+                toggle
+                checked={notifications}
+                onToggle={setNotifications}
+              />
+              <SettingRow
+                icon={Moon}
+                label="Dark Mode"
+                description="Switch to dark theme"
+                toggle
+                checked={darkMode}
+                onToggle={setDarkMode}
+              />
+              <SettingRow
+                icon={Globe}
+                label="Language"
+                description="English"
+                onClick={() => {
+                  addToast({
+                    type: 'info',
+                    title: 'Coming Soon',
+                    message: 'Language selection will be available soon.',
+                  });
+                }}
+                isLast
+              />
+            </Card>
+          </motion.div>
 
-              <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
-                {section.items.map((item, itemIndex) => (
-                  <SettingRow
-                    key={item.label}
-                    item={item}
-                    isLast={itemIndex === section.items.length - 1}
-                  />
-                ))}
-              </Card>
-            </motion.div>
-          ))}
+          {/* Legal & Privacy Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <SectionHeader icon={FileText} title="Legal & Privacy" />
+            <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
+              <SettingRow
+                icon={Shield}
+                label="Privacy Policy"
+                href="/privacy"
+              />
+              <SettingRow
+                icon={Shield}
+                label="Terms of Service"
+                href="/terms"
+                isLast
+              />
+            </Card>
+          </motion.div>
+
+          {/* Danger Zone Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <SectionHeader icon={AlertTriangle} title="Danger Zone" variant="danger" />
+            <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
+              <SettingRow
+                icon={Trash2}
+                label="Delete Account"
+                description="Permanently delete your account and data"
+                onClick={() => setIsDeleteModalOpen(true)}
+                danger
+                isLast
+              />
+            </Card>
+          </motion.div>
         </div>
       </PageContainer>
 
@@ -282,98 +249,4 @@ export default function SettingsPage() {
       </Modal>
     </div>
   );
-}
-
-// Setting Row Component
-function SettingRow({
-  item,
-  isLast,
-}: {
-  item: SettingItem;
-  isLast: boolean;
-}) {
-  const content = (
-    <div
-      className={`flex items-center justify-between p-4 transition-colors duration-200 ${
-        !isLast ? 'border-b border-gray-100' : ''
-      } ${item.action || item.href ? 'cursor-pointer hover:bg-background-offWhite' : ''} ${
-        item.toggle ? 'hover:bg-background-offWhite' : ''
-      }`}
-      onClick={item.action}
-      role={item.action ? 'button' : undefined}
-      tabIndex={item.action ? 0 : undefined}
-      aria-label={item.action ? item.label : undefined}
-      onKeyDown={item.action ? (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          item.action?.();
-        }
-      } : undefined}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-200 ${
-            item.danger ? 'bg-status-error/10' : 'bg-background-offWhite'
-          }`}
-        >
-          <item.icon
-            className={`w-5 h-5 ${
-              item.danger ? 'text-status-error' : 'text-text-secondary'
-            }`}
-          />
-        </div>
-        <div>
-          <p
-            className={`font-medium text-sm ${
-              item.danger ? 'text-status-error' : 'text-text-primary'
-            }`}
-          >
-            {item.label}
-          </p>
-          {item.description && (
-            <p className="text-xs text-text-muted mt-0.5">{item.description}</p>
-          )}
-        </div>
-      </div>
-
-      {item.toggle ? (
-        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-          <input
-            type="checkbox"
-            checked={item.value}
-            onChange={(e) => item.onToggle?.(e.target.checked)}
-            className="sr-only peer"
-            aria-label={`Toggle ${item.label}`}
-          />
-          <motion.div
-            className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-primary peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-primary/20 relative"
-            whileTap={{ scale: 0.95 }}
-          >
-            <motion.div
-              className="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 shadow-sm"
-              animate={{
-                x: item.value ? 20 : 0,
-                borderColor: item.value ? 'rgba(255,255,255,0.8)' : 'rgba(209,213,219,1)',
-              }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            />
-          </motion.div>
-        </label>
-      ) : (
-        <ChevronRight className={`w-5 h-5 flex-shrink-0 ${
-          item.danger ? 'text-status-error/50' : 'text-text-muted'
-        }`} />
-      )}
-    </div>
-  );
-
-  if (item.href) {
-    return (
-      <Link href={item.href} aria-label={`Navigate to ${item.label}`}>
-        {content}
-      </Link>
-    );
-  }
-
-  return content;
 }

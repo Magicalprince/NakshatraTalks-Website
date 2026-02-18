@@ -62,7 +62,7 @@ export function useHomeData(): HomeData {
         setTopRatedAstrologers(topRatedResponse.data);
       }
     } catch (err) {
-      console.error('Error fetching home data:', err);
+      if (process.env.NODE_ENV === 'development') console.error('Error fetching home data:', err);
       setError('Failed to load data');
 
       // Fallback to mock data on error

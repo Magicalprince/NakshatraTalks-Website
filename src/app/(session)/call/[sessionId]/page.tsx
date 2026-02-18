@@ -82,7 +82,7 @@ export default function CallSessionPage() {
         setCallStatus('connected');
       }, 2000);
     } catch (error) {
-      console.error('Failed to get media devices:', error);
+      if (process.env.NODE_ENV === 'development') console.error('Failed to get media devices:', error);
       addToast({
         type: 'error',
         title: 'Media Error',
@@ -186,7 +186,7 @@ export default function CallSessionPage() {
 
       // In Twilio, you would also need to update the published track
     } catch (error) {
-      console.error('Failed to flip camera:', error);
+      if (process.env.NODE_ENV === 'development') console.error('Failed to flip camera:', error);
       addToast({
         type: 'error',
         title: 'Camera Error',

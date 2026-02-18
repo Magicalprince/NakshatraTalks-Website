@@ -106,7 +106,7 @@ class ApiClient {
           // Don't retry auth endpoints to avoid infinite loops
           const isAuthEndpoint = originalRequest.url?.includes('/auth/');
           if (isAuthEndpoint) {
-            console.log('[ApiClient] 401 on auth endpoint, clearing tokens');
+            if (process.env.NODE_ENV === 'development') console.log('[ApiClient] 401 on auth endpoint, clearing tokens');
             this.clearAccessToken();
             authEvents.sessionInvalid('Auth endpoint returned 401');
             return Promise.reject(error);
@@ -136,7 +136,7 @@ class ApiClient {
               return Promise.reject(error);
             }
           } catch (refreshError) {
-            console.error('[ApiClient] Token refresh error:', refreshError);
+            if (process.env.NODE_ENV === 'development') console.error('[ApiClient] Token refresh error:', refreshError);
             this.clearAccessToken();
             authEvents.logoutRequired('Token refresh error');
             return Promise.reject(refreshError);
@@ -145,7 +145,7 @@ class ApiClient {
 
         // Handle 403 Forbidden
         if (error.response?.status === 403) {
-          console.log('[ApiClient] 403 Forbidden - Session may be invalid');
+          if (process.env.NODE_ENV === 'development') console.log('[ApiClient] 403 Forbidden - Session may be invalid');
         }
 
         return Promise.reject(error);
@@ -179,7 +179,7 @@ class ApiClient {
    */
   private async _doRefreshToken(): Promise<boolean> {
     try {
-      console.log('[ApiClient] Attempting token refresh...');
+      if (process.env.NODE_ENV === 'development') console.log('[ApiClient] Attempting token refresh...');
 
       // Make direct axios call to refresh endpoint
       // The refresh token is automatically sent via httpOnly cookie
@@ -194,17 +194,17 @@ class ApiClient {
       );
 
       if (response.data?.success && response.data?.access_token) {
-        console.log('[ApiClient] Token refresh successful');
+        if (process.env.NODE_ENV === 'development') console.log('[ApiClient] Token refresh successful');
         this.accessToken = response.data.access_token;
         authEvents.tokenRefreshed();
         return true;
       }
 
-      console.warn('[ApiClient] Token refresh response invalid:', response.data);
+      if (process.env.NODE_ENV === 'development') console.warn('[ApiClient] Token refresh response invalid:', response.data);
       return false;
     } catch (error: unknown) {
       const axiosError = error as AxiosError;
-      console.error('[ApiClient] Token refresh failed:', axiosError?.response?.status, axiosError?.message);
+      if (process.env.NODE_ENV === 'development') console.error('[ApiClient] Token refresh failed:', axiosError?.response?.status, axiosError?.message);
       return false;
     }
   }

@@ -273,12 +273,7 @@ class ChatService {
 
     return apiClient.post<ApiResponse<{ url: string }>>(
       API_ENDPOINTS.CHAT.UPLOAD(sessionId),
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
+      formData
     );
   }
 

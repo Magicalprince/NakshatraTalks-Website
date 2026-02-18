@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { astrologerDashboardService } from '@/lib/services/astrologer-dashboard.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useEffect, useRef, useCallback } from 'react';
+import { shouldUseMockData, mockApi } from '@/lib/mock';
 
 // Query keys
 export const ASTROLOGER_QUERY_KEYS = {
@@ -28,6 +29,10 @@ export function useAstrologerStats() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.stats,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getStats();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getStats();
       return response.data;
     },
@@ -46,6 +51,10 @@ export function useAvailabilityStatus() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.availability,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getAvailability();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getAvailabilityStatus();
       return response.data;
     },
@@ -64,8 +73,15 @@ export function useToggleAvailability() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (type?: 'chat' | 'call' | 'all') =>
-      astrologerDashboardService.toggleAvailability(type),
+    mutationFn: async (type?: 'chat' | 'call' | 'all') => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.updateAvailability({
+          chat: type === 'chat' || type === 'all',
+          call: type === 'call' || type === 'all',
+        });
+      }
+      return astrologerDashboardService.toggleAvailability(type);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
     },
@@ -79,8 +95,12 @@ export function useUpdateAvailability() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (availability: { chat?: boolean; call?: boolean; video?: boolean }) =>
-      astrologerDashboardService.updateAvailability(availability),
+    mutationFn: async (availability: { chat?: boolean; call?: boolean; video?: boolean }) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.updateAvailability(availability);
+      }
+      return astrologerDashboardService.updateAvailability(availability);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
     },
@@ -95,6 +115,7 @@ export function useHeartbeat(enabled: boolean = true) {
 
   const sendHeartbeat = useCallback(async () => {
     try {
+      if (shouldUseMockData()) return; // Skip heartbeat in mock mode
       await astrologerDashboardService.sendHeartbeat();
     } catch {
       // Ignore heartbeat errors
@@ -128,6 +149,10 @@ export function useIncomingRequests() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getIncomingRequests();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getIncomingRequests();
       return response.data;
     },
@@ -146,6 +171,10 @@ export function useWaitlist() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.waitlist,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getWaitlist();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getWaitlist();
       return response.data;
     },
@@ -161,8 +190,12 @@ export function useChatRequestActions() {
   const queryClient = useQueryClient();
 
   const acceptMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.acceptChatRequest(requestId),
+    mutationFn: async (requestId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.acceptRequest(requestId);
+      }
+      return astrologerDashboardService.acceptChatRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
@@ -170,8 +203,12 @@ export function useChatRequestActions() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ requestId, reason }: { requestId: string; reason?: string }) =>
-      astrologerDashboardService.rejectChatRequest(requestId, reason),
+    mutationFn: async ({ requestId, reason }: { requestId: string; reason?: string }) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.rejectRequest(requestId);
+      }
+      return astrologerDashboardService.rejectChatRequest(requestId, reason);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
     },
@@ -192,8 +229,12 @@ export function useAcceptRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.acceptChatRequest(requestId),
+    mutationFn: async (requestId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.acceptRequest(requestId);
+      }
+      return astrologerDashboardService.acceptChatRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
@@ -209,8 +250,12 @@ export function useRejectRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.rejectChatRequest(requestId),
+    mutationFn: async (requestId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.rejectRequest(requestId);
+      }
+      return astrologerDashboardService.rejectChatRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
@@ -225,8 +270,12 @@ export function useCallRequestActions() {
   const queryClient = useQueryClient();
 
   const acceptMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.acceptCallRequest(requestId),
+    mutationFn: async (requestId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.acceptRequest(requestId);
+      }
+      return astrologerDashboardService.acceptCallRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
@@ -234,8 +283,12 @@ export function useCallRequestActions() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ requestId, reason }: { requestId: string; reason?: string }) =>
-      astrologerDashboardService.rejectCallRequest(requestId, reason),
+    mutationFn: async ({ requestId, reason }: { requestId: string; reason?: string }) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.rejectRequest(requestId);
+      }
+      return astrologerDashboardService.rejectCallRequest(requestId, reason);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
     },
@@ -259,6 +312,10 @@ export function useActiveChat() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.activeChat,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getActiveChat();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getActiveChatSession();
       return response.data;
     },
@@ -277,6 +334,10 @@ export function useActiveCall() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.activeCall,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = await mockApi.astrologerDashboard.getActiveCall();
+        return response.data;
+      }
       const response = await astrologerDashboardService.getActiveCallSession();
       return response.data;
     },
@@ -295,6 +356,12 @@ export function useActiveSessions(type: 'chat' | 'call') {
   return useQuery({
     queryKey: type === 'chat' ? ASTROLOGER_QUERY_KEYS.activeChat : ASTROLOGER_QUERY_KEYS.activeCall,
     queryFn: async () => {
+      if (shouldUseMockData()) {
+        const response = type === 'chat'
+          ? await mockApi.astrologerDashboard.getActiveChat()
+          : await mockApi.astrologerDashboard.getActiveCall();
+        return response.data;
+      }
       const response = type === 'chat'
         ? await astrologerDashboardService.getActiveChatSession()
         : await astrologerDashboardService.getActiveCallSession();
@@ -312,8 +379,13 @@ export function useEndChatSessionAstrologer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (sessionId: string) =>
-      astrologerDashboardService.endChatSession(sessionId),
+    mutationFn: async (sessionId: string) => {
+      if (shouldUseMockData()) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return { success: true, data: { sessionId, ended: true } };
+      }
+      return astrologerDashboardService.endChatSession(sessionId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.stats });
@@ -328,8 +400,13 @@ export function useEndCallSessionAstrologer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (sessionId: string) =>
-      astrologerDashboardService.endCallSession(sessionId),
+    mutationFn: async (sessionId: string) => {
+      if (shouldUseMockData()) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return { success: true, data: { sessionId, ended: true } };
+      }
+      return astrologerDashboardService.endCallSession(sessionId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.stats });
@@ -344,8 +421,29 @@ export function useSendMessageAstrologer(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ content, type = 'text' }: { content: string; type?: 'text' | 'image' }) =>
-      astrologerDashboardService.sendMessage(sessionId, content, type),
+    mutationFn: async ({ content, type = 'text' }: { content: string; type?: 'text' | 'image' }) => {
+      if (shouldUseMockData()) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return {
+          success: true,
+          data: {
+            message: {
+              id: `msg-${Date.now()}`,
+              sessionId,
+              senderId: 'astrologer-1',
+              senderType: 'astrologer',
+              message: content,
+              content,
+              type,
+              isRead: false,
+              status: 'sent',
+              createdAt: new Date().toISOString(),
+            },
+          },
+        };
+      }
+      return astrologerDashboardService.sendMessage(sessionId, content, type);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.chatMessages(sessionId) });
     },
@@ -359,8 +457,12 @@ export function useQueueConnect() {
   const queryClient = useQueryClient();
 
   const connectChat = useMutation({
-    mutationFn: (queueId: string) =>
-      astrologerDashboardService.connectChatQueue(queueId),
+    mutationFn: async (queueId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.acceptRequest(queueId);
+      }
+      return astrologerDashboardService.connectChatQueue(queueId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
@@ -368,8 +470,12 @@ export function useQueueConnect() {
   });
 
   const connectCall = useMutation({
-    mutationFn: (queueId: string) =>
-      astrologerDashboardService.connectCallQueue(queueId),
+    mutationFn: async (queueId: string) => {
+      if (shouldUseMockData()) {
+        return mockApi.astrologerDashboard.acceptRequest(queueId);
+      }
+      return astrologerDashboardService.connectCallQueue(queueId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });

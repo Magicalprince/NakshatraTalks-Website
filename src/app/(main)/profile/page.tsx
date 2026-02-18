@@ -7,25 +7,23 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
-import { Wallet, History, Settings, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
+import { Wallet, History, Settings, HelpCircle, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { UpdateProfileData } from '@/types/api.types';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { QuickLinks, type QuickLinkItem } from '@/components/shared';
 
-const MENU_ITEMS = [
+const MENU_ITEMS: QuickLinkItem[] = [
   {
     icon: Wallet,
     label: 'My Wallet',
     href: '/wallet',
     color: 'text-primary',
     bgColor: 'bg-primary/10',
-    borderColor: 'border-l-primary',
   },
   {
     icon: History,
@@ -33,7 +31,6 @@ const MENU_ITEMS = [
     href: '/history/chat',
     color: 'text-status-info',
     bgColor: 'bg-status-info/10',
-    borderColor: 'border-l-status-info',
   },
   {
     icon: Settings,
@@ -41,7 +38,6 @@ const MENU_ITEMS = [
     href: '/settings',
     color: 'text-text-secondary',
     bgColor: 'bg-gray-100',
-    borderColor: 'border-l-text-secondary',
   },
   {
     icon: HelpCircle,
@@ -49,7 +45,6 @@ const MENU_ITEMS = [
     href: '/support',
     color: 'text-status-warning',
     bgColor: 'bg-status-warning/10',
-    borderColor: 'border-l-status-warning',
   },
 ];
 
@@ -228,28 +223,7 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <Card className="p-0 overflow-hidden" padding="none">
-                <nav aria-label="Quick links">
-                  {MENU_ITEMS.map((item, index) => (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      aria-label={`Go to ${item.label}`}
-                      className={`group flex items-center justify-between p-4 hover:bg-background-offWhite transition-all duration-200 ${
-                        index !== MENU_ITEMS.length - 1 ? 'border-b border-gray-100' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 transition-transform duration-200 group-hover:translate-x-1">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.bgColor} ${item.color}`}>
-                          <item.icon className="w-5 h-5" />
-                        </div>
-                        <span className="font-medium text-text-primary">{item.label}</span>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-text-muted transition-transform duration-200 group-hover:translate-x-0.5" />
-                    </Link>
-                  ))}
-                </nav>
-              </Card>
+              <QuickLinks items={MENU_ITEMS} />
             </motion.div>
 
             {/* Logout Button */}

@@ -118,12 +118,12 @@ export default function AstrologerCallSessionPage() {
       title: 'Call Ended',
       message: 'The call session has been ended.',
     });
-    router.push('/astrologer/call');
+    router.push('/astrologer/history');
   }, [localStream, addToast, router]);
 
   // Handle session end
   const handleSessionEnd = useCallback(() => {
-    router.push('/astrologer/call');
+    router.push('/astrologer/history');
   }, [router]);
 
   // Loading state
@@ -157,7 +157,7 @@ export default function AstrologerCallSessionPage() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Retry
           </Button>
-          <Button variant="primary" onClick={() => router.push('/astrologer/call')}>
+          <Button variant="primary" onClick={() => router.push('/astrologer/history')}>
             Back to Sessions
           </Button>
         </div>

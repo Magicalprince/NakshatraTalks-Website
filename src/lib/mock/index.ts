@@ -43,12 +43,12 @@ export const mockApi = {
   auth: {
     sendOtp: async (phone: string) => {
       await delay(800);
-      console.log('[Mock] Sending OTP to:', phone);
+      if (process.env.NODE_ENV === 'development') console.log('[Mock] Sending OTP to:', phone);
       return mockResponse({ sent: true, expiresIn: 120 });
     },
     verifyOtp: async (phone: string, otp: string) => {
       await delay(1000);
-      console.log('[Mock] Verifying OTP:', phone, otp);
+      if (process.env.NODE_ENV === 'development') console.log('[Mock] Verifying OTP:', phone, otp);
       // Accept any 6-digit OTP for testing
       if (otp.length === 6) {
         return mockResponse({

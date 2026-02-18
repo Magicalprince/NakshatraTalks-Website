@@ -121,7 +121,7 @@ export default function AstrologerChatSessionPage() {
 
   // Handle session end (navigate back)
   const handleSessionEnd = useCallback(() => {
-    router.push('/astrologer/chat');
+    router.push('/astrologer/history');
   }, [router]);
 
   // Handle load more messages
@@ -187,7 +187,7 @@ export default function AstrologerChatSessionPage() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Retry
           </Button>
-          <Button variant="primary" onClick={() => router.push('/astrologer/chat')}>
+          <Button variant="primary" onClick={() => router.push('/astrologer/history')}>
             Back to Sessions
           </Button>
         </div>
