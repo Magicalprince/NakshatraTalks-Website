@@ -74,6 +74,16 @@ export default function BrowseCallPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  // Sync sidebar filter selections into the filters object that drives the query
+  useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      specializations: selectedSpecs.length > 0 ? selectedSpecs : undefined,
+      languages: selectedLangs.length > 0 ? selectedLangs : undefined,
+      minRating: minRating > 0 ? minRating : undefined,
+    }));
+  }, [selectedSpecs, selectedLangs, minRating]);
+
   const handleCallAction = (astrologer: Astrologer) => {
     if (!isAuthenticated) {
       addToast({ type: 'info', title: 'Login Required', message: 'Please login to start a call session' });

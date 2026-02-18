@@ -24,6 +24,14 @@ function VerifyOTPContent() {
 
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(30);
+
+  // Resend OTP countdown timer
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const interval = setInterval(() => setResendTimer((t) => t - 1), 1000);
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   // Redirect if already authenticated (after hydration)
   useEffect(() => {
@@ -129,6 +137,23 @@ function VerifyOTPContent() {
         <p className="text-xs text-text-muted text-center font-lexend">
           Leave empty and click button for demo mode
         </p>
+
+        {/* Resend OTP */}
+        <div className="text-center">
+          {resendTimer > 0 ? (
+            <p className="text-sm text-text-muted font-lexend">
+              Resend OTP in <span className="font-semibold text-text-primary">{resendTimer}s</span>
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setResendTimer(30)}
+              className="text-sm text-primary font-semibold font-lexend hover:underline transition-colors"
+            >
+              Resend OTP
+            </button>
+          )}
+        </div>
 
         <Button
           onClick={handleVerify}

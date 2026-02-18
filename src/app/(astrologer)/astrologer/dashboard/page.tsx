@@ -150,7 +150,7 @@ export default function AstrologerDashboardPage() {
                       key={item.type}
                       onClick={() => toggleAvailability(item.type)}
                       disabled={isUpdating}
-                      className={`flex flex-col items-center p-6 transition-all duration-200 hover:bg-status-success/5 ${item.active ? 'bg-status-success/[0.03]' : ''}`}
+                      className={`flex flex-col items-center p-6 transition-all duration-200 hover:bg-status-success/5 ${item.active ? 'bg-status-success/[0.03]' : ''} ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
                     >
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all duration-200 ${item.active ? 'bg-status-success/15 shadow-sm' : 'bg-gray-100'}`}>
                         <item.icon className={`w-5 h-5 transition-colors ${item.active ? 'text-status-success' : 'text-text-muted'}`} />
@@ -161,6 +161,7 @@ export default function AstrologerDashboardPage() {
                         onChange={() => toggleAvailability(item.type)}
                         label={`Toggle ${item.label} availability`}
                         colorScheme="success"
+                        disabled={isUpdating}
                       />
                     </button>
                   ))}
@@ -252,6 +253,7 @@ export default function AstrologerDashboardPage() {
                                 variant="ghost"
                                 onClick={() => rejectRequest(request.requestId)}
                                 className="text-status-error hover:bg-status-error/10"
+                                aria-label={`Reject request from ${request.user?.name || 'User'}`}
                               >
                                 <XCircle className="w-4 h-4" />
                               </Button>
@@ -259,6 +261,7 @@ export default function AstrologerDashboardPage() {
                                 size="sm"
                                 onClick={() => acceptRequest(request.requestId)}
                                 className="bg-status-success hover:bg-status-success/90"
+                                aria-label={`Accept request from ${request.user?.name || 'User'}`}
                               >
                                 <CheckCircle className="w-4 h-4 mr-1" />
                                 Accept

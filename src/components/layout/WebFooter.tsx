@@ -23,10 +23,10 @@ const legal = [
 ];
 
 const socialLinks = [
-  { icon: Facebook, label: 'Facebook', href: '#' },
-  { icon: Instagram, label: 'Instagram', href: '#' },
-  { icon: Twitter, label: 'Twitter', href: '#' },
-  { icon: Youtube, label: 'YouTube', href: '#' },
+  { icon: Facebook, label: 'Facebook', href: 'https://facebook.com/nakshatratalks' },
+  { icon: Instagram, label: 'Instagram', href: 'https://instagram.com/nakshatratalks' },
+  { icon: Twitter, label: 'Twitter', href: 'https://x.com/nakshatratalks' },
+  { icon: Youtube, label: 'YouTube', href: 'https://youtube.com/@nakshatratalks' },
 ];
 
 export function WebFooter() {
@@ -88,6 +88,8 @@ export function WebFooter() {
                   <a
                     key={social.label}
                     href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     aria-label={social.label}
                     className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-primary/30 hover:border-primary/50 transition-all duration-200"
                   >
@@ -162,14 +164,11 @@ export function WebFooter() {
               Get the NakshatraTalks app for a seamless astrology experience on the go.
             </p>
 
-            {/* App store placeholder badges */}
+            {/* App store badges */}
             <div className="flex flex-col gap-3">
-              <a
-                href="#"
-                className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-4 py-2.5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 group"
-              >
+              <div className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-4 py-2.5 opacity-60">
                 <svg
-                  className="h-6 w-6 text-gray-300 group-hover:text-white transition-colors"
+                  className="h-6 w-6 text-gray-300"
                   viewBox="0 0 24 24"
                   fill="currentColor"
                 >
@@ -177,20 +176,17 @@ export function WebFooter() {
                 </svg>
                 <div>
                   <div className="text-[10px] text-gray-400 leading-none font-nunito">
-                    Download on the
-                  </div>
-                  <div className="text-sm font-semibold text-white font-lexend">
                     App Store
                   </div>
+                  <div className="text-xs font-medium text-gray-500 font-lexend">
+                    Coming Soon
+                  </div>
                 </div>
-              </a>
+              </div>
 
-              <a
-                href="#"
-                className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-4 py-2.5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 group"
-              >
+              <div className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 px-4 py-2.5 opacity-60">
                 <svg
-                  className="h-6 w-6 text-gray-300 group-hover:text-white transition-colors"
+                  className="h-6 w-6 text-gray-300"
                   viewBox="0 0 24 24"
                   fill="currentColor"
                 >
@@ -198,13 +194,13 @@ export function WebFooter() {
                 </svg>
                 <div>
                   <div className="text-[10px] text-gray-400 leading-none font-nunito">
-                    Get it on
-                  </div>
-                  <div className="text-sm font-semibold text-white font-lexend">
                     Google Play
                   </div>
+                  <div className="text-xs font-medium text-gray-500 font-lexend">
+                    Coming Soon
+                  </div>
                 </div>
-              </a>
+              </div>
             </div>
           </div>
         </div>

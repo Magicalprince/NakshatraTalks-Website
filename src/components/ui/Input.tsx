@@ -3,6 +3,7 @@
 import { forwardRef, InputHTMLAttributes, useState } from 'react';
 import { cn } from '@/utils/cn';
 import { Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -82,12 +83,33 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             </div>
           )}
         </div>
-        {error && (
-          <p className="mt-1.5 text-sm text-status-error font-lexend">{error}</p>
-        )}
-        {hint && !error && (
-          <p className="mt-1.5 text-sm text-text-muted font-lexend">{hint}</p>
-        )}
+        <AnimatePresence mode="wait">
+          {error && (
+            <motion.p
+              key="error"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className="mt-1.5 text-sm text-status-error font-lexend"
+              role="alert"
+            >
+              {error}
+            </motion.p>
+          )}
+          {hint && !error && (
+            <motion.p
+              key="hint"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="mt-1.5 text-sm text-text-muted font-lexend"
+            >
+              {hint}
+            </motion.p>
+          )}
+        </AnimatePresence>
       </div>
     );
   }

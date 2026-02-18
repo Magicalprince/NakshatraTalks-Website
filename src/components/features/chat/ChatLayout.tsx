@@ -115,11 +115,11 @@ export function ChatLayout({
             // Loading skeletons
             <div className="p-2 space-y-1">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
-                  <div className="w-12 h-12 rounded-full bg-gray-200" />
+                <div key={i} className="flex items-center gap-3 p-3">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 skeleton-shimmer" />
                   <div className="flex-1">
-                    <div className="h-4 bg-gray-200 rounded w-24 mb-2" />
-                    <div className="h-3 bg-gray-100 rounded w-32" />
+                    <div className="h-4 bg-gray-200 rounded w-24 mb-2 skeleton-shimmer" />
+                    <div className="h-3 bg-gray-100 rounded w-32 skeleton-shimmer" />
                   </div>
                 </div>
               ))}

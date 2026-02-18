@@ -17,10 +17,10 @@ export function WalletBalance({ balance, isLoading }: WalletBalanceProps) {
       <div className="bg-secondary rounded-xl p-5">
         <div className="flex items-center justify-between">
           <div>
-            <div className="h-4 w-24 bg-black/10 rounded animate-pulse mb-2" />
-            <div className="h-6 w-20 bg-black/10 rounded animate-pulse" />
+            <div className="h-4 w-24 bg-black/10 rounded skeleton-shimmer mb-2" />
+            <div className="h-6 w-20 bg-black/10 rounded skeleton-shimmer" />
           </div>
-          <div className="h-10 w-24 bg-black/10 rounded-lg animate-pulse" />
+          <div className="h-10 w-24 bg-black/10 rounded-lg skeleton-shimmer" />
         </div>
       </div>
     );

@@ -22,7 +22,7 @@ export default function AstrologerRejectedPage() {
   }, []);
 
   const handleContactPhone = useCallback(() => {
-    window.open('tel:+911234567890', '_blank');
+    window.location.href = 'tel:+918000000000';
   }, []);
 
   const handleLogout = useCallback(() => {

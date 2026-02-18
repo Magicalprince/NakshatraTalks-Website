@@ -21,7 +21,7 @@ export function AnimatedToggle({
   className,
 }: AnimatedToggleProps) {
   return (
-    <label className={cn('relative inline-flex items-center cursor-pointer flex-shrink-0', className)}>
+    <label className={cn('relative inline-flex items-center flex-shrink-0', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', className)}>
       <input
         type="checkbox"
         checked={checked}

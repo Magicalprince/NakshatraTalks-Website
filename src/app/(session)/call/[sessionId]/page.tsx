@@ -83,10 +83,13 @@ export default function CallSessionPage() {
       }, 2000);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') console.error('Failed to get media devices:', error);
+      const isDenied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError');
       addToast({
         type: 'error',
-        title: 'Media Error',
-        message: 'Failed to access camera/microphone. Please check permissions.',
+        title: isDenied ? 'Permission Denied' : 'Media Error',
+        message: isDenied
+          ? 'Camera/microphone access was denied. Please allow access in your browser settings and reload the page.'
+          : 'Failed to access camera/microphone. Please check that your device is connected and try again.',
       });
     }
   }, [callType, addToast]);

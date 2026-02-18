@@ -1,6 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MotionConfig } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { AuthProvider } from '@/components/providers/AuthProvider';
@@ -62,9 +63,11 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        {children}
-      </AuthProvider>
+      <MotionConfig reducedMotion="user">
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </MotionConfig>
       {showDevtools && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   );

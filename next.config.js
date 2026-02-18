@@ -11,10 +11,6 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.supabase.co',
       },
-      {
-        protocol: 'https',
-        hostname: 'randomuser.me',
-      },
     ],
   },
   async headers() {

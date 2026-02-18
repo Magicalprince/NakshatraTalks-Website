@@ -39,7 +39,7 @@ class AstrologerService {
   ): Promise<ApiResponse<PaginatedResponse<Astrologer>>> {
     // Use mock data in development
     if (shouldUseMockData()) {
-      const { page = 1, limit = 20, filters, search } = params;
+      const { page = 1, limit = 20, filters, sortBy, sortOrder = 'desc', search } = params;
       let astrologers = [...MOCK_ASTROLOGERS];
 
       // Apply search filter
@@ -70,6 +70,29 @@ class AstrologerService {
         if (filters.minRating) {
           astrologers = astrologers.filter(a => a.rating >= filters.minRating!);
         }
+        if (filters.minExperience) {
+          astrologers = astrologers.filter(a => a.experience >= filters.minExperience!);
+        }
+        if (filters.minPrice) {
+          astrologers = astrologers.filter(a => a.pricePerMinute >= filters.minPrice!);
+        }
+        if (filters.maxPrice) {
+          astrologers = astrologers.filter(a => a.pricePerMinute <= filters.maxPrice!);
+        }
+      }
+
+      // Apply sorting
+      if (sortBy) {
+        const dir = sortOrder === 'asc' ? 1 : -1;
+        astrologers.sort((a, b) => {
+          switch (sortBy) {
+            case 'rating': return (a.rating - b.rating) * dir;
+            case 'price': return (a.pricePerMinute - b.pricePerMinute) * dir;
+            case 'experience': return (a.experience - b.experience) * dir;
+            case 'orders': return (a.totalCalls - b.totalCalls) * dir;
+            default: return 0;
+          }
+        });
       }
 
       const start = (page - 1) * limit;

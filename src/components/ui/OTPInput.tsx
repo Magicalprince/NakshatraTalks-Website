@@ -145,6 +145,12 @@ export function OTPInput({
           />
         ))}
       </div>
+      {/* Digit count indicator */}
+      {!error && (
+        <p className="mt-2.5 text-center text-xs text-text-muted font-lexend">
+          {value.replace(/\D/g, '').length} of {length} digits entered
+        </p>
+      )}
       {error && (
         <p className="mt-3 text-center text-sm text-status-error font-lexend">
           {error}

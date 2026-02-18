@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useAuthStore } from '@/stores/auth-store';
+import { useUIStore } from '@/stores/ui-store';
 import { SectionHeader, SettingRow } from '@/components/shared';
 import {
   Bell,
@@ -25,6 +26,7 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 export default function AstrologerSettingsPage() {
   const { logout } = useAuthStore();
+  const { addToast } = useUIStore();
   const [notifications, setNotifications] = useState({
     newRequests: true,
     sessionReminders: true,
@@ -43,7 +45,21 @@ export default function AstrologerSettingsPage() {
     setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const [bankErrors, setBankErrors] = useState<Record<string, string>>({});
+
+  const validateBankDetails = () => {
+    const errors: Record<string, string> = {};
+    if (!bankDetails.accountName.trim()) errors.accountName = 'Account holder name is required';
+    if (!bankDetails.accountNumber.trim() || !/^\d{9,18}$/.test(bankDetails.accountNumber.trim())) errors.accountNumber = 'Enter a valid account number (9-18 digits)';
+    if (!bankDetails.ifscCode.trim() || !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankDetails.ifscCode.trim())) errors.ifscCode = 'Enter a valid IFSC code (e.g. SBIN0001234)';
+    if (!bankDetails.bankName.trim()) errors.bankName = 'Bank name is required';
+    return errors;
+  };
+
   const handleSaveBankDetails = () => {
+    const errors = validateBankDetails();
+    setBankErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     // Would call API to save bank details
     setShowBankModal(false);
   };
@@ -119,13 +135,25 @@ export default function AstrologerSettingsPage() {
                 icon={Smartphone}
                 label="Change Phone Number"
                 description="Update your login phone number"
-                onClick={() => {}}
+                onClick={() => {
+                  addToast({
+                    type: 'info',
+                    title: 'Contact Support',
+                    message: 'To change your phone number, please contact support@nakshatratalks.com',
+                  });
+                }}
               />
               <SettingRow
                 icon={Mail}
                 label="Email Verification"
                 description="Verify your email address"
-                onClick={() => {}}
+                onClick={() => {
+                  addToast({
+                    type: 'info',
+                    title: 'Contact Support',
+                    message: 'To update your email, please contact support@nakshatratalks.com',
+                  });
+                }}
                 isLast={true}
               />
             </Card>
@@ -142,17 +170,17 @@ export default function AstrologerSettingsPage() {
               <SettingRow
                 icon={HelpCircle}
                 label="Help Center"
-                onClick={() => {}}
+                href="/support"
               />
               <SettingRow
                 icon={FileText}
                 label="Terms of Service"
-                onClick={() => {}}
+                href="/terms"
               />
               <SettingRow
                 icon={Shield}
                 label="Privacy Policy"
-                onClick={() => {}}
+                href="/privacy"
                 isLast={true}
               />
             </Card>
@@ -186,30 +214,34 @@ export default function AstrologerSettingsPage() {
             <Input
               label="Account Holder Name"
               value={bankDetails.accountName}
-              onChange={(e) => setBankDetails({ ...bankDetails, accountName: e.target.value })}
+              onChange={(e) => { setBankDetails({ ...bankDetails, accountName: e.target.value }); setBankErrors((prev) => ({ ...prev, accountName: '' })); }}
               placeholder="Enter account holder name"
+              error={bankErrors.accountName}
             />
             <Input
               label="Account Number"
               value={bankDetails.accountNumber}
-              onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
+              onChange={(e) => { setBankDetails({ ...bankDetails, accountNumber: e.target.value.replace(/\D/g, '') }); setBankErrors((prev) => ({ ...prev, accountNumber: '' })); }}
               placeholder="Enter account number"
+              error={bankErrors.accountNumber}
             />
             <Input
               label="IFSC Code"
               value={bankDetails.ifscCode}
-              onChange={(e) => setBankDetails({ ...bankDetails, ifscCode: e.target.value })}
-              placeholder="Enter IFSC code"
+              onChange={(e) => { setBankDetails({ ...bankDetails, ifscCode: e.target.value.toUpperCase() }); setBankErrors((prev) => ({ ...prev, ifscCode: '' })); }}
+              placeholder="e.g. SBIN0001234"
+              error={bankErrors.ifscCode}
             />
             <Input
               label="Bank Name"
               value={bankDetails.bankName}
-              onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
+              onChange={(e) => { setBankDetails({ ...bankDetails, bankName: e.target.value }); setBankErrors((prev) => ({ ...prev, bankName: '' })); }}
               placeholder="Enter bank name"
+              error={bankErrors.bankName}
             />
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" className="flex-1" onClick={() => setShowBankModal(false)}>
+              <Button variant="outline" className="flex-1" onClick={() => { setShowBankModal(false); setBankErrors({}); }}>
                 Cancel
               </Button>
               <Button className="flex-1" onClick={handleSaveBankDetails}>

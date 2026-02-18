@@ -130,6 +130,7 @@ export default function AstrologerLivePage() {
                   <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center gap-4">
                     <button
                       onClick={() => setAudioEnabled(!audioEnabled)}
+                      aria-label={audioEnabled ? 'Mute microphone' : 'Unmute microphone'}
                       className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
                         audioEnabled ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-600'
                       }`}
@@ -142,6 +143,7 @@ export default function AstrologerLivePage() {
                     </button>
                     <button
                       onClick={() => setVideoEnabled(!videoEnabled)}
+                      aria-label={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
                       className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
                         videoEnabled ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-600'
                       }`}
@@ -154,6 +156,7 @@ export default function AstrologerLivePage() {
                     </button>
                     <button
                       onClick={() => setShowEndModal(true)}
+                      aria-label="End live session"
                       className="w-12 h-12 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"
                     >
                       <StopCircle className="w-5 h-5 text-white" />

@@ -122,7 +122,7 @@ export default function RatingPage() {
   };
 
   // Loading state
-  const isLoading = isChatLoading && isCallLoading;
+  const isLoading = isChatLoading || isCallLoading;
 
   // Auth loading state
   if (!isReady) {

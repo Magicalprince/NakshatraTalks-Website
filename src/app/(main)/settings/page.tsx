@@ -10,8 +10,6 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useDeleteAccount } from '@/hooks/useUserProfile';
 import {
   Bell,
-  Moon,
-  Globe,
   Shield,
   Trash2,
   Loader2,
@@ -27,7 +25,6 @@ import { SectionHeader, SettingRow } from '@/components/shared';
 export default function SettingsPage() {
   const { addToast } = useUIStore();
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Auth protection
@@ -119,26 +116,6 @@ export default function SettingsPage() {
                 toggle
                 checked={notifications}
                 onToggle={setNotifications}
-              />
-              <SettingRow
-                icon={Moon}
-                label="Dark Mode"
-                description="Switch to dark theme"
-                toggle
-                checked={darkMode}
-                onToggle={setDarkMode}
-              />
-              <SettingRow
-                icon={Globe}
-                label="Language"
-                description="English"
-                onClick={() => {
-                  addToast({
-                    type: 'info',
-                    title: 'Coming Soon',
-                    message: 'Language selection will be available soon.',
-                  });
-                }}
                 isLast
               />
             </Card>

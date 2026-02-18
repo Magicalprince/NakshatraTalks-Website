@@ -54,7 +54,24 @@ export default function AstrologerProfilePage() {
     callRate: astrologer?.callPricePerMinute?.toString() || '',
   });
 
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  const validateEditData = () => {
+    const errors: Record<string, string> = {};
+    if (!editData.bio.trim()) errors.bio = 'Bio is required';
+    const exp = Number(editData.experience);
+    if (!editData.experience || isNaN(exp) || exp < 0 || exp > 60) errors.experience = 'Enter valid experience (0-60 years)';
+    const chat = Number(editData.chatRate);
+    if (!editData.chatRate || isNaN(chat) || chat < 1) errors.chatRate = 'Enter a valid chat rate';
+    const call = Number(editData.callRate);
+    if (!editData.callRate || isNaN(call) || call < 1) errors.callRate = 'Enter a valid call rate';
+    return errors;
+  };
+
   const handleSave = () => {
+    const errors = validateEditData();
+    setEditErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     // Would call API to update profile
     setIsEditing(false);
   };
@@ -298,48 +315,44 @@ export default function AstrologerProfilePage() {
               <label className="block text-sm font-medium text-text-secondary mb-1">Bio</label>
               <textarea
                 value={editData.bio}
-                onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px]"
+                onChange={(e) => { setEditData({ ...editData, bio: e.target.value }); setEditErrors((prev) => ({ ...prev, bio: '' })); }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[100px] ${editErrors.bio ? 'border-status-error focus:ring-status-error/20' : ''}`}
                 placeholder="Tell users about yourself..."
               />
+              {editErrors.bio && <p className="text-xs text-status-error mt-1">{editErrors.bio}</p>}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">
-                Years of Experience
-              </label>
-              <Input
-                type="number"
-                value={editData.experience}
-                onChange={(e) => setEditData({ ...editData, experience: e.target.value })}
-              />
-            </div>
+            <Input
+              label="Years of Experience"
+              type="number"
+              value={editData.experience}
+              onChange={(e) => { setEditData({ ...editData, experience: e.target.value }); setEditErrors((prev) => ({ ...prev, experience: '' })); }}
+              error={editErrors.experience}
+              min={0}
+              max={60}
+            />
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Chat Rate (₹/min)
-                </label>
-                <Input
-                  type="number"
-                  value={editData.chatRate}
-                  onChange={(e) => setEditData({ ...editData, chatRate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Call Rate (₹/min)
-                </label>
-                <Input
-                  type="number"
-                  value={editData.callRate}
-                  onChange={(e) => setEditData({ ...editData, callRate: e.target.value })}
-                />
-              </div>
+              <Input
+                label="Chat Rate (₹/min)"
+                type="number"
+                value={editData.chatRate}
+                onChange={(e) => { setEditData({ ...editData, chatRate: e.target.value }); setEditErrors((prev) => ({ ...prev, chatRate: '' })); }}
+                error={editErrors.chatRate}
+                min={1}
+              />
+              <Input
+                label="Call Rate (₹/min)"
+                type="number"
+                value={editData.callRate}
+                onChange={(e) => { setEditData({ ...editData, callRate: e.target.value }); setEditErrors((prev) => ({ ...prev, callRate: '' })); }}
+                error={editErrors.callRate}
+                min={1}
+              />
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)}>
+              <Button variant="outline" className="flex-1" onClick={() => { setIsEditing(false); setEditErrors({}); }}>
                 Cancel
               </Button>
               <Button className="flex-1" onClick={handleSave}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChatInterface } from '@/components/features/chat';
 import {
@@ -14,13 +14,15 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function ChatSessionPage() {
   const params = useParams();
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+  const [showEndModal, setShowEndModal] = useState(false);
 
   // Auth check
   const { isReady } = useRequireAuth();
@@ -102,27 +104,30 @@ export default function ChatSessionPage() {
     [handleSendMessage]
   );
 
-  // Handle end session
+  // Handle end session — show confirmation modal
   const handleEndSession = useCallback(() => {
-    if (window.confirm('Are you sure you want to end this chat session?')) {
-      endSession(undefined, {
-        onSuccess: () => {
-          addToast({
-            type: 'success',
-            title: 'Session Ended',
-            message: 'Your chat session has been ended.',
-          });
-          refetchSession();
-        },
-        onError: (error) => {
-          addToast({
-            type: 'error',
-            title: 'Failed to end session',
-            message: error instanceof Error ? error.message : 'Please try again',
-          });
-        },
-      });
-    }
+    setShowEndModal(true);
+  }, []);
+
+  const confirmEndSession = useCallback(() => {
+    setShowEndModal(false);
+    endSession(undefined, {
+      onSuccess: () => {
+        addToast({
+          type: 'success',
+          title: 'Session Ended',
+          message: 'Your chat session has been ended.',
+        });
+        refetchSession();
+      },
+      onError: (error) => {
+        addToast({
+          type: 'error',
+          title: 'Failed to end session',
+          message: error instanceof Error ? error.message : 'Please try again',
+        });
+      },
+    });
   }, [endSession, addToast, refetchSession]);
 
   // Handle start new chat
@@ -291,6 +296,41 @@ export default function ChatSessionPage() {
         onLoadMore={handleLoadMore}
         onStartNewChat={handleStartNewChat}
       />
+
+      {/* End Session Confirmation Modal */}
+      <Modal
+        isOpen={showEndModal}
+        onClose={() => setShowEndModal(false)}
+        className="max-w-sm"
+      >
+        <div className="p-6 text-center">
+          <div className="w-14 h-14 bg-status-warning/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-7 h-7 text-status-warning" />
+          </div>
+          <h3 className="text-lg font-bold text-text-primary font-lexend mb-2">
+            End Chat Session?
+          </h3>
+          <p className="text-sm text-text-secondary mb-6">
+            Are you sure you want to end this chat session? This action cannot be undone.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowEndModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1 bg-status-error hover:bg-status-error/90"
+              onClick={confirmEndSession}
+            >
+              End Session
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

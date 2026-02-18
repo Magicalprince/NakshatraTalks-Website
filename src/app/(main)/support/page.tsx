@@ -195,21 +195,15 @@ function ReportForm() {
     'Other',
   ];
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!issueType || !description.trim()) return;
 
-    // Fallback to email if no API
-    const subject = encodeURIComponent(`Support: ${issueType} - NakshatraTalks`);
-    const body = encodeURIComponent(
-      `Issue Type: ${issueType}\n\n` +
-        `Description:\n${description}\n\n` +
-        `---\n` +
-        `Platform: Web Browser\n` +
-        `App Version: 1.0.0\n`
-    );
-    const mailtoUrl = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
-    window.open(mailtoUrl, '_blank');
+    setIsSubmitting(true);
 
+    // Simulate API call (replace with real API when backend is ready)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    setIsSubmitting(false);
     setIsSubmitted(true);
     setTimeout(() => {
       setIsSubmitted(false);
@@ -322,15 +316,17 @@ function ReportForm() {
               onClick={handleSubmit}
               className="w-full"
               size="lg"
-              disabled={!issueType || !description.trim()}
+              disabled={!issueType || !description.trim() || isSubmitting}
+              isLoading={isSubmitting}
             >
               <Mail className="w-5 h-5 mr-2" aria-hidden="true" />
-              Submit via Email
+              Submit Report
             </Button>
 
             <p className="text-xs text-text-muted text-center font-nunito">
-              This will open your email client to send to{' '}
-              <span className="font-medium text-text-secondary">{SUPPORT_EMAIL}</span>
+              Our team will respond to{' '}
+              <span className="font-medium text-text-secondary">{SUPPORT_EMAIL}</span>{' '}
+              within 24 hours
             </p>
           </motion.div>
         )}

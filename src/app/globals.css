@@ -2,9 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Nunito:wght@400;700;800&family=Poppins:wght@400;500;600;700&display=swap');
-
 :root {
   /* Primary Colors */
   --color-primary: #2930A6;
@@ -246,73 +243,6 @@ a {
     html {
       font-size: 16px;
     }
-  }
-}
-
-/* Component base styles */
-@layer components {
-  /* Card component */
-  .card {
-    @apply bg-white rounded-lg shadow-card p-4;
-  }
-
-  .card-hover {
-    @apply transition-shadow duration-200 hover:shadow-card-hover;
-  }
-
-  /* Button variants */
-  .btn {
-    @apply inline-flex items-center justify-center font-medium transition-all duration-200 rounded-xl;
-  }
-
-  .btn-primary {
-    @apply bg-primary text-white hover:bg-primary-dark;
-  }
-
-  .btn-secondary {
-    @apply bg-secondary text-text-primary hover:bg-secondary-dark;
-  }
-
-  .btn-outline {
-    @apply border-2 border-primary text-primary hover:bg-primary hover:text-white;
-  }
-
-  /* Input base */
-  .input-base {
-    @apply w-full h-12 px-4 rounded-md border border-gray-300 text-base font-lexend;
-    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
-    @apply placeholder:text-text-muted;
-  }
-
-  /* Badge */
-  .badge {
-    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
-  }
-
-  .badge-online {
-    @apply bg-status-success/10 text-status-success;
-  }
-
-  .badge-offline {
-    @apply bg-gray-100 text-text-muted;
-  }
-
-  /* Avatar */
-  .avatar {
-    @apply rounded-full object-cover border-2 border-secondary;
-  }
-
-  /* Message bubble */
-  .message-bubble {
-    @apply max-w-[80%] rounded-[20px] px-3 py-2 shadow-sm;
-  }
-
-  .message-bubble-user {
-    @apply bg-message-user text-white;
-  }
-
-  .message-bubble-astrologer {
-    @apply bg-message-astrologer text-text-primary border border-black/5;
   }
 }
 
