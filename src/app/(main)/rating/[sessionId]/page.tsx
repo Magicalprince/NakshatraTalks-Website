@@ -12,9 +12,11 @@ import { useCallSession } from '@/hooks/useCallSession';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
-import { ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 interface SubmitReviewParams {
   sessionId: string;
@@ -126,15 +128,13 @@ export default function RatingPage() {
   if (!isReady) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        <div className="bg-white border-b px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Skeleton className="w-10 h-10 rounded" />
-            <Skeleton className="w-32 h-6" />
+        <PageContainer size="sm">
+          <div className="py-4">
+            <Skeleton className="w-48 h-5 mb-6" />
+            <Skeleton className="w-40 h-8 mb-6" />
+            <Skeleton className="h-96 rounded-xl" />
           </div>
-        </div>
-        <div className="container mx-auto px-4 py-6 max-w-md">
-          <Skeleton className="h-96 rounded-xl" />
-        </div>
+        </PageContainer>
       </div>
     );
   }
@@ -142,15 +142,13 @@ export default function RatingPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        <div className="bg-white border-b px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Skeleton className="w-10 h-10 rounded" />
-            <Skeleton className="w-32 h-6" />
+        <PageContainer size="sm">
+          <div className="py-4">
+            <Skeleton className="w-48 h-5 mb-6" />
+            <Skeleton className="w-40 h-8 mb-6" />
+            <Skeleton className="h-96 rounded-xl" />
           </div>
-        </div>
-        <div className="container mx-auto px-4 py-6 max-w-md">
-          <Skeleton className="h-96 rounded-xl" />
-        </div>
+        </PageContainer>
       </div>
     );
   }
@@ -159,20 +157,22 @@ export default function RatingPage() {
   if (!session || (chatError && callError)) {
     return (
       <div className="min-h-screen bg-background-offWhite flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-status-error" />
+        <PageContainer size="sm">
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-status-error" />
+            </div>
+            <h2 className="text-lg font-semibold text-text-primary mb-2">
+              Session Not Found
+            </h2>
+            <p className="text-text-secondary mb-4">
+              Unable to load session details for rating.
+            </p>
+            <Link href="/">
+              <Button variant="primary">Go Home</Button>
+            </Link>
           </div>
-          <h2 className="text-lg font-semibold text-text-primary mb-2">
-            Session Not Found
-          </h2>
-          <p className="text-text-secondary mb-4">
-            Unable to load session details for rating.
-          </p>
-          <Link href="/">
-            <Button variant="primary">Go Home</Button>
-          </Link>
-        </div>
+        </PageContainer>
       </div>
     );
   }
@@ -181,24 +181,26 @@ export default function RatingPage() {
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-background-offWhite flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-20 h-20 bg-status-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-status-success" />
-          </div>
-          <h2 className="text-xl font-bold text-text-primary mb-2">
-            Thank You!
-          </h2>
-          <p className="text-text-secondary mb-6">
-            Your feedback helps us improve our service.
-          </p>
-          <Link href="/">
-            <Button variant="primary">Back to Home</Button>
-          </Link>
-        </motion.div>
+        <PageContainer size="sm">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-center py-16"
+          >
+            <div className="w-20 h-20 bg-status-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-10 h-10 text-status-success" />
+            </div>
+            <h2 className="text-xl font-bold text-text-primary mb-2">
+              Thank You!
+            </h2>
+            <p className="text-text-secondary mb-6">
+              Your feedback helps us improve our service.
+            </p>
+            <Link href="/">
+              <Button variant="primary">Back to Home</Button>
+            </Link>
+          </motion.div>
+        </PageContainer>
       </div>
     );
   }
@@ -207,45 +209,45 @@ export default function RatingPage() {
   if (session.rating) {
     return (
       <div className="min-h-screen bg-background-offWhite flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-primary" />
+        <PageContainer size="sm">
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-lg font-semibold text-text-primary mb-2">
+              Already Reviewed
+            </h2>
+            <p className="text-text-secondary mb-4">
+              You have already submitted a review for this session.
+            </p>
+            <Link href="/">
+              <Button variant="primary">Go Home</Button>
+            </Link>
           </div>
-          <h2 className="text-lg font-semibold text-text-primary mb-2">
-            Already Reviewed
-          </h2>
-          <p className="text-text-secondary mb-4">
-            You have already submitted a review for this session.
-          </p>
-          <Link href="/">
-            <Button variant="primary">Go Home</Button>
-          </Link>
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-10 border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-bold text-text-primary">Rate Experience</h1>
-          </div>
-        </div>
-      </div>
+      <PageContainer size="sm">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Rate Experience' },
+          ]}
+        />
 
-      {/* Content */}
-      <div className="container mx-auto px-4 py-6 max-w-md">
+        {/* Page Title */}
+        <h1 className="text-2xl font-bold text-text-primary font-lexend mb-6">Rate Experience</h1>
+
+        {/* Content - Centered Card */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
+          className="pb-8"
         >
           <ReviewForm
             astrologerName={astrologer?.name || session.astrologerName || 'Astrologer'}
@@ -257,7 +259,7 @@ export default function RatingPage() {
             isLoading={isSubmitting}
           />
         </motion.div>
-      </div>
+      </PageContainer>
     </div>
   );
 }

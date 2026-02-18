@@ -4,21 +4,31 @@ import { cn } from '@/utils/cn';
 
 interface SkeletonProps {
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export function Skeleton({ className }: SkeletonProps) {
+export function Skeleton({ className, style }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'animate-pulse rounded-md bg-gray-200',
+        'animate-pulse rounded-md bg-gray-200/80 skeleton-shimmer',
         className
       )}
+      style={style}
     />
   );
 }
 
 // Pre-built skeleton components for common use cases
-export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
+export function SkeletonText({
+  lines = 3,
+  delay = 0,
+  className,
+}: {
+  lines?: number;
+  delay?: number;
+  className?: string;
+}) {
   return (
     <div className={cn('space-y-2', className)}>
       {Array.from({ length: lines }).map((_, i) => (
@@ -28,6 +38,7 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
             'h-4',
             i === lines - 1 ? 'w-3/4' : 'w-full'
           )}
+          style={delay > 0 ? { animationDelay: `${i * delay}ms` } : undefined}
         />
       ))}
     </div>
@@ -36,7 +47,7 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
 
 export function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn('rounded-lg bg-white p-4 shadow-card', className)}>
+    <div className={cn('rounded-xl bg-white p-4 shadow-card border border-gray-100', className)}>
       <div className="flex items-center gap-4">
         <Skeleton className="h-12 w-12 rounded-full" />
         <div className="flex-1 space-y-2">
@@ -56,7 +67,7 @@ export function SkeletonAstrologerCard({ className }: { className?: string }) {
   return (
     <div className={cn('rounded-xl bg-white p-4 shadow-card', className)}>
       <div className="flex gap-4">
-        <Skeleton className="h-[89px] w-[93px] rounded-full" />
+        <Skeleton className="h-20 w-20 rounded-full" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-5 w-3/4" />
           <Skeleton className="h-3 w-1/2" />
@@ -106,6 +117,40 @@ export function SkeletonTransactionCard({ className }: { className?: string }) {
         <Skeleton className="h-3 w-1/3" />
       </div>
       <Skeleton className="h-4 w-16" />
+    </div>
+  );
+}
+
+export function SkeletonNotification({ className }: { className?: string }) {
+  return (
+    <div className={cn('rounded-xl bg-white p-4 shadow-sm', className)}>
+      <div className="flex gap-3">
+        <Skeleton className="h-10 w-10 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <div className="flex justify-between">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-4/5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SkeletonHero({ className }: { className?: string }) {
+  return (
+    <div className={cn('rounded-xl bg-white p-6 shadow-card space-y-4', className)}>
+      <Skeleton className="h-8 w-2/3 rounded-lg" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-5/6" />
+      <Skeleton className="h-4 w-3/4" />
+      <div className="flex gap-3 pt-2">
+        <Skeleton className="h-12 w-36 rounded-xl" />
+        <Skeleton className="h-12 w-36 rounded-xl" />
+      </div>
+      <Skeleton className="h-48 w-full rounded-xl mt-4" />
     </div>
   );
 }

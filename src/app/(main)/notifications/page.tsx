@@ -2,30 +2,33 @@
 
 /**
  * Notifications Page
- * Displays user notifications including session requests, wallet updates, promotions
- * Design matches mobile app with yellow header and grouped notifications
+ * Modern 2026 design with grouped notifications, inline actions,
+ * shimmer skeletons, staggered animations, and inline clear-all confirmation.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import {
-  ArrowLeft,
   Bell,
   Phone,
   MessageCircle,
   Wallet,
   Gift,
   CheckCircle,
-  Clock,
-  X,
   Trash2,
+  CheckCheck,
+  AlertTriangle,
+  Users,
 } from 'lucide-react';
-import { Button, Card, Skeleton } from '@/components/ui';
+import { Skeleton } from '@/components/ui';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { cn } from '@/utils/cn';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
-// Notification types
+// ─── Types ──────────────────────────────────────────────────────────────────────
+
 type NotificationType = 'call' | 'chat' | 'wallet' | 'promo' | 'system';
 
 interface Notification {
@@ -45,13 +48,14 @@ interface Notification {
   };
 }
 
-// Mock notifications data
+// ─── Mock Data ──────────────────────────────────────────────────────────────────
+
 const MOCK_NOTIFICATIONS: Notification[] = [
   {
     id: 'notif-1',
     type: 'chat',
     title: 'Chat Session Ended',
-    message: 'Your chat session with Pandit Sharma has ended. Duration: 15 mins. Total: ₹375.',
+    message: 'Your chat session with Pandit Sharma has ended. Duration: 15 mins. Total: \u20B9375.',
     timestamp: '10:30 AM',
     date: 'Today',
     isRead: false,
@@ -65,7 +69,7 @@ const MOCK_NOTIFICATIONS: Notification[] = [
     id: 'notif-2',
     type: 'wallet',
     title: 'Wallet Recharged',
-    message: 'Your wallet has been credited with ₹500. Current balance: ₹1,250.',
+    message: 'Your wallet has been credited with \u20B9500. Current balance: \u20B91,250.',
     timestamp: '09:45 AM',
     date: 'Today',
     isRead: false,
@@ -78,7 +82,7 @@ const MOCK_NOTIFICATIONS: Notification[] = [
     id: 'notif-3',
     type: 'promo',
     title: 'Special Offer!',
-    message: 'Get 20% extra on your next recharge of ₹1,000 or more. Limited time offer!',
+    message: 'Get 20% extra on your next recharge of \u20B91,000 or more. Limited time offer!',
     timestamp: '08:00 AM',
     date: 'Today',
     isRead: true,
@@ -131,17 +135,19 @@ const MOCK_NOTIFICATIONS: Notification[] = [
   },
 ];
 
-// Tab options
+// ─── Tabs ───────────────────────────────────────────────────────────────────────
+
 type TabOption = 'all' | 'sessions' | 'wallet' | 'offers';
 
-const TABS: { value: TabOption; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'sessions', label: 'Sessions' },
-  { value: 'wallet', label: 'Wallet' },
-  { value: 'offers', label: 'Offers' },
+const TABS: { value: TabOption; label: string; filterTypes: NotificationType[] }[] = [
+  { value: 'all', label: 'All', filterTypes: [] },
+  { value: 'sessions', label: 'Sessions', filterTypes: ['call', 'chat'] },
+  { value: 'wallet', label: 'Wallet', filterTypes: ['wallet'] },
+  { value: 'offers', label: 'Offers', filterTypes: ['promo'] },
 ];
 
-// Get icon for notification type
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
 const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
     case 'call':
@@ -157,161 +163,348 @@ const getNotificationIcon = (type: NotificationType) => {
   }
 };
 
-// Get icon color for notification type
-const getIconColor = (type: NotificationType) => {
+const getIconColors = (type: NotificationType) => {
   switch (type) {
     case 'call':
-      return 'bg-green-100 text-green-600';
+      return { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-400' };
     case 'chat':
-      return 'bg-primary/10 text-primary';
+      return { bg: 'bg-primary/5', text: 'text-primary', border: 'border-primary' };
     case 'wallet':
-      return 'bg-amber-100 text-amber-600';
+      return { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-400' };
     case 'promo':
-      return 'bg-pink-100 text-pink-600';
+      return { bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-400' };
     default:
-      return 'bg-gray-100 text-gray-600';
+      return { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-400' };
   }
 };
 
+const getUnreadTint = (type: NotificationType) => {
+  switch (type) {
+    case 'call':
+      return 'bg-green-50/40';
+    case 'chat':
+      return 'bg-primary/[0.03]';
+    case 'wallet':
+      return 'bg-amber-50/40';
+    case 'promo':
+      return 'bg-pink-50/40';
+    default:
+      return 'bg-gray-50/40';
+  }
+};
+
+// ─── Swipeable Notification Card ────────────────────────────────────────────────
+
 interface NotificationCardProps {
   notification: Notification;
+  index: number;
   onMarkRead: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-function NotificationCard({ notification, onMarkRead, onDelete }: NotificationCardProps) {
+function NotificationCard({ notification, index, onMarkRead, onDelete }: NotificationCardProps) {
   const Icon = getNotificationIcon(notification.type);
-  const iconColor = getIconColor(notification.type);
+  const colors = getIconColors(notification.type);
+  const x = useMotionValue(0);
+  const deleteOpacity = useTransform(x, [-120, -60], [1, 0]);
+  const deleteScale = useTransform(x, [-120, -60], [1, 0.8]);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const content = (
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.x < -100) {
+      onDelete(notification.id);
+    }
+  };
+
+  const cardContent = (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      className={cn(
-        'relative p-4 rounded-xl mb-3 transition-all',
-        notification.isRead ? 'bg-white' : 'bg-primary/5 border-l-4 border-primary'
-      )}
-      style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}
+      ref={cardRef}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -60, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.25 } }}
+      transition={{ delay: index * 0.04, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="relative mb-3 overflow-hidden rounded-xl"
     >
-      <div className="flex gap-3">
-        {/* Icon */}
-        <div className={cn('w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', iconColor)}>
-          <Icon className="w-5 h-5" />
-        </div>
+      {/* Swipe-to-delete background */}
+      <motion.div
+        style={{ opacity: deleteOpacity, scale: deleteScale }}
+        className="absolute inset-0 flex items-center justify-end rounded-xl bg-status-error px-6"
+      >
+        <Trash2 className="h-5 w-5 text-white" />
+      </motion.div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className={cn(
-              'text-sm font-lexend line-clamp-1',
-              notification.isRead ? 'font-medium text-text-primary' : 'font-semibold text-text-primary'
-            )}>
-              {notification.title}
-            </h3>
-            <span className="text-xs text-text-muted whitespace-nowrap font-lexend">
-              {notification.timestamp}
-            </span>
-          </div>
-          <p className="text-sm text-text-secondary mt-1 line-clamp-2 font-lexend">
-            {notification.message}
-          </p>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {!notification.isRead && (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onMarkRead(notification.id);
-            }}
-            className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-            title="Mark as read"
-          >
-            <CheckCircle className="w-4 h-4 text-primary" />
-          </button>
+      {/* Main card surface */}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -140, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        className={cn(
+          'relative rounded-xl transition-shadow duration-200 hover:shadow-web-sm',
+          notification.isRead
+            ? 'bg-white'
+            : cn('border-l-[3px]', colors.border, getUnreadTint(notification.type)),
         )}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete(notification.id);
-          }}
-          className="p-1.5 rounded-full hover:bg-red-50 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4 text-status-error" />
-        </button>
-      </div>
+        style={{ x, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+      >
+        <div className="p-4">
+          <div className="flex gap-3">
+            {/* Type Icon */}
+            <div
+              className={cn(
+                'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full',
+                colors.bg,
+              )}
+            >
+              <Icon className={cn('h-[18px] w-[18px]', colors.text)} />
+            </div>
+
+            {/* Body */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3
+                    className={cn(
+                      'truncate text-sm font-lexend',
+                      notification.isRead
+                        ? 'font-medium text-text-primary'
+                        : 'font-semibold text-text-nearBlack',
+                    )}
+                  >
+                    {notification.title}
+                  </h3>
+                  {!notification.isRead && (
+                    <span className="flex-shrink-0 h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span className="flex-shrink-0 whitespace-nowrap text-xs text-text-muted font-lexend">
+                  {notification.timestamp}
+                </span>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-text-secondary line-clamp-2 font-lexend">
+                {notification.message}
+              </p>
+
+              {/* Action buttons -- always visible, subtle */}
+              <div className="mt-2.5 flex items-center justify-end gap-1">
+                {!notification.isRead && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onMarkRead(notification.id);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium font-lexend text-text-muted transition-colors hover:bg-primary/5 hover:text-primary"
+                    aria-label="Mark as read"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Read</span>
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDelete(notification.id);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium font-lexend text-text-muted transition-colors hover:bg-status-error/5 hover:text-status-error"
+                  aria-label="Delete notification"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 
   if (notification.actionUrl) {
     return (
-      <Link href={notification.actionUrl} className="group block">
-        {content}
+      <Link href={notification.actionUrl} className="block">
+        {cardContent}
       </Link>
     );
   }
 
-  return <div className="group">{content}</div>;
+  return cardContent;
 }
+
+// ─── Date Group Header ──────────────────────────────────────────────────────────
 
 function DateHeader({ date }: { date: string }) {
   return (
-    <div className="flex items-center gap-3 my-4">
-      <div className="flex-1 h-px bg-gray-200" />
-      <span className="text-xs font-medium text-text-muted font-lexend">{date}</span>
-      <div className="flex-1 h-px bg-gray-200" />
+    <div className="flex items-center gap-3 py-4">
+      <div className="h-px flex-1 bg-gray-200/70" />
+      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-text-muted font-lexend">
+        {date}
+      </span>
+      <div className="h-px flex-1 bg-gray-200/70" />
     </div>
   );
 }
 
-function EmptyState() {
+// ─── Inline Clear-All Confirmation Banner ───────────────────────────────────────
+
+interface ClearAllBannerProps {
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ClearAllBanner({ onConfirm, onCancel }: ClearAllBannerProps) {
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-16 px-6"
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      className="overflow-hidden"
     >
-      <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-5">
-        <Bell className="w-10 h-10 text-gray-400" />
+      <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-status-error/20 bg-status-error/5 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-status-error/10">
+            <AlertTriangle className="h-4 w-4 text-status-error" />
+          </div>
+          <p className="text-sm font-medium text-text-primary font-lexend">
+            Are you sure? This cannot be undone.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 ml-10 sm:ml-0">
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-text-secondary font-lexend transition-colors hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-lg bg-status-error px-3.5 py-1.5 text-xs font-semibold text-white font-lexend transition-colors hover:bg-red-600"
+          >
+            Clear All
+          </button>
+        </div>
       </div>
-      <h3 className="text-lg font-semibold text-text-primary font-lexend">
-        No Notifications
-      </h3>
-      <p className="text-sm text-text-secondary text-center mt-2 max-w-xs font-lexend">
-        You&apos;re all caught up! New notifications will appear here.
-      </p>
     </motion.div>
   );
 }
 
+// ─── Empty State ────────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="flex flex-col items-center justify-center px-6 py-20"
+    >
+      {/* Floating icon with gradient circle */}
+      <motion.div
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative mb-6"
+      >
+        <div className="absolute -inset-3 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 blur-lg" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5">
+          <Bell className="h-9 w-9 text-primary/70" />
+        </div>
+      </motion.div>
+
+      <h3 className="text-lg font-semibold text-text-primary font-lexend">
+        No Notifications
+      </h3>
+      <p className="mt-2 max-w-xs text-center text-sm text-text-secondary font-lexend">
+        You&apos;re all caught up! New notifications will appear here when you have activity.
+      </p>
+
+      <Link
+        href="/browse-chat"
+        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white font-lexend shadow-button transition-all hover:bg-primary-dark hover:shadow-web-md"
+      >
+        <Users className="h-4 w-4" />
+        Browse Astrologers
+      </Link>
+    </motion.div>
+  );
+}
+
+// ─── Shimmer Skeleton Loader ────────────────────────────────────────────────────
+
+function NotificationSkeleton() {
+  return (
+    <div className="space-y-3">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between py-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full animate-shimmer bg-gray-200" />
+          <div className="h-7 w-44 rounded-lg animate-shimmer bg-gray-200" />
+        </div>
+        <div className="h-5 w-20 rounded-md animate-shimmer bg-gray-200" />
+      </div>
+
+      {/* Tabs skeleton */}
+      <div className="flex gap-1 border-b border-gray-200 pb-0 mb-4">
+        {[80, 72, 64, 60].map((w, i) => (
+          <div
+            key={i}
+            className="animate-shimmer bg-gray-200 rounded-md mb-0"
+            style={{ width: w, height: 36 }}
+          />
+        ))}
+      </div>
+
+      {/* Card skeletons */}
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="rounded-xl bg-white p-4"
+          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+        >
+          <div className="flex gap-3">
+            <div className="h-10 w-10 flex-shrink-0 rounded-full animate-shimmer bg-gray-200" />
+            <div className="flex-1 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-32 rounded animate-shimmer bg-gray-200" />
+                <div className="h-3 w-16 rounded animate-shimmer bg-gray-200" />
+              </div>
+              <div className="h-3 w-full rounded animate-shimmer bg-gray-200" />
+              <div className="h-3 w-3/4 rounded animate-shimmer bg-gray-200" />
+              <div className="flex justify-end gap-2 pt-1">
+                <div className="h-6 w-14 rounded-md animate-shimmer bg-gray-200" />
+                <div className="h-6 w-16 rounded-md animate-shimmer bg-gray-200" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Page Component ────────────────────────────────────────────────────────
+
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<TabOption>('all');
   const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Auth check
   const { isReady } = useRequireAuth();
 
-  // Filter notifications based on active tab
+  // ── Derived state ──────────────────────────────────────────────────────────
+
   const filteredNotifications = useMemo(() => {
-    if (activeTab === 'all') return notifications;
-    if (activeTab === 'sessions') return notifications.filter(n => n.type === 'call' || n.type === 'chat');
-    if (activeTab === 'wallet') return notifications.filter(n => n.type === 'wallet');
-    if (activeTab === 'offers') return notifications.filter(n => n.type === 'promo');
-    return notifications;
+    const tab = TABS.find((t) => t.value === activeTab);
+    if (!tab || tab.filterTypes.length === 0) return notifications;
+    return notifications.filter((n) => tab.filterTypes.includes(n.type));
   }, [notifications, activeTab]);
 
-  // Group notifications by date
   const groupedNotifications = useMemo(() => {
     const groups: { date: string; notifications: Notification[] }[] = [];
     let currentDate = '';
 
-    filteredNotifications.forEach(notification => {
+    filteredNotifications.forEach((notification) => {
       if (notification.date !== currentDate) {
         currentDate = notification.date;
         groups.push({ date: currentDate, notifications: [] });
@@ -322,152 +515,202 @@ export default function NotificationsPage() {
     return groups;
   }, [filteredNotifications]);
 
-  // Unread count
-  const unreadCount = useMemo(() => {
-    return notifications.filter(n => !n.isRead).length;
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications],
+  );
+
+  // Unread counts per tab category for tab badges
+  const unreadByTab = useMemo(() => {
+    const sessionsUnread = notifications.filter(
+      (n) => !n.isRead && (n.type === 'call' || n.type === 'chat'),
+    ).length;
+    const walletUnread = notifications.filter(
+      (n) => !n.isRead && n.type === 'wallet',
+    ).length;
+    const offersUnread = notifications.filter(
+      (n) => !n.isRead && n.type === 'promo',
+    ).length;
+
+    return { sessions: sessionsUnread, wallet: walletUnread, offers: offersUnread } as Record<
+      string,
+      number
+    >;
   }, [notifications]);
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
   const handleMarkRead = useCallback((id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
-    );
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
   }, []);
 
   const handleDelete = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
   const handleMarkAllRead = useCallback(() => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   }, []);
 
   const handleClearAll = useCallback(() => {
-    if (window.confirm('Are you sure you want to clear all notifications?')) {
-      setNotifications([]);
-    }
+    setNotifications([]);
+    setShowClearConfirm(false);
   }, []);
 
-  // Loading state
+  // ── Loading State ──────────────────────────────────────────────────────────
+
   if (!isReady) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
-        <div className="bg-secondary rounded-b-[28px] pb-4">
-          <div className="flex items-center justify-between px-4 pt-4 pb-3">
-            <Skeleton className="w-10 h-10 rounded-full" />
-            <Skeleton className="w-32 h-6" />
-            <Skeleton className="w-10 h-10 rounded-full" />
+        <PageContainer size="md">
+          <div className="py-4">
+            <Skeleton className="mb-4 h-5 w-48" />
+            <NotificationSkeleton />
           </div>
-          <div className="px-4 pb-2">
-            <Skeleton className="h-10 rounded-full" />
-          </div>
-        </div>
-        <div className="px-4 mt-4 space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-xl" />
-          ))}
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#F5F5F5] pb-24">
-      {/* Yellow Header */}
-      <div className="bg-secondary rounded-b-[28px] pb-4">
-        {/* Header Row */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3">
-          <Link href="/">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              className="w-10 h-10 flex items-center justify-center"
-            >
-              <ArrowLeft className="w-6 h-6 text-[#333333]" />
-            </motion.button>
-          </Link>
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-[#333333] font-lexend">
-              Notifications
-            </h1>
-            {unreadCount > 0 && (
-              <span className="bg-primary text-white text-xs font-semibold px-2 py-0.5 rounded-full font-lexend">
-                {unreadCount}
-              </span>
-            )}
+  // Running index counter for stagger across groups
+  let runningIndex = 0;
+
+  return (
+    <div className="min-h-screen bg-[#F5F5F5]">
+      <PageContainer size="md">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Notifications' },
+          ]}
+        />
+
+        {/* ── Header Section ─────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-center gap-3">
+            {/* Bell icon with primary circle */}
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Bell className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-[#333333] font-lexend">Notifications</h1>
+              {unreadCount > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-white font-lexend">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Clear All Button */}
+          {/* Action buttons */}
           {notifications.length > 0 && (
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handleClearAll}
-              className="w-10 h-10 flex items-center justify-center"
-            >
-              <Trash2 className="w-5 h-5 text-[#666666]" />
-            </motion.button>
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-primary font-lexend transition-colors hover:bg-primary/5"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted font-lexend transition-colors hover:bg-status-error/5 hover:text-status-error"
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear all
+              </button>
+            </div>
           )}
-          {notifications.length === 0 && <div className="w-10" />}
-        </div>
+        </motion.div>
 
-        {/* Tabs */}
+        {/* ── Inline Clear-All Confirmation ───────────────────────────────── */}
+        <AnimatePresence>
+          {showClearConfirm && (
+            <ClearAllBanner
+              onConfirm={handleClearAll}
+              onCancel={() => setShowClearConfirm(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* ── Tabs ────────────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex mx-4 bg-white rounded-full p-1"
-          style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)' }}
+          transition={{ delay: 0.05 }}
+          className="mb-6 flex border-b border-gray-200"
         >
-          {TABS.map((tab) => (
-            <motion.button
-              key={tab.value}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setActiveTab(tab.value)}
-              className={cn(
-                'flex-1 py-2 text-sm font-medium font-lexend rounded-full transition-colors',
-                activeTab === tab.value
-                  ? 'bg-primary text-white'
-                  : 'text-[#666666]'
-              )}
-            >
-              {tab.label}
-            </motion.button>
-          ))}
-        </motion.div>
-      </div>
-
-      {/* Mark All Read Button */}
-      {unreadCount > 0 && (
-        <div className="px-4 pt-4">
-          <button
-            onClick={handleMarkAllRead}
-            className="text-sm text-primary font-medium font-lexend hover:underline"
-          >
-            Mark all as read
-          </button>
-        </div>
-      )}
-
-      {/* Notifications List */}
-      <div className="px-4 mt-2">
-        {filteredNotifications.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <AnimatePresence mode="popLayout">
-            {groupedNotifications.map((group) => (
-              <div key={group.date}>
-                <DateHeader date={group.date} />
-                {group.notifications.map((notification) => (
-                  <NotificationCard
-                    key={notification.id}
-                    notification={notification}
-                    onMarkRead={handleMarkRead}
-                    onDelete={handleDelete}
+          {TABS.map((tab) => {
+            const badgeCount =
+              tab.value === 'all' ? 0 : (unreadByTab[tab.value] ?? 0);
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={cn(
+                  'relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium font-lexend transition-colors',
+                  activeTab === tab.value
+                    ? 'text-primary'
+                    : 'text-[#666666] hover:text-[#333333]',
+                )}
+              >
+                {tab.label}
+                {badgeCount > 0 && (
+                  <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-bold text-primary font-lexend">
+                    {badgeCount}
+                  </span>
+                )}
+                {activeTab === tab.value && (
+                  <motion.div
+                    layoutId="notif-tab-underline"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                   />
-                ))}
-              </div>
-            ))}
-          </AnimatePresence>
-        )}
-      </div>
+                )}
+              </button>
+            );
+          })}
+        </motion.div>
+
+        {/* ── Notification List ────────────────────────────────────────────── */}
+        <div className="pb-8">
+          {filteredNotifications.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <AnimatePresence mode="popLayout">
+              {groupedNotifications.map((group) => {
+                const groupStartIndex = runningIndex;
+                runningIndex += group.notifications.length;
+
+                return (
+                  <div key={group.date}>
+                    <DateHeader date={group.date} />
+                    {group.notifications.map((notification, i) => (
+                      <NotificationCard
+                        key={notification.id}
+                        notification={notification}
+                        index={groupStartIndex + i}
+                        onMarkRead={handleMarkRead}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </AnimatePresence>
+          )}
+        </div>
+      </PageContainer>
     </div>
   );
 }

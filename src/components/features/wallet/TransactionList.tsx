@@ -11,7 +11,8 @@ import {
   Gift,
   MessageCircle,
   Phone,
-  CreditCard
+  CreditCard,
+  Receipt,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -128,16 +129,16 @@ export function TransactionList({
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" aria-label="Loading transactions" role="status">
         {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i} className="p-4">
             <div className="flex items-center gap-3">
-              <Skeleton className="w-10 h-10 rounded-full" />
-              <div className="flex-1">
-                <Skeleton className="h-4 w-32 mb-2" />
-                <Skeleton className="h-3 w-24" />
+              <Skeleton className="w-10 h-10 rounded-full skeleton-shimmer" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-32 rounded skeleton-shimmer" />
+                <Skeleton className="h-3 w-24 rounded skeleton-shimmer" />
               </div>
-              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-16 rounded skeleton-shimmer" />
             </div>
           </Card>
         ))}
@@ -148,33 +149,35 @@ export function TransactionList({
   if (!transactions.length) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-center py-12"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="text-center py-16"
       >
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CreditCard className="w-8 h-8 text-text-muted" />
+        <div className="w-20 h-20 bg-background-offWhite rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner-soft">
+          <Receipt className="w-9 h-9 text-text-muted" />
         </div>
-        <h3 className="font-semibold text-text-primary mb-2">No Transactions Yet</h3>
-        <p className="text-text-secondary text-sm">
-          Your transaction history will appear here
+        <h3 className="font-semibold text-text-primary font-lexend text-lg mb-2">No Transactions Yet</h3>
+        <p className="text-text-secondary text-sm max-w-xs mx-auto leading-relaxed">
+          Your transaction history will appear here once you recharge your wallet or consult an astrologer.
         </p>
       </motion.div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" role="list" aria-label="Transaction history">
       {transactions.map((transaction, index) => (
         <motion.div
           key={transaction.id}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.03 }}
+          role="listitem"
         >
-          <Card className="p-4">
+          <Card className="p-4 transition-shadow duration-200 hover:shadow-web-md border border-transparent hover:border-gray-100">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionColor(transaction.type)}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getTransactionColor(transaction.type)}`}>
                 {getTransactionIcon(transaction.type, transaction.category)}
               </div>
 
@@ -184,11 +187,11 @@ export function TransactionList({
                 </p>
                 <p className="text-xs text-text-muted">
                   {formatDate(transaction.createdAt)}
-                  {transaction.astrologerName && ` • ${transaction.astrologerName}`}
+                  {transaction.astrologerName && ` \u2022 ${transaction.astrologerName}`}
                 </p>
               </div>
 
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <p className={`font-semibold ${
                   transaction.type === 'credit' || transaction.type === 'recharge' || transaction.type === 'refund' || transaction.type === 'bonus'
                     ? 'text-status-success'
@@ -213,7 +216,7 @@ export function TransactionList({
       {/* Load more trigger */}
       <div ref={loadMoreRef} className="py-2">
         {isFetchingNextPage && (
-          <div className="flex justify-center">
+          <div className="flex justify-center py-4" role="status" aria-label="Loading more transactions">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         )}

@@ -2,7 +2,7 @@
 
 /**
  * Kundli Matching Page
- * Web-optimized design with side-by-side boy/girl form layout
+ * Web-standard design with HeroSection, PageContainer, and Breadcrumbs
  */
 
 import { useState } from 'react';
@@ -11,6 +11,11 @@ import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { HeroSection } from '@/components/layout/HeroSection';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { useGenerateMatching } from '@/hooks/useKundli';
+import { useUIStore } from '@/stores/ui-store';
 import {
   Heart,
   User,
@@ -20,6 +25,7 @@ import {
   ChevronRight,
   CheckCircle,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -71,13 +77,50 @@ export default function KundliMatchingPage() {
   const [showForm, setShowForm] = useState(false);
   const [boyData, setBoyData] = useState<PersonData>(initialPersonData);
   const [girlData, setGirlData] = useState<PersonData>(initialPersonData);
+  const { addToast } = useUIStore();
+  const generateMatching = useGenerateMatching();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would call the API
-    console.log('Generating Matching with:', { boyData, girlData });
-    // Navigate to results
-    router.push('/saved-matchings');
+
+    const matchingInput = {
+      boyDetails: {
+        name: boyData.name,
+        dateOfBirth: boyData.dateOfBirth,
+        timeOfBirth: boyData.timeOfBirth,
+        placeOfBirth: boyData.birthPlace.name,
+        latitude: boyData.birthPlace.latitude,
+        longitude: boyData.birthPlace.longitude,
+        timezone: boyData.birthPlace.timezone,
+      },
+      girlDetails: {
+        name: girlData.name,
+        dateOfBirth: girlData.dateOfBirth,
+        timeOfBirth: girlData.timeOfBirth,
+        placeOfBirth: girlData.birthPlace.name,
+        latitude: girlData.birthPlace.latitude,
+        longitude: girlData.birthPlace.longitude,
+        timezone: girlData.birthPlace.timezone,
+      },
+    };
+
+    generateMatching.mutate(matchingInput, {
+      onSuccess: (response) => {
+        const matchingId = response?.data?.id || `match-${Date.now()}`;
+        router.push(`/kundli-matching/${matchingId}`);
+      },
+      onError: () => {
+        // Fallback: generate a local ID and navigate to result page
+        // The result page has built-in fallback mock data
+        const fallbackId = `match-${Date.now()}`;
+        addToast({
+          type: 'info',
+          title: 'Demo Mode',
+          message: 'Showing sample matching results. Connect API for actual analysis.',
+        });
+        router.push(`/kundli-matching/${fallbackId}`);
+      },
+    });
   };
 
   const isPersonDataValid = (data: PersonData) => {
@@ -112,136 +155,119 @@ export default function KundliMatchingPage() {
     return (
       <div className="min-h-screen bg-background-offWhite">
         {/* Hero Section */}
-        <div className="bg-gradient-to-b from-pink-500 via-pink-500 to-pink-500/95 text-white pt-8 pb-16 px-4">
-          <div className="container mx-auto max-w-4xl text-center">
-            {/* Heart Icon */}
-            <div className="w-24 h-24 mx-auto mb-4 relative">
-              <div className="absolute inset-0 bg-white/20 rounded-full blur-xl" />
-              <div className="relative w-full h-full bg-white/10 rounded-full flex items-center justify-center border-2 border-white/20">
-                <Heart className="w-12 h-12 text-white" fill="currentColor" />
+        <HeroSection
+          variant="gradient"
+          size="md"
+          title="Kundli Matching"
+          subtitle="Check compatibility between two people for marriage with Ashtakoot Gun Milan"
+        >
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => setShowForm(true)}
+            className="px-8 shadow-lg"
+          >
+            Start Matching
+            <ChevronRight className="w-5 h-5 ml-2" />
+          </Button>
+        </HeroSection>
+
+        {/* Content */}
+        <PageContainer size="lg" className="py-10 lg:py-14">
+          <div className="grid lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {/* What We Analyze */}
+            <Card className="p-6 bg-white">
+              <h2 className="font-semibold text-text-primary mb-4 flex items-center gap-2 font-lexend">
+                <CheckCircle className="w-5 h-5 text-pink-500" />
+                What We Analyze
+              </h2>
+              <ul className="space-y-3">
+                {ANALYSIS_FEATURES.map((feature, idx) => (
+                  <li key={idx} className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium text-pink-600">{idx + 1}</span>
+                    </div>
+                    <span className="text-sm text-text-secondary font-nunito">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            {/* Score Scale */}
+            <Card className="p-6 bg-white">
+              <h3 className="font-semibold text-text-primary mb-4 text-center font-lexend">
+                Matching Score Scale
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <span className="text-sm font-medium text-green-700">Excellent Match</span>
+                  <span className="text-sm text-green-600">25-36 points</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <span className="text-sm font-medium text-blue-700">Good Match</span>
+                  <span className="text-sm text-blue-600">18-24 points</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <span className="text-sm font-medium text-yellow-700">Average Match</span>
+                  <span className="text-sm text-yellow-600">12-17 points</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <span className="text-sm font-medium text-red-700">Below Average</span>
+                  <span className="text-sm text-red-600">0-11 points</span>
+                </div>
               </div>
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-bold mb-3">
-              Kundli Matching
-            </h1>
-            <p className="text-white/80 text-base max-w-md mx-auto mb-8">
-              Check compatibility between two people for marriage with Ashtakoot Gun Milan
-            </p>
-
-            {/* Start Button */}
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => setShowForm(true)}
-              className="px-8 shadow-lg"
-            >
-              Start Matching
-              <ChevronRight className="w-5 h-5 ml-2" />
-            </Button>
+            </Card>
           </div>
-        </div>
 
-        {/* What We Analyze */}
-        <div className="container mx-auto px-4 max-w-2xl -mt-8">
-          <Card className="p-6 bg-white shadow-lg">
-            <h2 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-pink-500" />
-              What We Analyze
-            </h2>
-            <ul className="space-y-3">
-              {ANALYSIS_FEATURES.map((feature, idx) => (
-                <li key={idx} className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-medium text-pink-600">{idx + 1}</span>
-                  </div>
-                  <span className="text-sm text-text-secondary">{feature}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-
-        {/* Score Scale */}
-        <div className="container mx-auto px-4 py-8 max-w-2xl">
-          <Card className="p-5">
-            <h3 className="font-semibold text-text-primary mb-4 text-center">
-              Matching Score Scale
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                <span className="text-sm font-medium text-green-700">Excellent Match</span>
-                <span className="text-sm text-green-600">25-36 points</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium text-blue-700">Good Match</span>
-                <span className="text-sm text-blue-600">18-24 points</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                <span className="text-sm font-medium text-yellow-700">Average Match</span>
-                <span className="text-sm text-yellow-600">12-17 points</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                <span className="text-sm font-medium text-red-700">Below Average</span>
-                <span className="text-sm text-red-600">0-11 points</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Expert CTA */}
-        <div className="container mx-auto px-4 pb-8 max-w-2xl">
-          <Card className="p-6 text-center bg-gradient-to-r from-pink-50 to-pink-100 border-0">
-            <h3 className="font-semibold text-text-primary mb-2">
-              Need Expert Guidance?
-            </h3>
-            <p className="text-sm text-text-secondary mb-4">
-              Consult our expert astrologers for detailed compatibility analysis
-            </p>
-            <Link href="/browse-chat">
-              <Button variant="primary" size="sm">
-                Consult an Astrologer
-              </Button>
-            </Link>
-          </Card>
-        </div>
+          {/* Expert CTA */}
+          <div className="max-w-5xl mx-auto mt-8">
+            <Card className="p-6 text-center bg-gradient-to-r from-pink-50 to-primary/5 border-0">
+              <h3 className="font-semibold text-text-primary mb-2 font-lexend">
+                Need Expert Guidance?
+              </h3>
+              <p className="text-sm text-text-secondary mb-4 font-nunito">
+                Consult our expert astrologers for detailed compatibility analysis
+              </p>
+              <Link href="/browse-chat">
+                <Button variant="primary" size="sm">
+                  Consult an Astrologer
+                </Button>
+              </Link>
+            </Card>
+          </div>
+        </PageContainer>
       </div>
     );
   }
 
-  // Form page - Web-optimized side-by-side layout
+  // Form page - Web-standard layout with Breadcrumbs
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-pink-500 to-pink-600 text-white py-8 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <button
-            onClick={() => setShowForm(false)}
-            className="text-white/80 hover:text-white text-sm mb-4 flex items-center gap-1"
-          >
-            <ChevronRight className="w-4 h-4 rotate-180" />
-            Back to Kundli Matching
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-              <Heart className="w-7 h-7 text-white" fill="currentColor" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Kundli Matching</h1>
-              <p className="text-white/70 text-sm">Enter birth details for both boy and girl</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Hero Section */}
+      <HeroSection
+        variant="gradient"
+        size="sm"
+        title="Kundli Matching"
+        subtitle="Enter birth details for both boy and girl"
+      />
 
       {/* Form Container */}
-      <div className="container mx-auto max-w-5xl px-4 py-8">
+      <PageContainer size="lg" className="py-8">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Kundli Matching', href: '/kundli-matching' },
+            { label: 'Match Details' },
+          ]}
+        />
+
         <motion.form
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
           onSubmit={handleSubmit}
-          className="space-y-6"
+          className="space-y-6 mt-4 max-w-5xl mx-auto"
         >
           {/* Side by Side Cards on Desktop */}
           <div className="grid lg:grid-cols-2 gap-6">
@@ -252,8 +278,8 @@ export default function KundliMatchingPage() {
                   <User className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-text-primary text-lg">Boy&apos;s Details</h2>
-                  <p className="text-xs text-text-secondary">Groom&apos;s birth information</p>
+                  <h2 className="font-semibold text-text-primary text-lg font-lexend">Boy&apos;s Details</h2>
+                  <p className="text-xs text-text-secondary font-nunito">Groom&apos;s birth information</p>
                 </div>
               </div>
 
@@ -351,8 +377,8 @@ export default function KundliMatchingPage() {
                   <User className="w-6 h-6 text-pink-500" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-text-primary text-lg">Girl&apos;s Details</h2>
-                  <p className="text-xs text-text-secondary">Bride&apos;s birth information</p>
+                  <h2 className="font-semibold text-text-primary text-lg font-lexend">Girl&apos;s Details</h2>
+                  <p className="text-xs text-text-secondary font-nunito">Bride&apos;s birth information</p>
                 </div>
               </div>
 
@@ -448,8 +474,8 @@ export default function KundliMatchingPage() {
           <Card className="p-6 bg-gradient-to-r from-pink-50 to-primary/5">
             <div className="flex flex-col sm:flex-row items-center gap-4">
               <div className="flex-1 text-center sm:text-left">
-                <h3 className="font-semibold text-text-primary">Ready to Check Compatibility?</h3>
-                <p className="text-sm text-text-secondary">
+                <h3 className="font-semibold text-text-primary font-lexend">Ready to Check Compatibility?</h3>
+                <p className="text-sm text-text-secondary font-nunito">
                   Get detailed Ashtakoot Gun Milan analysis with dosha compatibility
                 </p>
               </div>
@@ -464,11 +490,20 @@ export default function KundliMatchingPage() {
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={!isFormValid()}
+                  disabled={!isFormValid() || generateMatching.isPending}
                   className="bg-pink-500 hover:bg-pink-600"
                 >
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Check Compatibility
+                  {generateMatching.isPending ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Check Compatibility
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -479,7 +514,7 @@ export default function KundliMatchingPage() {
             For accurate matching results, please enter exact birth details as per birth certificates
           </p>
         </motion.form>
-      </div>
+      </PageContainer>
     </div>
   );
 }

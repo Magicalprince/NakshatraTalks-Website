@@ -1,62 +1,123 @@
 'use client';
 
-/**
- * CTABanner Component
- * Design matches mobile app with:
- * - Semi-transparent white background
- * - Yellow border with shadow
- * - Banner decoration image on right
- * - Chat Now button
- */
-
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
+import { MessageCircle, Phone, Sparkles, Star } from 'lucide-react';
+import { Button } from '@/components/ui';
 
 export function CTABanner() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
-      className="relative overflow-hidden rounded-2xl h-[115px]"
-      style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
-        borderWidth: '3px',
-        borderStyle: 'solid',
-        borderColor: '#FFCF0D',
-        boxShadow: '0 4px 20px rgba(255, 207, 13, 0.2)',
-      }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.4 }}
+      className="relative overflow-hidden rounded-xl bg-gradient-primary py-14 px-6 sm:px-10 lg:px-16 text-center"
     >
-      {/* Content */}
-      <div className="relative z-10 p-4 h-full flex flex-col justify-center">
-        <h3 className="text-[17px] leading-5 font-medium text-[#371B34] font-lexend">
-          Talk to astrologer and{'\n'}clear your doubts
-        </h3>
-        <p className="text-[10px] text-[#371B34] font-lexend mt-1.5 max-w-[180px]">
-          Open up to the thing that matters among the people
-        </p>
-        <Link href="/browse-chat">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="mt-2 h-7 px-4 bg-primary rounded-[10px] text-white text-sm font-bold font-lexend inline-flex items-center justify-center"
-          >
-            Chat Now
-          </motion.button>
-        </Link>
+      {/* Animated gradient glow border effect */}
+      <div
+        className="absolute -inset-[1px] rounded-xl opacity-50 blur-sm pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(135deg, #FFCF0D 0%, #2930A6 30%, #3B42B8 60%, #FFCF0D 100%)',
+          backgroundSize: '300% 300%',
+          animation: 'gradientShift 6s ease-in-out infinite',
+        }}
+      />
+
+      {/* Inner background to sit on top of glow */}
+      <div className="absolute inset-[1px] rounded-xl bg-gradient-primary pointer-events-none" />
+
+      {/* Decorative floating abstract shapes */}
+      <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/5 rounded-full animate-float pointer-events-none" />
+      <div
+        className="absolute -bottom-10 -left-10 w-44 h-44 bg-white/5 rounded-full animate-float pointer-events-none"
+        style={{ animationDelay: '1s', animationDuration: '7s' }}
+      />
+      <div
+        className="absolute top-1/2 -right-6 w-32 h-32 bg-secondary/10 rounded-full animate-float pointer-events-none"
+        style={{ animationDelay: '2.5s', animationDuration: '9s' }}
+      />
+      <div
+        className="absolute -top-6 left-[30%] w-24 h-24 bg-white/[0.03] rounded-full animate-float pointer-events-none"
+        style={{ animationDelay: '3s', animationDuration: '10s' }}
+      />
+
+      {/* Floating sparkle icon */}
+      <div className="absolute top-6 right-[15%] pointer-events-none">
+        <motion.div
+          animate={{ y: [0, -8, 0], rotate: [0, 10, -10, 0] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Sparkles className="h-5 w-5 text-secondary/40" />
+        </motion.div>
+      </div>
+      <div className="absolute bottom-8 left-[12%] pointer-events-none">
+        <motion.div
+          animate={{ y: [0, -6, 0], rotate: [0, -15, 15, 0] }}
+          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+        >
+          <Star className="h-4 w-4 text-secondary/30" />
+        </motion.div>
       </div>
 
-      {/* Banner Decoration Image */}
-      <div className="absolute right-0 bottom-0 w-[193px] h-[115px]">
-        <Image
-          src="/images/banner-decoration.png"
-          alt="Banner decoration"
-          width={193}
-          height={115}
-          className="object-contain"
-        />
+      {/* Subtle dot pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 max-w-2xl mx-auto">
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.3 }}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/20 border border-secondary/30 mb-5"
+        >
+          <Sparkles className="h-3 w-3 text-secondary" />
+          <span className="text-xs font-semibold text-secondary font-lexend tracking-wide">
+            Start Today
+          </span>
+        </motion.div>
+
+        <h2 className="text-2xl lg:text-3xl font-bold text-white font-lexend">
+          Start Your Consultation Today
+        </h2>
+        <p className="mt-3 text-white/80 font-nunito text-md max-w-lg mx-auto">
+          Talk to expert astrologers and get clarity on life, relationships, career, and more.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
+          <Link href="/browse-chat">
+            <Button
+              variant="secondary"
+              size="md"
+              className="gap-2 font-lexend transition-shadow duration-200 hover:shadow-lg"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat Now
+            </Button>
+          </Link>
+          <Link href="/browse-call">
+            <Button
+              variant="outline"
+              size="md"
+              className="gap-2 font-lexend border-white text-white hover:bg-white hover:text-primary transition-shadow duration-200 hover:shadow-lg"
+            >
+              <Phone className="h-4 w-4" />
+              Call Now
+            </Button>
+          </Link>
+        </div>
       </div>
+
     </motion.div>
   );
 }

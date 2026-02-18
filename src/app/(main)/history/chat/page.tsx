@@ -1,6 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+/**
+ * Chat History Page
+ * Enhanced 2026 design with search/filter, shimmer skeletons,
+ * spring tab animations, colored badges, and polished card interactions.
+ */
+
+import { useState, useMemo } from 'react';
 import { useChatHistory } from '@/hooks/useChatSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { Button } from '@/components/ui/Button';
@@ -9,21 +15,59 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { RatingDisplay } from '@/components/features/rating';
 import {
-  ArrowLeft,
   MessageSquare,
+  MessageCircle,
   Clock,
   IndianRupee,
   ChevronRight,
+  Phone,
+  Search,
+  X,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChatSession } from '@/types/api.types';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+
+// ─── Tab definition ──────────────────────────────────────────────────────────
+
+const TABS = [
+  { key: 'chat', label: 'Chats', href: '/history/chat', icon: MessageSquare },
+  { key: 'call', label: 'Calls', href: '/history/call', icon: Phone },
+] as const;
+
+const ACTIVE_TAB = 'chat';
+
+// ─── Skeleton Card ──────────────────────────────────────────────────────────
+
+function HistorySkeletonCard() {
+  return (
+    <div className="rounded-xl bg-white border border-gray-100 p-4 shadow-web-sm">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-gray-100 skeleton-shimmer" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-32 rounded-md bg-gray-100 skeleton-shimmer" />
+          <div className="h-3 w-24 rounded-md bg-gray-100 skeleton-shimmer" />
+        </div>
+        <div className="w-5 h-5 rounded bg-gray-100 skeleton-shimmer" />
+      </div>
+      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-50">
+        <div className="h-6 w-16 rounded-full bg-gray-100 skeleton-shimmer" />
+        <div className="h-6 w-20 rounded-full bg-gray-100 skeleton-shimmer" />
+        <div className="h-4 w-14 rounded bg-gray-100 skeleton-shimmer ml-auto" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ChatHistoryPage() {
-  // Auth check
   const { isReady } = useRequireAuth();
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch chat history
   const {
     data: historyData,
     isLoading,
@@ -38,141 +82,198 @@ export default function ChatHistoryPage() {
     return historyData.pages.flatMap((page) => page?.sessions || []);
   }, [historyData]);
 
+  // Filter sessions by search
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery.trim()) return sessions;
+    const query = searchQuery.toLowerCase();
+    return sessions.filter(
+      (s) =>
+        (s.astrologerName || '').toLowerCase().includes(query)
+    );
+  }, [sessions, searchQuery]);
+
   // Auth loading state
   if (!isReady) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        <div className="bg-white sticky top-0 z-10 border-b">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center gap-4">
-              <Skeleton className="w-10 h-10 rounded-md" />
-              <Skeleton className="w-32 h-6" />
+        <PageContainer size="md">
+          <div className="py-4">
+            <Skeleton className="w-64 h-5 mb-6 skeleton-shimmer" />
+            <Skeleton className="w-52 h-8 mb-6 skeleton-shimmer" />
+            <div className="flex gap-1 mb-6 border-b border-gray-100 pb-px">
+              <Skeleton className="w-24 h-10 rounded-lg skeleton-shimmer" />
+              <Skeleton className="w-20 h-10 rounded-lg skeleton-shimmer" />
+            </div>
+            <Skeleton className="w-full h-11 rounded-xl mb-6 skeleton-shimmer" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <HistorySkeletonCard key={i} />
+              ))}
             </div>
           </div>
-        </div>
-        <div className="bg-white border-b">
-          <div className="container mx-auto px-4">
-            <div className="flex gap-4 py-3">
-              <Skeleton className="w-20 h-6" />
-              <Skeleton className="w-16 h-6" />
-            </div>
-          </div>
-        </div>
-        <div className="container mx-auto px-4 py-6 max-w-2xl space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Card key={i} className="p-4">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-12 h-12 rounded-full" />
-                <div className="flex-1">
-                  <Skeleton className="w-32 h-4 mb-2" />
-                  <Skeleton className="w-24 h-3" />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-10 border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/profile">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-bold text-text-primary">Chat History</h1>
-          </div>
+      <PageContainer size="md">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'History', href: '/history/chat' },
+            { label: 'Chat History' },
+          ]}
+        />
+
+        {/* Page Title */}
+        <h1 className="text-2xl font-bold text-text-primary font-lexend mb-6">
+          Consultation History
+        </h1>
+
+        {/* Underline-style Tabs with spring layoutId animation */}
+        <div className="flex border-b border-gray-200 mb-6" role="tablist" aria-label="History type">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = tab.key === ACTIVE_TAB;
+            return (
+              <Link
+                key={tab.key}
+                href={tab.href}
+                role="tab"
+                aria-selected={isActive}
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative py-3 px-5 text-sm font-medium font-lexend transition-colors duration-200 ${
+                  isActive
+                    ? 'text-primary'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Icon className="w-4 h-4" aria-hidden="true" />
+                  {tab.label}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="history-tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+              </Link>
+            );
+          })}
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4">
-          <div className="flex gap-4">
-            <Link
-              href="/history/chat"
-              className="py-3 px-4 border-b-2 border-primary text-primary font-medium"
-            >
-              <MessageSquare className="w-4 h-4 inline mr-2" />
-              Chats
-            </Link>
-            <Link
-              href="/history/call"
-              className="py-3 px-4 text-text-secondary hover:text-text-primary"
-            >
-              <Clock className="w-4 h-4 inline mr-2" />
-              Calls
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
-        {isLoading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Card key={i} className="p-4">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-12 h-12 rounded-full" />
-                  <div className="flex-1">
-                    <Skeleton className="w-32 h-4 mb-2" />
-                    <Skeleton className="w-24 h-3" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MessageSquare className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
-              No Chat History
-            </h3>
-            <p className="text-text-secondary mb-4">
-              Your chat consultations will appear here
-            </p>
-            <Link href="/browse-chat">
-              <Button variant="primary">Start a Chat</Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sessions.map((session, index) => (
-              <HistoryCard key={session.id} session={session} index={index} />
-            ))}
-
-            {/* Load More */}
-            {hasNextPage && (
-              <div className="text-center py-4">
-                <Button
-                  variant="outline"
-                  onClick={() => fetchNextPage()}
-                  disabled={isFetchingNextPage}
+        {/* Search / Filter Bar */}
+        <div className="mb-6">
+          <div className="relative flex items-center bg-white rounded-xl border border-gray-200 shadow-web-sm focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px_rgba(41,48,166,0.08)] transition-all duration-200">
+            <Search className="w-4 h-4 text-text-muted ml-4 flex-shrink-0" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search by astrologer name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent px-3 py-3 outline-none text-sm font-nunito text-text-primary placeholder:text-text-muted"
+              aria-label="Search chat history"
+            />
+            <AnimatePresence>
+              {searchQuery && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => setSearchQuery('')}
+                  className="mr-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Clear search"
                 >
-                  {isFetchingNextPage ? 'Loading...' : 'Load More'}
-                </Button>
-              </div>
-            )}
+                  <X className="w-4 h-4 text-text-muted" />
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Bottom padding */}
-      <div className="h-24" />
+        {/* Content */}
+        <div>
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <HistorySkeletonCard key={i} />
+              ))}
+            </div>
+          ) : filteredSessions.length === 0 ? (
+            /* ─── Empty State ──────────────────────────────────────── */
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center py-16"
+            >
+              <div className="relative w-20 h-20 mx-auto mb-5">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/15 via-primary/8 to-secondary/10" />
+                <div className="absolute inset-1 rounded-full bg-gradient-to-br from-primary/10 to-transparent flex items-center justify-center">
+                  <MessageCircle className="w-9 h-9 text-primary/70" />
+                </div>
+                <div className="absolute -top-1 -right-1">
+                  <Sparkles className="w-5 h-5 text-secondary" />
+                </div>
+              </div>
+              <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
+                {searchQuery ? 'No results found' : 'No Chat History'}
+              </h3>
+              <p className="text-sm text-text-secondary mb-6 font-nunito max-w-xs mx-auto">
+                {searchQuery
+                  ? `No consultations matching "${searchQuery}"`
+                  : 'Your chat consultations with astrologers will appear here once you start a session.'}
+              </p>
+              {!searchQuery && (
+                <Link href="/browse-chat">
+                  <Button variant="primary" size="md">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Start a Chat
+                  </Button>
+                </Link>
+              )}
+            </motion.div>
+          ) : (
+            <div>
+              {/* Results count */}
+              {searchQuery && (
+                <p className="text-xs text-text-muted mb-3 font-nunito">
+                  {filteredSessions.length} result{filteredSessions.length !== 1 ? 's' : ''} found
+                </p>
+              )}
+
+              <div className="space-y-3">
+                {filteredSessions.map((session, index) => (
+                  <HistoryCard key={session.id} session={session} index={index} />
+                ))}
+              </div>
+
+              {/* Load More */}
+              {hasNextPage && (
+                <div className="text-center py-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => fetchNextPage()}
+                    isLoading={isFetchingNextPage}
+                  >
+                    Load More
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </PageContainer>
     </div>
   );
 }
 
-// History Card Component
+// ─── History Card Component ──────────────────────────────────────────────────
+
 function HistoryCard({ session, index }: { session: ChatSession; index: number }) {
   const formatDuration = (seconds: number | null | undefined) => {
     if (!seconds) return '--';
@@ -190,49 +291,69 @@ function HistoryCard({ session, index }: { session: ChatSession; index: number }
     });
   };
 
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 30 }}
     >
-      <Link href={`/chat/${session.id}`}>
-        <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer">
+      <Link href={`/chat/${session.id}`} className="block group" aria-label={`Chat with ${session.astrologerName || 'Astrologer'} on ${formatDate(session.startTime)}`}>
+        <Card className="p-4 border border-gray-100 hover:border-primary/15 hover:shadow-web-md transition-all duration-250 cursor-pointer card-hover-lift">
           <div className="flex items-center gap-3">
-            <Avatar
-              src={undefined}
-              alt={session.astrologerName || 'Astrologer'}
-              size="md"
-            />
+            <div className="relative flex-shrink-0">
+              <Avatar
+                src={undefined}
+                alt={session.astrologerName || 'Astrologer'}
+                size="md"
+              />
+              <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-primary rounded-full flex items-center justify-center ring-2 ring-white">
+                <MessageSquare className="w-2.5 h-2.5 text-white" aria-hidden="true" />
+              </div>
+            </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-text-primary truncate">
+              <h3 className="font-semibold text-text-primary truncate font-lexend text-base">
                 {session.astrologerName || 'Astrologer'}
               </h3>
-              <p className="text-xs text-text-muted">
-                {formatDate(session.startTime)}
+              <p className="text-xs text-text-muted font-nunito mt-0.5">
+                {formatDate(session.startTime)} at {formatTime(session.startTime)}
               </p>
             </div>
-            <ChevronRight className="w-5 h-5 text-text-muted" />
+            <ChevronRight className="w-5 h-5 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-200 flex-shrink-0" aria-hidden="true" />
           </div>
 
-          <div className="flex items-center gap-4 mt-3 pt-3 border-t">
-            <div className="flex items-center gap-1 text-sm text-text-secondary">
-              <Clock className="w-4 h-4" />
+          <div className="flex items-center flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+            {/* Duration Badge */}
+            <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
+              <Clock className="w-3 h-3" aria-hidden="true" />
               {formatDuration(session.duration)}
-            </div>
-            <div className="flex items-center gap-1 text-sm text-text-secondary">
-              <IndianRupee className="w-4 h-4" />
+            </span>
+
+            {/* Cost Badge */}
+            <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">
+              <IndianRupee className="w-3 h-3" aria-hidden="true" />
               {session.totalCost?.toFixed(2) || '0.00'}
-            </div>
+            </span>
+
+            {/* Rating */}
             {session.rating && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 ml-auto">
                 <RatingDisplay rating={session.rating} size="xs" showValue={false} />
               </div>
             )}
+
+            {/* Rate Now CTA */}
             {!session.rating && session.status === 'completed' && (
               <Link
                 href={`/rating/${session.id}`}
-                className="text-xs text-primary font-medium ml-auto"
+                className="text-xs text-primary font-semibold ml-auto hover:underline underline-offset-2 transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
                 Rate Now

@@ -81,6 +81,8 @@ const config: Config = {
         '2xl': ['22px', { lineHeight: '30px' }],
         '3xl': ['26px', { lineHeight: '34px' }],
         '4xl': ['30px', { lineHeight: '38px' }],
+        '5xl': ['36px', { lineHeight: '44px' }],
+        '6xl': ['48px', { lineHeight: '56px' }],
       },
       borderRadius: {
         'sm': '8px',
@@ -108,6 +110,13 @@ const config: Config = {
         'button': '0 2px 4px rgba(0, 0, 0, 0.1)',
         'glow-primary': '0 0 20px rgba(41, 48, 166, 0.3)',
         'glow-secondary': '0 0 20px rgba(255, 207, 13, 0.3)',
+        'web-sm': '0 1px 3px rgba(0, 0, 0, 0.08)',
+        'web-md': '0 4px 6px rgba(0, 0, 0, 0.07)',
+        'web-lg': '0 10px 15px rgba(0, 0, 0, 0.1)',
+        'web-xl': '0 20px 40px rgba(0, 0, 0, 0.08)',
+        'glass': '0 8px 32px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+        'glow-live': '0 0 15px rgba(239, 68, 68, 0.4)',
+        'inner-soft': 'inset 0 2px 4px rgba(0, 0, 0, 0.06)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
@@ -116,6 +125,9 @@ const config: Config = {
         'scale-in': 'scaleIn 0.2s ease-out',
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
         'spin-slow': 'spin 3s linear infinite',
+        'shimmer': 'shimmer 2s ease-in-out infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -138,11 +150,25 @@ const config: Config = {
           '0%, 100%': { boxShadow: '0 0 10px rgba(41, 48, 166, 0.3)' },
           '50%': { boxShadow: '0 0 25px rgba(41, 48, 166, 0.5)' },
         },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.6' },
+          '50%': { opacity: '1' },
+        },
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-primary': 'linear-gradient(135deg, #2930A6 0%, #3B42B8 100%)',
         'gradient-secondary': 'linear-gradient(135deg, #FFCF0D 0%, #FFD93D 100%)',
+        'gradient-mesh': 'radial-gradient(at 40% 20%, #2930A6 0px, transparent 50%), radial-gradient(at 80% 0%, #3B42B8 0px, transparent 50%), radial-gradient(at 0% 50%, #FFCF0D 0px, transparent 50%)',
+        'gradient-hero': 'linear-gradient(135deg, #1E2485 0%, #2930A6 40%, #3B42B8 100%)',
       },
     },
   },

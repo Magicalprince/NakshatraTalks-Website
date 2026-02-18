@@ -2,7 +2,9 @@
 
 /**
  * Kundli Page
- * Web-optimized design with single-page form layout
+ * Web-standard design with HeroSection, PageContainer, and Breadcrumbs.
+ * - Landing page shows features + previously generated reports.
+ * - Form submits via the API and navigates to the result page.
  */
 
 import { useState } from 'react';
@@ -11,6 +13,14 @@ import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { HeroSection } from '@/components/layout/HeroSection';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { useGenerateKundli, useKundliList, useMatchingList } from '@/hooks/useKundli';
+import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { Kundli, MatchingReport } from '@/types/api.types';
 import {
   FileText,
   User,
@@ -21,8 +31,10 @@ import {
   Sparkles,
   TrendingUp,
   Heart,
+  HeartHandshake,
   Shield,
   Check,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -46,8 +58,32 @@ const FEATURES = [
   { icon: Sparkles, title: 'Remedies', desc: 'Gemstones & Mantras', color: 'text-purple-500', bg: 'bg-purple-50' },
 ];
 
+// Format date for display
+const formatDate = (dateString: string, timeString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate();
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}, ${timeString}`;
+};
+
+// Get initials from name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+};
+
 export default function KundliPage() {
   const router = useRouter();
+  const { addToast } = useUIStore();
+  const { isAuthenticated } = useAuthStore();
+  const { mutate: generateKundli, isPending } = useGenerateKundli();
+  const { data: kundliList, isLoading: isKundliListLoading } = useKundliList();
+  const { data: matchingList, isLoading: isMatchingListLoading } = useMatchingList();
+
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -64,10 +100,45 @@ export default function KundliPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, this would call the API
-    console.log('Generating Kundli with:', formData);
-    // Navigate to a report page or show results
-    router.push('/kundli-reports');
+
+    const kundliInput = {
+      name: formData.name,
+      dateOfBirth: formData.dateOfBirth,
+      timeOfBirth: formData.timeOfBirth,
+      placeOfBirth: formData.birthPlace.name,
+      latitude: formData.birthPlace.latitude,
+      longitude: formData.birthPlace.longitude,
+      timezone: formData.birthPlace.timezone,
+    };
+
+    generateKundli(kundliInput, {
+      onSuccess: (response) => {
+        const newId = response?.data?.id;
+        if (newId) {
+          addToast({
+            type: 'success',
+            title: 'Kundli Generated',
+            message: 'Your kundli has been generated successfully.',
+          });
+          router.push(`/kundli-reports/${newId}`);
+        } else {
+          // Fallback — API returned success but no ID
+          addToast({
+            type: 'success',
+            title: 'Kundli Generated',
+            message: 'Your kundli has been generated. Redirecting to reports...',
+          });
+          router.push('/kundli-reports');
+        }
+      },
+      onError: (error) => {
+        addToast({
+          type: 'error',
+          title: 'Generation Failed',
+          message: error instanceof Error ? error.message : 'Failed to generate kundli. Please try again.',
+        });
+      },
+    });
   };
 
   const isFormValid = () => {
@@ -92,134 +163,280 @@ export default function KundliPage() {
     });
   };
 
+  const previousReports: Kundli[] = kundliList || [];
+  const previousMatchings: (MatchingReport & { boy?: { name: string }; girl?: { name: string } })[] = matchingList || [];
+
   // Landing page
   if (!showForm) {
     return (
       <div className="min-h-screen bg-background-offWhite">
         {/* Hero Section */}
-        <div className="bg-gradient-to-b from-primary via-primary to-primary/95 text-white pt-8 pb-16 px-4">
-          <div className="container mx-auto max-w-4xl text-center">
-            {/* Kundli Icon/Image */}
-            <div className="w-24 h-24 mx-auto mb-4 relative">
-              <div className="absolute inset-0 bg-secondary/30 rounded-full blur-xl" />
-              <div className="relative w-full h-full bg-white/10 rounded-full flex items-center justify-center border-2 border-white/20">
-                <FileText className="w-12 h-12 text-secondary" />
-              </div>
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-bold mb-3">
-              Free Kundli
-            </h1>
-            <p className="text-white/80 text-base max-w-md mx-auto mb-8">
-              Generate your detailed Vedic birth chart with planetary positions,
-              doshas, and life predictions
-            </p>
-
-            {/* Generate Button */}
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => setShowForm(true)}
-              className="px-8 shadow-lg"
-            >
-              Generate Your Kundli
-              <ChevronRight className="w-5 h-5 ml-2" />
-            </Button>
-          </div>
-        </div>
+        <HeroSection
+          variant="primary"
+          size="md"
+          title="Free Kundli"
+          subtitle="Generate your detailed Vedic birth chart with planetary positions, doshas, and life predictions"
+        >
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => setShowForm(true)}
+            className="px-8 shadow-lg"
+          >
+            Generate Your Kundli
+            <ChevronRight className="w-5 h-5 ml-2" />
+          </Button>
+        </HeroSection>
 
         {/* Features Grid */}
-        <div className="container mx-auto px-4 max-w-2xl -mt-8">
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="font-semibold text-text-primary text-center mb-4">
+        <PageContainer size="lg" className="py-10 lg:py-14">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="font-semibold text-text-primary text-center text-xl mb-6 font-lexend">
               What&apos;s Included
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {FEATURES.map((feature) => (
                 <div
                   key={feature.title}
-                  className={`${feature.bg} rounded-xl p-4 text-center`}
+                  className={`${feature.bg} rounded-xl p-5 text-center`}
                 >
                   <feature.icon className={`w-8 h-8 ${feature.color} mx-auto mb-2`} />
-                  <h3 className="font-medium text-text-primary text-sm">{feature.title}</h3>
-                  <p className="text-xs text-text-secondary mt-1">{feature.desc}</p>
+                  <h3 className="font-medium text-text-primary text-sm font-lexend">{feature.title}</h3>
+                  <p className="text-xs text-text-secondary mt-1 font-nunito">{feature.desc}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Kundli Matching Link */}
-        <div className="container mx-auto px-4 py-8 max-w-2xl">
-          <Link href="/kundli-matching">
-            <Card className="p-5 hover:shadow-lg transition-shadow cursor-pointer flex items-center gap-4">
-              <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Heart className="w-6 h-6 text-pink-500" />
+          {/* Previously Generated Reports */}
+          {isAuthenticated && (
+            <div className="max-w-4xl mx-auto mt-10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-text-primary text-lg font-lexend">
+                  Your Kundli Reports
+                </h2>
+                {previousReports.length > 0 && (
+                  <Link
+                    href="/kundli-reports"
+                    className="text-sm text-primary hover:text-primary-dark font-medium font-lexend flex items-center gap-1 transition-colors"
+                  >
+                    View All
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-text-primary">Kundli Matching</h3>
-                <p className="text-sm text-text-secondary">
-                  Check compatibility for marriage with Gun Milan
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-text-muted" />
-            </Card>
-          </Link>
-        </div>
 
-        {/* Expert CTA */}
-        <div className="container mx-auto px-4 pb-8 max-w-2xl">
-          <Card className="p-6 text-center bg-gradient-to-r from-primary/5 to-secondary/10 border-0">
-            <h3 className="font-semibold text-text-primary mb-2">
-              Need Expert Analysis?
-            </h3>
-            <p className="text-sm text-text-secondary mb-4">
-              Get your Kundli analyzed by our expert Vedic astrologers
-            </p>
-            <Link href="/browse-chat">
-              <Button variant="primary" size="sm">
-                Consult an Astrologer
-              </Button>
+              {isKundliListLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <Card key={i} className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="w-11 h-11 rounded-full" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-48" />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : previousReports.length === 0 ? (
+                <Card className="p-6 text-center">
+                  <FileText className="w-10 h-10 text-text-muted/40 mx-auto mb-2" />
+                  <p className="text-sm text-text-secondary font-nunito">
+                    No reports yet. Generate your first Kundli to see it here.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {previousReports.slice(0, 5).map((kundli, index) => (
+                    <motion.div
+                      key={kundli.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.08 }}
+                    >
+                      <Link href={`/kundli-reports/${kundli.id}`}>
+                        <Card className="p-4 hover:shadow-web-sm hover:border-primary/10 transition-all cursor-pointer group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                              <span className="text-white font-semibold text-sm font-lexend">
+                                {getInitials(kundli.name)}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-text-primary truncate font-lexend group-hover:text-primary transition-colors">
+                                {kundli.name}
+                              </p>
+                              <p className="text-xs text-text-secondary truncate font-nunito">
+                                {formatDate(kundli.dateOfBirth, kundli.timeOfBirth)} &middot; {kundli.placeOfBirth}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-text-muted flex-shrink-0 group-hover:text-primary transition-colors" />
+                          </div>
+                        </Card>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Previously Generated Matching Reports */}
+          {isAuthenticated && (
+            <div className="max-w-4xl mx-auto mt-10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-text-primary text-lg font-lexend">
+                  Your Matching Reports
+                </h2>
+                {previousMatchings.length > 0 && (
+                  <Link
+                    href="/saved-matchings"
+                    className="text-sm text-pink-500 hover:text-pink-600 font-medium font-lexend flex items-center gap-1 transition-colors"
+                  >
+                    View All
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+
+              {isMatchingListLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <Card key={i} className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="w-11 h-11 rounded-full" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-3 w-32" />
+                        </div>
+                        <Skeleton className="w-12 h-6 rounded-full" />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : previousMatchings.length === 0 ? (
+                <Card className="p-6 text-center">
+                  <HeartHandshake className="w-10 h-10 text-text-muted/40 mx-auto mb-2" />
+                  <p className="text-sm text-text-secondary font-nunito">
+                    No matching reports yet. Try Kundli Matching to check compatibility.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {previousMatchings.slice(0, 5).map((matching, index) => {
+                    const scoreColor =
+                      matching.totalPoints >= 25
+                        ? 'text-green-600 bg-green-50'
+                        : matching.totalPoints >= 18
+                          ? 'text-blue-600 bg-blue-50'
+                          : matching.totalPoints >= 12
+                            ? 'text-yellow-600 bg-yellow-50'
+                            : 'text-red-600 bg-red-50';
+
+                    return (
+                      <motion.div
+                        key={matching.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.08 }}
+                      >
+                        <Link href={`/kundli-matching/${matching.id}`}>
+                          <Card className="p-4 hover:shadow-web-sm hover:border-pink-500/10 transition-all cursor-pointer group">
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+                                <HeartHandshake className="w-5 h-5 text-pink-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-text-primary truncate font-lexend group-hover:text-pink-500 transition-colors">
+                                  {matching.boy?.name || 'Boy'} & {matching.girl?.name || 'Girl'}
+                                </p>
+                                <p className="text-xs text-text-secondary font-nunito">
+                                  {matching.totalPoints}/{matching.maxPoints} points &middot; {matching.percentage}% compatible
+                                </p>
+                              </div>
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${scoreColor}`}>
+                                {matching.totalPoints}/{matching.maxPoints}
+                              </span>
+                            </div>
+                          </Card>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Kundli Matching Link */}
+          <div className="max-w-4xl mx-auto mt-8">
+            <Link href="/kundli-matching">
+              <Card className="p-5 hover:shadow-lg transition-shadow cursor-pointer flex items-center gap-4">
+                <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Heart className="w-6 h-6 text-pink-500" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-text-primary font-lexend">Kundli Matching</h3>
+                  <p className="text-sm text-text-secondary font-nunito">
+                    Check compatibility for marriage with Gun Milan
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-text-muted" />
+              </Card>
             </Link>
-          </Card>
-        </div>
+          </div>
+
+          {/* Expert CTA */}
+          <div className="max-w-4xl mx-auto mt-8">
+            <Card className="p-6 text-center bg-gradient-to-r from-primary/5 to-secondary/10 border-0">
+              <h3 className="font-semibold text-text-primary mb-2 font-lexend">
+                Need Expert Analysis?
+              </h3>
+              <p className="text-sm text-text-secondary mb-4 font-nunito">
+                Get your Kundli analyzed by our expert Vedic astrologers
+              </p>
+              <Link href="/browse-chat">
+                <Button variant="primary" size="sm">
+                  Consult an Astrologer
+                </Button>
+              </Link>
+            </Card>
+          </div>
+        </PageContainer>
       </div>
     );
   }
 
-  // Form page - Web-optimized single page layout
+  // Form page - Web-standard layout with Breadcrumbs
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-primary/90 text-white py-8 px-4">
-        <div className="container mx-auto max-w-3xl">
-          <button
-            onClick={() => setShowForm(false)}
-            className="text-white/80 hover:text-white text-sm mb-4 flex items-center gap-1"
-          >
-            <ChevronRight className="w-4 h-4 rotate-180" />
-            Back to Kundli
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-              <FileText className="w-7 h-7 text-secondary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Generate Your Kundli</h1>
-              <p className="text-white/70 text-sm">Enter your birth details for accurate predictions</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Hero Section */}
+      <HeroSection
+        variant="primary"
+        size="sm"
+        title="Generate Your Kundli"
+        subtitle="Enter your birth details for accurate predictions"
+      />
 
       {/* Form Container */}
-      <div className="container mx-auto max-w-3xl px-4 py-8">
+      <PageContainer size="md" className="py-8">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Kundli', href: '/kundli' },
+            { label: 'Generate' },
+          ]}
+        />
+
         <motion.form
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
           onSubmit={handleSubmit}
-          className="space-y-6"
+          className="space-y-6 mt-4"
         >
           {/* Personal Details Card */}
           <Card className="p-6">
@@ -228,8 +445,8 @@ export default function KundliPage() {
                 <User className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="font-semibold text-text-primary">Personal Details</h2>
-                <p className="text-xs text-text-secondary">Enter your basic information</p>
+                <h2 className="font-semibold text-text-primary font-lexend">Personal Details</h2>
+                <p className="text-xs text-text-secondary font-nunito">Enter your basic information</p>
               </div>
             </div>
 
@@ -280,8 +497,8 @@ export default function KundliPage() {
                 <Calendar className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="font-semibold text-text-primary">Birth Details</h2>
-                <p className="text-xs text-text-secondary">Provide accurate birth information for precise calculations</p>
+                <h2 className="font-semibold text-text-primary font-lexend">Birth Details</h2>
+                <p className="text-xs text-text-secondary font-nunito">Provide accurate birth information for precise calculations</p>
               </div>
             </div>
 
@@ -328,8 +545,8 @@ export default function KundliPage() {
                 <MapPin className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h2 className="font-semibold text-text-primary">Birth Place</h2>
-                <p className="text-xs text-text-secondary">Select or search your birth city</p>
+                <h2 className="font-semibold text-text-primary font-lexend">Birth Place</h2>
+                <p className="text-xs text-text-secondary font-nunito">Select or search your birth city</p>
               </div>
             </div>
 
@@ -381,6 +598,7 @@ export default function KundliPage() {
               size="lg"
               onClick={() => setShowForm(false)}
               className="sm:flex-1"
+              disabled={isPending}
             >
               Cancel
             </Button>
@@ -388,11 +606,20 @@ export default function KundliPage() {
               type="submit"
               variant="primary"
               size="lg"
-              disabled={!isFormValid()}
+              disabled={!isFormValid() || isPending}
               className="sm:flex-[2]"
             >
-              <Sparkles className="w-5 h-5 mr-2" />
-              Generate Kundli
+              {isPending ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Generate Kundli
+                </>
+              )}
             </Button>
           </div>
 
@@ -401,7 +628,7 @@ export default function KundliPage() {
             Your data is secure and will only be used for generating your Kundli report
           </p>
         </motion.form>
-      </div>
+      </PageContainer>
     </div>
   );
 }

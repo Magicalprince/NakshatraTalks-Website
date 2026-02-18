@@ -2,22 +2,23 @@
 
 /**
  * Wallet Page
- * Design matches mobile app with:
- * - Yellow header background with rounded bottom
- * - Balance card at top
- * - Filter tabs with rounded pill style
- * - Transaction history list
+ * Web-standard layout with:
+ * - Breadcrumb navigation
+ * - 2-column layout: transactions (2/3) + balance card sidebar (1/3)
+ * - Underline-style filter tabs with spring-based layoutId animation
+ * - Shimmer loading skeletons
+ * - Gradient glow wallet balance sidebar
  */
 
 import { useState, useMemo } from 'react';
 import { WalletBalance, TransactionList } from '@/components/features/wallet';
 import { useWalletBalance, useWalletSummary, useTransactions } from '@/hooks/useWalletData';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { ChevronLeft } from 'lucide-react';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 type FilterType = 'all' | 'credit' | 'debit';
 
@@ -55,97 +56,126 @@ export default function WalletPage() {
   // Auth loading state
   if (!isReady) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5] pb-24">
-        <div className="bg-secondary rounded-b-[28px] pb-5">
-          <div className="flex items-center justify-between px-4 pt-2 pb-3">
-            <Skeleton className="w-10 h-10 rounded-full" />
-            <Skeleton className="w-24 h-6" />
-            <div className="w-10" />
+      <div className="min-h-screen bg-background-offWhite">
+        <PageContainer size="lg">
+          <div className="py-4">
+            <Skeleton className="w-48 h-5 mb-6 rounded-lg skeleton-shimmer" />
+            <Skeleton className="w-64 h-8 mb-8 rounded-lg skeleton-shimmer" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-4">
+                {/* Tab skeleton */}
+                <div className="flex gap-4 mb-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-9 w-24 rounded-lg skeleton-shimmer" />
+                  ))}
+                </div>
+                {/* Transaction skeletons */}
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="bg-white rounded-xl p-4 shadow-web-sm">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-10 h-10 rounded-full skeleton-shimmer" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-36 rounded skeleton-shimmer" />
+                        <Skeleton className="h-3 w-24 rounded skeleton-shimmer" />
+                      </div>
+                      <Skeleton className="h-5 w-16 rounded skeleton-shimmer" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <Skeleton className="h-36 rounded-xl skeleton-shimmer" />
+              </div>
+            </div>
           </div>
-          <div className="px-5">
-            <Skeleton className="h-32 rounded-2xl" />
-          </div>
-          <div className="mx-5 mt-5">
-            <Skeleton className="h-12 rounded-[25px]" />
-          </div>
-        </div>
-        <div className="px-5 mt-4 space-y-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-xl" />
-          ))}
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] pb-24">
-      {/* Yellow Header Background */}
-      <div className="bg-secondary rounded-b-[28px] pb-5">
-        {/* Header Row */}
-        <div className="flex items-center justify-between px-4 pt-2 pb-3">
-          <Link href="/">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              className="w-10 h-10 flex items-center justify-center"
+    <div className="min-h-screen bg-background-offWhite">
+      <PageContainer size="lg">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'My Wallet' },
+          ]}
+        />
+
+        {/* Page Title */}
+        <h1 className="text-2xl font-bold text-text-primary font-lexend mb-6">My Wallet</h1>
+
+        {/* 2-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content - Transactions */}
+          <div className="lg:col-span-2">
+            {/* Underline-style Filter Tabs */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="flex border-b border-gray-200 mb-6"
+              role="tablist"
+              aria-label="Transaction filter tabs"
             >
-              <ChevronLeft className="w-[26px] h-[26px] text-[#333333]" strokeWidth={2} />
-            </motion.button>
-          </Link>
+              {FILTER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  role="tab"
+                  aria-selected={activeFilter === option.value}
+                  aria-controls={`tabpanel-${option.value}`}
+                  onClick={() => setActiveFilter(option.value)}
+                  className={cn(
+                    'py-3 px-5 text-sm font-medium font-lexend transition-colors relative',
+                    activeFilter === option.value
+                      ? 'text-primary'
+                      : 'text-text-secondary hover:text-text-primary'
+                  )}
+                >
+                  {option.label}
+                  {activeFilter === option.value && (
+                    <motion.div
+                      layoutId="wallet-tab-underline"
+                      className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full"
+                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                </button>
+              ))}
+            </motion.div>
 
-          <h1 className="text-xl font-semibold text-[#333333] font-lexend">My Wallet</h1>
+            {/* Transaction History */}
+            <div role="tabpanel" id={`tabpanel-${activeFilter}`}>
+              <TransactionList
+                transactions={transactions}
+                isLoading={isTransactionsLoading}
+                isFetchingNextPage={isFetchingNextPage}
+                hasNextPage={hasNextPage}
+                fetchNextPage={fetchNextPage}
+              />
+            </div>
+          </div>
 
-          <div className="w-10" />
+          {/* Sidebar - Balance Card */}
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-24">
+              {/* Gradient glow border wrapper */}
+              <div className="relative rounded-xl p-[2px] bg-gradient-to-br from-primary/30 via-secondary/40 to-primary/20 shadow-glow-primary/30">
+                <div className="rounded-[10px] overflow-hidden">
+                  <WalletBalance
+                    balance={balance ?? 0}
+                    isLoading={isBalanceLoading || isSummaryLoading}
+                    totalCredits={summary?.stats?.last30Days?.totalRecharged}
+                    totalDebits={summary?.stats?.last30Days?.totalSpent}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Balance Section */}
-        <WalletBalance
-          balance={balance ?? 0}
-          isLoading={isBalanceLoading || isSummaryLoading}
-          totalCredits={summary?.stats?.last30Days?.totalRecharged}
-          totalDebits={summary?.stats?.last30Days?.totalSpent}
-        />
-
-        {/* Filter Tabs */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="flex mx-5 mt-5 bg-white rounded-[25px] p-1"
-          style={{
-            boxShadow: '0 2px 16px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          {FILTER_OPTIONS.map((option, index) => (
-            <motion.button
-              key={option.value}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setActiveFilter(option.value)}
-              className={cn(
-                'flex-1 py-2.5 text-[13px] font-medium font-lexend transition-colors',
-                index === 0 && 'rounded-l-[21px]',
-                index === FILTER_OPTIONS.length - 1 && 'rounded-r-[21px]',
-                activeFilter === option.value
-                  ? 'bg-primary text-white rounded-[21px]'
-                  : 'text-[#666666]'
-              )}
-            >
-              {option.label}
-            </motion.button>
-          ))}
-        </motion.div>
-      </div>
-
-      {/* Transaction History */}
-      <div className="px-5 mt-4">
-        <TransactionList
-          transactions={transactions}
-          isLoading={isTransactionsLoading}
-          isFetchingNextPage={isFetchingNextPage}
-          hasNextPage={hasNextPage}
-          fetchNextPage={fetchNextPage}
-        />
-      </div>
+      </PageContainer>
     </div>
   );
 }

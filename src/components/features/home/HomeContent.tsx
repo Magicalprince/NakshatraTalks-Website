@@ -1,34 +1,21 @@
 'use client';
 
-/**
- * HomeContent Component
- * Dashboard-style web layout with:
- * - Welcome section with search
- * - Quick stats/actions cards
- * - Category icons in grid
- * - CTA Banner
- * - Live Sessions carousel
- * - Top Rated Astrologers grid
- */
-
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { SearchBar } from './SearchBar';
+import { MessageCircle, Phone, Search, UserCheck, Headphones } from 'lucide-react';
+import { HeroSection } from '@/components/layout/HeroSection';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Button } from '@/components/ui';
 import { CategoryIcons } from './CategoryIcons';
-import { CTABanner } from './CTABanner';
 import { LiveSessionsCarousel } from './LiveSessionsCarousel';
 import { TopRatedAstrologers } from './TopRatedAstrologers';
-import { useAuthStore } from '@/stores/auth-store';
-import { Wallet, MessageCircle, Phone, Clock } from 'lucide-react';
-import Link from 'next/link';
+import { CTABanner } from './CTABanner';
 
-// Animation variants
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.1 },
   },
 };
 
@@ -41,142 +28,137 @@ const itemVariants = {
   },
 };
 
-export function HomeContent() {
-  const { user, isAuthenticated } = useAuthStore();
+const steps = [
+  {
+    icon: Search,
+    title: 'Choose Your Astrologer',
+    description: 'Browse expert astrologers by specialization, rating, and language.',
+  },
+  {
+    icon: UserCheck,
+    title: 'Connect Instantly',
+    description: 'Start a chat or call session with your chosen astrologer.',
+  },
+  {
+    icon: Headphones,
+    title: 'Get Guidance',
+    description: 'Receive personalized Vedic astrology insights and remedies.',
+  },
+];
 
+export function HomeContent() {
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="min-h-screen pb-24 lg:pb-8"
     >
-      {/* Welcome Section - Desktop */}
-      <section className="hidden lg:block px-8 pt-6 pb-4">
-        <motion.div variants={itemVariants}>
-          <h1 className="text-2xl font-bold text-text-primary font-lexend mb-1">
-            {isAuthenticated ? `Welcome back, ${user?.name?.split(' ')[0] || 'User'}!` : 'Welcome to NakshatraTalks'}
-          </h1>
-          <p className="text-text-muted font-lexend">
-            Connect with expert astrologers for personalized guidance
-          </p>
-        </motion.div>
-      </section>
+      {/* Hero Section */}
+      <HeroSection
+        title="Connect with Expert Vedic Astrologers"
+        subtitle="Get personalized guidance through chat or call. Explore your horoscope, kundli, and more."
+        variant="gradient"
+        size="lg"
+      >
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link href="/browse-chat">
+            <Button variant="secondary" size="lg" className="gap-2 font-lexend">
+              <MessageCircle className="h-4 w-4" />
+              Chat with Astrologer
+            </Button>
+          </Link>
+          <Link href="/browse-call">
+            <Button variant="outline" size="lg" className="gap-2 font-lexend border-white text-white hover:bg-white hover:text-primary">
+              <Phone className="h-4 w-4" />
+              Call an Astrologer
+            </Button>
+          </Link>
+        </div>
+      </HeroSection>
 
-      {/* Quick Stats Cards - Desktop Only */}
-      {isAuthenticated && (
-        <section className="hidden lg:block px-8 pb-6">
-          <motion.div variants={itemVariants} className="grid grid-cols-4 gap-4">
-            {/* Wallet Balance */}
-            <Link href="/wallet">
-              <motion.div
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-secondary rounded-2xl p-5 cursor-pointer"
-                style={{ boxShadow: '0 4px 16px rgba(255, 207, 13, 0.25)' }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-primary/70 font-lexend">Wallet Balance</span>
-                </div>
-                <p className="text-2xl font-bold text-primary font-lexend">
-                  ₹{user?.walletBalance?.toFixed(0) || 0}
-                </p>
-              </motion.div>
-            </Link>
-
-            {/* Chat Sessions */}
-            <Link href="/history/chat">
-              <motion.div
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-white rounded-2xl p-5 border border-gray-100 cursor-pointer"
-                style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)' }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                    <MessageCircle className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <span className="text-sm font-medium text-text-muted font-lexend">Chat Sessions</span>
-                </div>
-                <p className="text-2xl font-bold text-text-primary font-lexend">12</p>
-              </motion.div>
-            </Link>
-
-            {/* Call Sessions */}
-            <Link href="/history/call">
-              <motion.div
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-white rounded-2xl p-5 border border-gray-100 cursor-pointer"
-                style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)' }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-green-500" />
-                  </div>
-                  <span className="text-sm font-medium text-text-muted font-lexend">Call Sessions</span>
-                </div>
-                <p className="text-2xl font-bold text-text-primary font-lexend">8</p>
-              </motion.div>
-            </Link>
-
-            {/* Total Minutes */}
-            <Link href="/history/chat">
-              <motion.div
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-white rounded-2xl p-5 border border-gray-100 cursor-pointer"
-                style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)' }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <span className="text-sm font-medium text-text-muted font-lexend">Total Minutes</span>
-                </div>
-                <p className="text-2xl font-bold text-text-primary font-lexend">156</p>
-              </motion.div>
-            </Link>
+      {/* Services Section */}
+      <section className="py-12 lg:py-16 bg-white">
+        <PageContainer>
+          <motion.div variants={itemVariants}>
+            <div className="text-center mb-10">
+              <h2 className="text-2xl lg:text-3xl font-bold text-text-primary font-lexend">
+                Our Services
+              </h2>
+              <p className="mt-2 text-text-secondary font-nunito text-md">
+                Explore astrology services tailored for you
+              </p>
+            </div>
+            <CategoryIcons />
           </motion.div>
-        </section>
-      )}
-
-      {/* Search Bar Section */}
-      <section className="px-5 lg:px-8 pt-4 lg:pt-0 pb-5">
-        <motion.div variants={itemVariants}>
-          <SearchBar showQuickFilters={false} />
-        </motion.div>
+        </PageContainer>
       </section>
 
-      {/* Category Icons Section */}
-      <section className="px-5 lg:px-8 mb-8">
-        <motion.div variants={itemVariants}>
-          <CategoryIcons />
-        </motion.div>
-      </section>
-
-      {/* CTA Banner Section */}
-      <section className="px-5 lg:px-8 mb-8">
-        <motion.div variants={itemVariants}>
-          <CTABanner />
-        </motion.div>
-      </section>
-
-      {/* Live Sessions Section */}
-      <section className="px-5 lg:px-8">
-        <motion.div variants={itemVariants}>
-          <LiveSessionsCarousel />
-        </motion.div>
+      {/* How It Works Section */}
+      <section className="py-12 lg:py-16 bg-background-offWhite">
+        <PageContainer>
+          <motion.div variants={itemVariants}>
+            <div className="text-center mb-10">
+              <h2 className="text-2xl lg:text-3xl font-bold text-text-primary font-lexend">
+                How It Works
+              </h2>
+              <p className="mt-2 text-text-secondary font-nunito text-md">
+                Get started in three simple steps
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              {steps.map((step, index) => (
+                <motion.div
+                  key={step.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.15 }}
+                  className="text-center"
+                >
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <step.icon className="h-7 w-7 text-primary" />
+                  </div>
+                  <div className="text-sm font-semibold text-primary font-lexend mb-1">
+                    Step {index + 1}
+                  </div>
+                  <h3 className="text-md font-semibold text-text-primary font-lexend mb-2">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm text-text-secondary font-nunito">
+                    {step.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </PageContainer>
       </section>
 
       {/* Top Rated Astrologers Section */}
-      <section className="px-5 lg:px-8">
-        <motion.div variants={itemVariants}>
-          <TopRatedAstrologers />
-        </motion.div>
+      <section className="py-12 lg:py-16 bg-white">
+        <PageContainer>
+          <motion.div variants={itemVariants}>
+            <TopRatedAstrologers />
+          </motion.div>
+        </PageContainer>
+      </section>
+
+      {/* Live Sessions Section */}
+      <section className="py-12 lg:py-16 bg-background-offWhite">
+        <PageContainer>
+          <motion.div variants={itemVariants}>
+            <LiveSessionsCarousel />
+          </motion.div>
+        </PageContainer>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-12 lg:py-16">
+        <PageContainer>
+          <motion.div variants={itemVariants}>
+            <CTABanner />
+          </motion.div>
+        </PageContainer>
       </section>
     </motion.div>
   );

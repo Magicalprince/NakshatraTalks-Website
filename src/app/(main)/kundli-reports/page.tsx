@@ -2,7 +2,7 @@
 
 /**
  * Kundli Dashboard Page
- * Displays list of saved Kundli reports with search and create new option
+ * Web-standard layout with breadcrumbs and PageContainer
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -11,7 +11,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft,
   Search,
   ChevronRight,
   Plus,
@@ -26,6 +25,8 @@ import { useUIStore } from '@/stores/ui-store';
 import { kundliService } from '@/lib/services/kundli.service';
 import { shouldUseMockData } from '@/lib/mock';
 import { Kundli } from '@/types/api.types';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 // Mock Kundli data for development
 const MOCK_KUNDLIS: Kundli[] = [
@@ -84,8 +85,6 @@ interface KundliCardProps {
 }
 
 function KundliCard({ kundli, index, onPress, onLongPress }: KundliCardProps) {
-  const [showMenu, setShowMenu] = useState(false);
-
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -292,60 +291,50 @@ export default function KundliDashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        {/* Yellow Header Background */}
-        <div className="bg-secondary rounded-b-3xl pb-4">
-          <div className="pt-4 px-4">
-            <div className="flex items-center justify-between">
-              <Skeleton className="w-10 h-10 rounded-md" />
-              <Skeleton className="w-32 h-6" />
-              <div className="w-10" />
-            </div>
-            <Skeleton className="w-48 h-4 mx-auto mt-2" />
-          </div>
-        </div>
-
-        {/* Search and Cards */}
-        <div className="bg-white rounded-t-3xl -mt-4 min-h-[calc(100vh-200px)]">
-          <div className="p-4">
-            <Skeleton className="h-12 rounded-full" />
-          </div>
-          <div className="px-4">
+        <PageContainer size="md">
+          <div className="py-4">
+            <Skeleton className="w-48 h-5 mb-6" />
+            <Skeleton className="w-40 h-8 mb-6" />
+            <Skeleton className="h-12 rounded-xl mb-6" />
             {[1, 2, 3].map((i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Yellow Header Background */}
-      <div className="bg-secondary rounded-b-3xl pb-4">
-        <div className="pt-4 px-4">
-          <div className="flex items-center justify-between">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="w-6 h-6 text-text-dark" />
-              </Button>
-            </Link>
-            <h1 className="text-lg font-semibold text-text-dark font-lexend">
-              Kundli Reports
-            </h1>
-            <div className="w-10" />
-          </div>
-          <p className="text-sm text-text-secondary text-center mt-1 font-lexend">
-            View and manage your saved reports
-          </p>
-        </div>
-      </div>
+      <PageContainer size="md">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Kundli Reports' },
+          ]}
+        />
 
-      {/* White Content Area */}
-      <div className="bg-white rounded-t-3xl -mt-4 min-h-[calc(100vh-160px)]">
+        {/* Page Title */}
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold text-text-primary font-lexend">
+            Kundli Reports
+          </h1>
+          {(kundlis.length > 0 || searchQuery) && (
+            <Button onClick={handleCreateNew} className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Kundli
+            </Button>
+          )}
+        </div>
+        <p className="text-sm text-text-secondary mb-6 font-lexend">
+          View and manage your saved reports
+        </p>
+
         {/* Search Bar */}
-        <div className="p-4">
-          <div className="flex items-center bg-background-offWhite rounded-full px-4 h-12 border border-gray-200">
+        <div className="mb-6">
+          <div className="flex items-center bg-white rounded-xl px-4 h-12 border border-gray-200">
             <Search className="w-5 h-5 text-text-muted" />
             <input
               type="text"
@@ -363,7 +352,7 @@ export default function KundliDashboardPage() {
         </div>
 
         {/* Content */}
-        <div className="px-4 pb-32">
+        <div className="pb-8">
           {filteredKundlis.length === 0 && !searchQuery ? (
             <EmptyState onCreatePress={handleCreateNew} />
           ) : filteredKundlis.length === 0 ? (
@@ -382,26 +371,7 @@ export default function KundliDashboardPage() {
             ))
           )}
         </div>
-
-        {/* Create New Button - Fixed at bottom */}
-        {(kundlis.length > 0 || searchQuery) && (
-          <div className="fixed bottom-24 left-0 right-0 px-5">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Button
-                onClick={handleCreateNew}
-                className="w-full h-14 rounded-full text-base"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create New Kundli
-              </Button>
-            </motion.div>
-          </div>
-        )}
-      </div>
+      </PageContainer>
 
       {/* Action Sheet Modal */}
       <AnimatePresence>
@@ -418,7 +388,7 @@ export default function KundliDashboardPage() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-white w-full max-w-lg rounded-t-2xl p-4"
+              className="bg-white w-full max-w-lg rounded-t-xl p-4"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
@@ -499,9 +469,6 @@ export default function KundliDashboardPage() {
           </div>
         </div>
       </Modal>
-
-      {/* Bottom padding for navigation */}
-      <div className="h-20" />
     </div>
   );
 }

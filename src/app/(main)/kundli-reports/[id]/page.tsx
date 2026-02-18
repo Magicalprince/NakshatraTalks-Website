@@ -2,20 +2,22 @@
 
 /**
  * Kundli Report Detail Page
- * Displays generated Kundli report with 5 tabs: General | Remedies | Dosha | Charts | Dasha
+ * Web-standard layout with breadcrumbs, underline tabs, and PageContainer
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Star, Gem, AlertTriangle, Grid3X3, Clock } from 'lucide-react';
-import { Button, Card, Skeleton } from '@/components/ui';
+import { Star, Gem, AlertTriangle, Grid3X3, Clock } from 'lucide-react';
+import { Card, Skeleton } from '@/components/ui';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { kundliService } from '@/lib/services/kundli.service';
 import { shouldUseMockData } from '@/lib/mock';
 import { KundliReport, Kundli } from '@/types/api.types';
+import { cn } from '@/utils/cn';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 
 // Tab configuration
 type KundliTab = 'general' | 'remedies' | 'dosha' | 'charts' | 'dasha';
@@ -604,7 +606,6 @@ function DashaTab({ report }: { report: KundliReport }) {
 
 export default function KundliReportPage() {
   const params = useParams();
-  const router = useRouter();
   const kundliId = params.id as string;
   const [activeTab, setActiveTab] = useState<KundliTab>('general');
 
@@ -665,81 +666,79 @@ export default function KundliReportPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background-offWhite">
-        <div className="bg-white sticky top-0 z-10 border-b">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center gap-4">
-              <Skeleton className="w-10 h-10 rounded-md" />
-              <div>
-                <Skeleton className="w-32 h-6 mb-1" />
-                <Skeleton className="w-48 h-4" />
-              </div>
+        <PageContainer size="md">
+          <div className="py-4">
+            <Skeleton className="w-64 h-5 mb-6" />
+            <Skeleton className="w-48 h-8 mb-2" />
+            <Skeleton className="w-72 h-4 mb-6" />
+            <div className="flex gap-4 mb-6">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="w-20 h-8" />
+              ))}
+            </div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-32 rounded-xl" />
+              ))}
             </div>
           </div>
-          <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="w-20 h-8 rounded-full flex-shrink-0" />
-            ))}
-          </div>
-        </div>
-        <div className="container mx-auto px-4 py-6 max-w-2xl space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
-          ))}
-        </div>
+        </PageContainer>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background-offWhite">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-10 border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/kundli-reports">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg font-bold text-text-primary font-lexend">
-                {kundli?.name || 'Kundli Report'}
-              </h1>
-              {kundli && (
-                <p className="text-xs text-text-secondary font-lexend">
-                  {formatDate(kundli.dateOfBirth)}, {kundli.timeOfBirth} | {kundli.placeOfBirth}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+      <PageContainer size="md">
+        {/* Breadcrumbs */}
+        <Breadcrumbs
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Kundli Reports', href: '/kundli-reports' },
+            { label: 'Report Details' },
+          ]}
+        />
 
-        {/* Tab Bar */}
-        <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
+        {/* Page Title */}
+        <h1 className="text-2xl font-bold text-text-primary font-lexend mb-1">
+          {kundli?.name || 'Kundli Report'}
+        </h1>
+        {kundli && (
+          <p className="text-sm text-text-secondary font-lexend mb-6">
+            {formatDate(kundli.dateOfBirth)}, {kundli.timeOfBirth} | {kundli.placeOfBirth}
+          </p>
+        )}
+
+        {/* Underline-style Tab Bar */}
+        <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors font-lexend ${
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors font-lexend relative',
                 activeTab === tab.key
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-text-secondary hover:bg-gray-200'
-              }`}
+                  ? 'text-primary'
+                  : 'text-text-secondary hover:text-text-primary'
+              )}
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
+              {activeTab === tab.key && (
+                <motion.div
+                  layoutId="kundli-tab-underline"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                />
+              )}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
-        <AnimatePresence mode="wait">{renderTabContent}</AnimatePresence>
-      </div>
-
-      {/* Bottom padding for navigation */}
-      <div className="h-24" />
+        {/* Content */}
+        <div className="pb-8">
+          <AnimatePresence mode="wait">{renderTabContent}</AnimatePresence>
+        </div>
+      </PageContainer>
     </div>
   );
 }

@@ -163,7 +163,7 @@ export default function ChatSessionPage() {
   // Auth loading state
   if (!isReady) {
     return (
-      <div className="flex flex-col h-screen bg-background-chat">
+      <div className="flex flex-col h-full bg-background-chat">
         {/* Header Skeleton */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-full" />
@@ -198,7 +198,7 @@ export default function ChatSessionPage() {
   // Loading state
   if (isSessionLoading) {
     return (
-      <div className="flex flex-col h-screen bg-background-chat">
+      <div className="flex flex-col h-full bg-background-chat">
         {/* Header Skeleton */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-full" />
@@ -233,7 +233,7 @@ export default function ChatSessionPage() {
   // Error state
   if (sessionError || !session) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-background-offWhite p-4">
+      <div className="flex flex-col items-center justify-center h-full bg-background-offWhite p-4">
         <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8 text-status-error" />
         </div>
@@ -268,7 +268,7 @@ export default function ChatSessionPage() {
       : undefined;
 
   return (
-    <div className="h-screen">
+    <div className="h-full">
       <ChatInterface
         sessionId={sessionId}
         astrologerId={astrologer?.id || session.astrologerId}

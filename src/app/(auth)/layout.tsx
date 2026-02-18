@@ -56,7 +56,7 @@ export default function AuthLayout({
         </div>
 
         <p className="text-sm text-white/60 font-lexend">
-          © 2024 NakshatraTalks. All rights reserved.
+          &copy; {new Date().getFullYear()} NakshatraTalks. All rights reserved.
         </p>
       </div>
 

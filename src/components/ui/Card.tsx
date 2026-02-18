@@ -4,19 +4,22 @@ import { forwardRef, HTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/cn';
 
-const cardVariants = cva('rounded-lg bg-white transition-all duration-200', {
+const cardVariants = cva('rounded-lg bg-white transition-all duration-300 overflow-hidden', {
   variants: {
     variant: {
       default: 'shadow-card',
       elevated: 'shadow-card hover:shadow-card-hover',
       outlined: 'border border-gray-200 shadow-none',
       flat: 'shadow-none bg-background-offWhite',
+      glass: 'bg-white/80 backdrop-blur-lg shadow-glass border border-white/20',
+      interactive: 'shadow-card hover:shadow-card-hover hover:-translate-y-0.5 cursor-pointer',
     },
     padding: {
       none: 'p-0',
       sm: 'p-3',
       md: 'p-4',
       lg: 'p-6',
+      xl: 'p-8',
     },
   },
   defaultVariants: {
@@ -113,7 +116,7 @@ const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
     return (
       <div
         ref={ref}
-        className={cn('flex items-center pt-4', className)}
+        className={cn('flex items-center pt-4 border-t border-gray-100', className)}
         {...props}
       />
     );
