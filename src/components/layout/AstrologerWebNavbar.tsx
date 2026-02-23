@@ -80,6 +80,7 @@ export function AstrologerWebNavbar() {
                 src="/images/logo.png"
                 alt="NakshatraTalks"
                 fill
+                sizes="112px"
                 className="object-contain"
                 priority
               />

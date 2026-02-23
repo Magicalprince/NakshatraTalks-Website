@@ -4,32 +4,42 @@ import { useEffect, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
-import { useQueueStore } from '@/stores/queue-store';
+import { ConnectionRequestStatus } from '@/stores/queue-store';
 import { Loader2, CheckCircle, XCircle, Clock, Phone, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Astrologer, SessionType } from '@/types/api.types';
+
+interface ActiveRequestInfo {
+  type: SessionType;
+  sessionId?: string;
+}
 
 interface ConnectionRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCancel: () => void;
+  onNavigateToSession: () => void;
+  requestStatus: ConnectionRequestStatus;
+  selectedAstrologer: Astrologer | null;
+  activeRequest: ActiveRequestInfo | null;
 }
 
-export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestModalProps) {
-  const {
-    activeRequest,
-    selectedAstrologer,
-    requestStatus,
-    queuePosition,
-    estimatedWaitTime,
-    cancelRequest,
-    clearRequest,
-  } = useQueueStore();
-
+export function ConnectionRequestModal({
+  isOpen,
+  onClose,
+  onCancel,
+  onNavigateToSession,
+  requestStatus,
+  selectedAstrologer,
+  activeRequest,
+}: ConnectionRequestModalProps) {
   const [countdown, setCountdown] = useState(60);
 
   // Countdown timer for waiting
   useEffect(() => {
     if (requestStatus !== 'waiting' && requestStatus !== 'connecting') return;
 
+    setCountdown(60);
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -42,26 +52,6 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
 
     return () => clearInterval(timer);
   }, [requestStatus]);
-
-  // Reset countdown when status changes
-  useEffect(() => {
-    if (requestStatus === 'waiting') {
-      setCountdown(60);
-    }
-  }, [requestStatus]);
-
-  const handleCancel = () => {
-    cancelRequest();
-    clearRequest();
-    onClose();
-  };
-
-  const handleClose = () => {
-    if (requestStatus === 'connected' || requestStatus === 'rejected' || requestStatus === 'timeout') {
-      clearRequest();
-    }
-    onClose();
-  };
 
   const renderContent = () => {
     switch (requestStatus) {
@@ -84,11 +74,11 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
                 transition={{ duration: 1.5, repeat: Infinity }}
               />
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
+            <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
               Connecting to {selectedAstrologer?.name}
             </h3>
-            <p className="text-text-secondary mb-4">
-              Please wait while we connect you...
+            <p className="text-text-secondary mb-4 font-lexend">
+              Checking availability and balance...
             </p>
             <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
           </motion.div>
@@ -107,34 +97,25 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
                 fallback={selectedAstrologer?.name}
                 size="xl"
               />
-              <div className="absolute -bottom-1 -right-1 bg-secondary text-text-primary text-xs font-bold px-2 py-1 rounded-full">
-                #{queuePosition || 1}
-              </div>
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
-              Waiting in Queue
+            <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
+              Waiting for {selectedAstrologer?.name}
             </h3>
-            <p className="text-text-secondary mb-2">
-              {selectedAstrologer?.name} is currently with another client
+            <p className="text-text-secondary mb-4 font-lexend">
+              Your request has been sent. Waiting for the astrologer to accept...
             </p>
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <div className="flex items-center gap-1 text-text-muted">
-                <Clock className="w-4 h-4" />
-                <span>~{estimatedWaitTime || 5} min</span>
-              </div>
-              <div className="text-text-muted">|</div>
-              <div className="text-text-muted">
-                Position: {queuePosition || 1}
-              </div>
-            </div>
             <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
               <motion.div
                 className="bg-primary h-2 rounded-full"
-                initial={{ width: '0%' }}
+                initial={{ width: '100%' }}
                 animate={{ width: `${(countdown / 60) * 100}%` }}
+                transition={{ duration: 1 }}
               />
             </div>
-            <Button variant="outline" onClick={handleCancel}>
+            <p className="text-xs text-text-muted mb-4 font-lexend">
+              {countdown}s remaining
+            </p>
+            <Button variant="outline" onClick={onCancel}>
               Cancel Request
             </Button>
           </motion.div>
@@ -150,23 +131,16 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
             <div className="w-16 h-16 bg-status-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-status-success" />
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
+            <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
               Connected!
             </h3>
-            <p className="text-text-secondary mb-4">
+            <p className="text-text-secondary mb-4 font-lexend">
               You are now connected with {selectedAstrologer?.name}
             </p>
             <Button
               variant="primary"
               className="gap-2"
-              onClick={() => {
-                // Navigate to chat/call session
-                const type = activeRequest?.type;
-                const sessionId = activeRequest?.sessionId;
-                if (sessionId) {
-                  window.location.href = `/${type}/${sessionId}`;
-                }
-              }}
+              onClick={onNavigateToSession}
             >
               {activeRequest?.type === 'chat' ? (
                 <>
@@ -193,27 +167,15 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
             <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <XCircle className="w-8 h-8 text-status-error" />
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
+            <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
               Request Declined
             </h3>
-            <p className="text-text-secondary mb-4">
+            <p className="text-text-secondary mb-4 font-lexend">
               {selectedAstrologer?.name} is not available at the moment. Please try again later or choose another astrologer.
             </p>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={handleClose}>
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => {
-                  clearRequest();
-                  onClose();
-                }}
-              >
-                Browse Others
-              </Button>
-            </div>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
           </motion.div>
         );
 
@@ -227,29 +189,15 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
             <div className="w-16 h-16 bg-status-warning/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <Clock className="w-8 h-8 text-status-warning" />
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
+            <h3 className="text-lg font-semibold text-text-primary mb-2 font-lexend">
               Request Timed Out
             </h3>
-            <p className="text-text-secondary mb-4">
-              {selectedAstrologer?.name} didn&apos;t respond in time. Would you like to try again?
+            <p className="text-text-secondary mb-4 font-lexend">
+              {selectedAstrologer?.name} didn&apos;t respond in time. Please try again.
             </p>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={handleClose}>
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={() => {
-                  // Retry the request
-                  if (selectedAstrologer && activeRequest) {
-                    useQueueStore.getState().createRequest(selectedAstrologer, activeRequest.type);
-                  }
-                }}
-              >
-                Try Again
-              </Button>
-            </div>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
           </motion.div>
         );
 
@@ -261,13 +209,15 @@ export function ConnectionRequestModal({ isOpen, onClose }: ConnectionRequestMod
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
+      onClose={onClose}
       showCloseButton={requestStatus !== 'connecting' && requestStatus !== 'waiting'}
       className="max-w-sm"
     >
-      <AnimatePresence mode="wait">
-        {renderContent()}
-      </AnimatePresence>
+      <div className="p-6">
+        <AnimatePresence mode="wait">
+          {renderContent()}
+        </AnimatePresence>
+      </div>
     </Modal>
   );
 }

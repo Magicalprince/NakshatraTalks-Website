@@ -3,10 +3,10 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { walletService, RechargeInitiateParams, RechargeVerifyParams } from '@/lib/services/wallet.service';
+import { walletService } from '@/lib/services/wallet.service';
+import { VerifyPaymentData, Transaction } from '@/types/api.types';
 import { useAuthStore } from '@/stores/auth-store';
 
-// Query keys
 export const WALLET_QUERY_KEYS = {
   balance: ['wallet', 'balance'] as const,
   summary: ['wallet', 'summary'] as const,
@@ -14,9 +14,6 @@ export const WALLET_QUERY_KEYS = {
   transactions: ['wallet', 'transactions'] as const,
 };
 
-/**
- * Hook for fetching wallet balance
- */
 export function useWalletBalance() {
   const { isAuthenticated } = useAuthStore();
 
@@ -27,13 +24,10 @@ export function useWalletBalance() {
       return response.data?.balance ?? 0;
     },
     enabled: isAuthenticated,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 }
 
-/**
- * Hook for fetching wallet summary
- */
 export function useWalletSummary() {
   const { isAuthenticated } = useAuthStore();
 
@@ -47,9 +41,6 @@ export function useWalletSummary() {
   });
 }
 
-/**
- * Hook for fetching recharge options
- */
 export function useRechargeOptions() {
   return useQuery({
     queryKey: WALLET_QUERY_KEYS.rechargeOptions,
@@ -57,21 +48,35 @@ export function useRechargeOptions() {
       const response = await walletService.getRechargeOptions();
       return response.data ?? [];
     },
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 60,
   });
 }
 
-/**
- * Hook for fetching transaction history with pagination
- */
 export function useTransactions(type?: 'all' | 'credit' | 'debit') {
   const { isAuthenticated } = useAuthStore();
 
   return useInfiniteQuery({
     queryKey: [...WALLET_QUERY_KEYS.transactions, type],
     queryFn: async ({ pageParam = 1 }) => {
+      // Backend uses sendPaginatedSuccess which returns:
+      // { success: true, data: Transaction[], pagination: { currentPage, totalPages, ... } }
+      // apiClient.get returns the full response body
       const response = await walletService.getTransactions(pageParam, 20, type);
-      return response.data;
+      // response.data could be the nested { transactions, page, totalPages }
+      // OR it could be a flat Transaction[] (from sendPaginatedSuccess)
+      const rawData = response.data;
+      if (rawData && 'transactions' in rawData) {
+        // Already in expected format
+        return rawData;
+      }
+      // Backend returns data as flat array with pagination at root
+      const transactions = (rawData as unknown as Transaction[]) ?? [];
+      const pagination = response.pagination;
+      return {
+        transactions,
+        page: pagination?.currentPage ?? pageParam,
+        totalPages: pagination?.totalPages ?? 1,
+      };
     },
     getNextPageParam: (lastPage) => {
       if (!lastPage) return undefined;
@@ -83,25 +88,19 @@ export function useTransactions(type?: 'all' | 'credit' | 'debit') {
   });
 }
 
-/**
- * Hook for initiating recharge
- */
 export function useInitiateRecharge() {
   return useMutation({
-    mutationFn: (params: RechargeInitiateParams) => walletService.initiateRecharge(params),
+    mutationFn: (params: { amount: number; optionId?: string }) =>
+      walletService.initiateRecharge(params.amount),
   });
 }
 
-/**
- * Hook for verifying recharge
- */
 export function useVerifyRecharge() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: RechargeVerifyParams) => walletService.verifyRecharge(params),
+    mutationFn: (data: VerifyPaymentData) => walletService.verifyRecharge(data),
     onSuccess: () => {
-      // Refetch wallet data after successful recharge
       queryClient.invalidateQueries({ queryKey: WALLET_QUERY_KEYS.balance });
       queryClient.invalidateQueries({ queryKey: WALLET_QUERY_KEYS.summary });
       queryClient.invalidateQueries({ queryKey: WALLET_QUERY_KEYS.transactions });

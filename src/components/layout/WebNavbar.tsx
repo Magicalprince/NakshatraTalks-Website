@@ -21,6 +21,7 @@ import {
 import { cn } from '@/utils/cn';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useWalletBalance } from '@/hooks/useWalletData';
 import { Button } from '@/components/ui';
 
 const formatWalletAmount = (amount: number): string => {
@@ -50,6 +51,18 @@ export function WebNavbar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const isLoggedIn = isHydrated && isAuthenticated;
+
+  // Fetch wallet balance from API (auto-refreshes every 30s)
+  const { data: walletBalance } = useWalletBalance();
+  const displayBalance = walletBalance ?? user?.walletBalance ?? 0;
+
+  // Sync fetched balance back to auth store
+  const updateWalletBalance = useAuthStore((s) => s.updateWalletBalance);
+  useEffect(() => {
+    if (walletBalance !== undefined && walletBalance !== user?.walletBalance) {
+      updateWalletBalance(walletBalance);
+    }
+  }, [walletBalance, user?.walletBalance, updateWalletBalance]);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -166,7 +179,7 @@ export function WebNavbar() {
                   className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium font-lexend text-primary hover:bg-primary/5 rounded-lg transition-colors"
                 >
                   <IndianRupee className="h-3.5 w-3.5" />
-                  <span>{formatWalletAmount(user?.walletBalance || 0)}</span>
+                  <span>{formatWalletAmount(displayBalance)}</span>
                 </Link>
 
                 {/* Notifications */}

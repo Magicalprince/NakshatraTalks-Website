@@ -1,161 +1,74 @@
 /**
- * Wallet Service - Wallet and Payment API calls
+ * Wallet Service - Real Backend Integration
+ *
+ * Handles wallet balance, transactions, and Razorpay recharge flow.
  */
 
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
-import { ApiResponse, Transaction, RechargeOption, WalletSummary } from '@/types/api.types';
 import {
-  shouldUseMockData,
-  MOCK_USER,
-  MOCK_TRANSACTIONS,
-  MOCK_WALLET_SUMMARY,
-  MOCK_RECHARGE_OPTIONS,
-} from '@/lib/mock';
-
-export interface RechargeInitiateParams {
-  amount: number;
-  optionId?: string;
-}
-
-export interface RechargeInitiateResponse {
-  orderId: string;
-  razorpayOrderId: string;
-  amount: number;
-  currency: string;
-  notes?: Record<string, string>;
-}
-
-export interface RechargeVerifyParams {
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
-  razorpaySignature: string;
-}
-
-export interface RechargeVerifyResponse {
-  success: boolean;
-  newBalance: number;
-  transactionId: string;
-}
+  ApiResponse,
+  Transaction,
+  RechargeOption,
+  WalletSummary,
+  InitiateRechargeResponse,
+  VerifyPaymentData,
+  VerifyPaymentResponse,
+  PendingOrder,
+} from '@/types/api.types';
 
 class WalletService {
-  /**
-   * Get wallet balance
-   */
-  async getBalance(): Promise<ApiResponse<{ balance: number }>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: { balance: MOCK_USER.walletBalance || 1250 },
-      };
-    }
-
-    return apiClient.get<ApiResponse<{ balance: number }>>(API_ENDPOINTS.WALLET.BALANCE);
+  async getBalance(): Promise<ApiResponse<{ balance: number; currency: string }>> {
+    return apiClient.get(API_ENDPOINTS.WALLET.BALANCE);
   }
 
-  /**
-   * Get wallet summary (balance + recent transactions)
-   */
   async getSummary(): Promise<ApiResponse<WalletSummary>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: MOCK_WALLET_SUMMARY,
-      };
-    }
-
-    return apiClient.get<ApiResponse<WalletSummary>>(API_ENDPOINTS.WALLET.SUMMARY);
+    return apiClient.get(API_ENDPOINTS.WALLET.SUMMARY);
   }
 
-  /**
-   * Get recharge options
-   */
   async getRechargeOptions(): Promise<ApiResponse<RechargeOption[]>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: MOCK_RECHARGE_OPTIONS,
-      };
-    }
-
-    return apiClient.get<ApiResponse<RechargeOption[]>>(API_ENDPOINTS.WALLET.RECHARGE_OPTIONS);
+    return apiClient.get(API_ENDPOINTS.WALLET.RECHARGE_OPTIONS);
   }
 
-  /**
-   * Get transaction history
-   */
   async getTransactions(
-    page: number = 1,
-    limit: number = 20,
-    type?: 'all' | 'credit' | 'debit'
+    page = 1,
+    limit = 20,
+    type?: 'all' | 'credit' | 'debit' | 'recharge' | 'refund'
   ): Promise<ApiResponse<{ transactions: Transaction[]; totalPages: number; page: number }>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      let transactions = [...MOCK_TRANSACTIONS];
-
-      // Filter by type
-      if (type && type !== 'all') {
-        if (type === 'credit') {
-          transactions = transactions.filter(t => t.amount > 0);
-        } else if (type === 'debit') {
-          transactions = transactions.filter(t => t.amount < 0);
-        }
-      }
-
-      return {
-        success: true,
-        data: {
-          transactions,
-          totalPages: 1,
-          page,
-        },
-      };
-    }
-
-    return apiClient.get<ApiResponse<{ transactions: Transaction[]; totalPages: number; page: number }>>(
-      API_ENDPOINTS.WALLET.TRANSACTIONS,
-      { params: { page, limit, type } }
-    );
+    const params: Record<string, string | number> = { page, limit };
+    if (type && type !== 'all') params.type = type;
+    return apiClient.get(API_ENDPOINTS.WALLET.TRANSACTIONS, { params });
   }
 
-  /**
-   * Initiate recharge (create Razorpay order)
-   */
-  async initiateRecharge(params: RechargeInitiateParams): Promise<ApiResponse<RechargeInitiateResponse>> {
-    return apiClient.post<ApiResponse<RechargeInitiateResponse>>(
-      API_ENDPOINTS.WALLET.RECHARGE_INITIATE,
-      params
-    );
+  async getRechargeHistory(page = 1, limit = 20): Promise<ApiResponse<{ recharges: Transaction[]; totalPages: number }>> {
+    return apiClient.get(API_ENDPOINTS.WALLET.RECHARGES, { params: { page, limit } });
   }
 
-  /**
-   * Verify recharge (after Razorpay payment)
-   */
-  async verifyRecharge(params: RechargeVerifyParams): Promise<ApiResponse<RechargeVerifyResponse>> {
-    return apiClient.post<ApiResponse<RechargeVerifyResponse>>(
-      API_ENDPOINTS.WALLET.RECHARGE_VERIFY,
-      params
-    );
+  async initiateRecharge(amount: number): Promise<ApiResponse<InitiateRechargeResponse>> {
+    return apiClient.post(API_ENDPOINTS.WALLET.RECHARGE_INITIATE, { amount });
   }
 
-  /**
-   * Format currency for display
-   */
+  async verifyRecharge(data: VerifyPaymentData): Promise<ApiResponse<VerifyPaymentResponse>> {
+    return apiClient.post(API_ENDPOINTS.WALLET.RECHARGE_VERIFY, data);
+  }
+
+  async getPendingOrders(): Promise<ApiResponse<PendingOrder[]>> {
+    return apiClient.get(API_ENDPOINTS.WALLET.PENDING_ORDERS);
+  }
+
+  async cancelOrder(orderId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.WALLET.CANCEL_ORDER(orderId));
+  }
+
   formatCurrency(amount: number): string {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
-    }).format(amount);
+    }).format(Math.abs(amount));
   }
 
-  /**
-   * Format transaction type
-   */
   formatTransactionType(type: string): string {
     const typeMap: Record<string, string> = {
       credit: 'Credited',

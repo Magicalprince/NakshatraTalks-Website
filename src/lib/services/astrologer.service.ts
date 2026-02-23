@@ -1,5 +1,7 @@
 /**
- * Astrologer Service - Astrologer API calls
+ * Astrologer Service - Real Backend Integration
+ *
+ * Handles browsing, searching, filtering, and viewing astrologer profiles.
  */
 
 import { apiClient } from '@/lib/api/client';
@@ -9,147 +11,52 @@ import {
   Astrologer,
   AstrologerFilters,
   PaginatedResponse,
+  Review,
 } from '@/types/api.types';
-import { shouldUseMockData, MOCK_ASTROLOGERS, MOCK_REVIEWS } from '@/lib/mock';
 
 export interface GetAstrologersParams {
   page?: number;
   limit?: number;
   filters?: AstrologerFilters;
-  sortBy?: 'rating' | 'price' | 'experience' | 'orders';
+  sortBy?: 'rating' | 'price' | 'experience' | 'orders' | 'price_per_minute' | 'total_calls' | 'chat_price_per_minute' | 'call_price_per_minute';
   sortOrder?: 'asc' | 'desc';
   search?: string;
 }
 
-export interface AstrologerReview {
-  id: string;
-  userId: string;
-  userName: string;
-  rating: number;
-  comment: string;
-  createdAt: string;
-}
-
 class AstrologerService {
   /**
-   * Get all astrologers with filters and pagination
+   * Get astrologers with filters and pagination
    */
   async getAstrologers(
     params: GetAstrologersParams = {}
   ): Promise<ApiResponse<PaginatedResponse<Astrologer>>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const { page = 1, limit = 20, filters, sortBy, sortOrder = 'desc', search } = params;
-      let astrologers = [...MOCK_ASTROLOGERS];
-
-      // Apply search filter
-      if (search) {
-        const searchLower = search.toLowerCase();
-        astrologers = astrologers.filter(
-          a =>
-            a.name.toLowerCase().includes(searchLower) ||
-            a.specialization.some(s => s.toLowerCase().includes(searchLower))
-        );
-      }
-
-      // Apply filters
-      if (filters) {
-        if (filters.isOnline) {
-          astrologers = astrologers.filter(a => a.isAvailable);
-        }
-        if (filters.specializations?.length) {
-          astrologers = astrologers.filter(a =>
-            a.specialization.some(s => filters.specializations?.includes(s))
-          );
-        }
-        if (filters.languages?.length) {
-          astrologers = astrologers.filter(a =>
-            a.languages.some(l => filters.languages?.includes(l))
-          );
-        }
-        if (filters.minRating) {
-          astrologers = astrologers.filter(a => a.rating >= filters.minRating!);
-        }
-        if (filters.minExperience) {
-          astrologers = astrologers.filter(a => a.experience >= filters.minExperience!);
-        }
-        if (filters.minPrice) {
-          astrologers = astrologers.filter(a => a.pricePerMinute >= filters.minPrice!);
-        }
-        if (filters.maxPrice) {
-          astrologers = astrologers.filter(a => a.pricePerMinute <= filters.maxPrice!);
-        }
-      }
-
-      // Apply sorting
-      if (sortBy) {
-        const dir = sortOrder === 'asc' ? 1 : -1;
-        astrologers.sort((a, b) => {
-          switch (sortBy) {
-            case 'rating': return (a.rating - b.rating) * dir;
-            case 'price': return (a.pricePerMinute - b.pricePerMinute) * dir;
-            case 'experience': return (a.experience - b.experience) * dir;
-            case 'orders': return (a.totalCalls - b.totalCalls) * dir;
-            default: return 0;
-          }
-        });
-      }
-
-      const start = (page - 1) * limit;
-      const end = start + limit;
-      const paginatedData = astrologers.slice(start, end);
-
-      return {
-        success: true,
-        data: {
-          data: paginatedData,
-          page,
-          limit,
-          totalPages: Math.ceil(astrologers.length / limit),
-          totalItems: astrologers.length,
-          hasNext: end < astrologers.length,
-          hasPrev: page > 1,
-        },
-      };
-    }
-
     const { page = 1, limit = 20, filters, sortBy, sortOrder, search } = params;
 
     const queryParams: Record<string, string | number | boolean | undefined> = {
       page,
       limit,
       sortBy,
-      sortOrder,
-      search,
+      order: sortOrder,
     };
 
-    // Add filter params
+    if (search) queryParams.q = search;
+
     if (filters) {
       if (filters.specializations?.length) {
-        queryParams.specializations = filters.specializations.join(',');
+        queryParams.specialization = filters.specializations.join(',');
       }
       if (filters.languages?.length) {
         queryParams.languages = filters.languages.join(',');
       }
-      if (filters.minRating) {
-        queryParams.minRating = filters.minRating;
-      }
-      if (filters.maxPrice) {
-        queryParams.maxPrice = filters.maxPrice;
-      }
-      if (filters.minPrice) {
-        queryParams.minPrice = filters.minPrice;
-      }
-      if (filters.isOnline !== undefined) {
-        queryParams.isOnline = filters.isOnline;
-      }
-      if (filters.minExperience) {
-        queryParams.minExperience = filters.minExperience;
-      }
+      if (filters.minRating) queryParams.minRating = filters.minRating;
+      if (filters.maxPrice) queryParams.maxPrice = filters.maxPrice;
+      if (filters.minPrice) queryParams.minPrice = filters.minPrice;
+      if (filters.isOnline !== undefined) queryParams.isAvailable = filters.isOnline;
+      if (filters.minExperience) queryParams.minExperience = filters.minExperience;
     }
 
     return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
-      API_ENDPOINTS.ASTROLOGERS.LIST,
+      API_ENDPOINTS.ASTROLOGERS.SEARCH,
       { params: queryParams }
     );
   }
@@ -160,13 +67,31 @@ class AstrologerService {
   async getChatAstrologers(
     params: GetAstrologersParams = {}
   ): Promise<ApiResponse<PaginatedResponse<Astrologer>>> {
-    return this.getAstrologers({
-      ...params,
-      filters: {
-        ...params.filters,
-        isOnline: true,
-      },
-    });
+    const { page = 1, limit = 20, filters, sortBy, sortOrder, search } = params;
+
+    const queryParams: Record<string, string | number | boolean | undefined> = {
+      page,
+      limit,
+      sortBy,
+      order: sortOrder,
+      type: 'chat',
+    };
+
+    if (search) queryParams.q = search;
+    if (filters?.specializations?.length) {
+      queryParams.specialization = filters.specializations.join(',');
+    }
+    if (filters?.languages?.length) {
+      queryParams.languages = filters.languages.join(',');
+    }
+    if (filters?.minRating) queryParams.minRating = filters.minRating;
+    if (filters?.maxPrice) queryParams.maxPrice = filters.maxPrice;
+    if (filters?.minPrice) queryParams.minPrice = filters.minPrice;
+
+    return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
+      API_ENDPOINTS.CHAT.AVAILABLE_ASTROLOGERS,
+      { params: queryParams }
+    );
   }
 
   /**
@@ -175,34 +100,36 @@ class AstrologerService {
   async getCallAstrologers(
     params: GetAstrologersParams = {}
   ): Promise<ApiResponse<PaginatedResponse<Astrologer>>> {
-    return this.getAstrologers({
-      ...params,
-      filters: {
-        ...params.filters,
-        isOnline: true,
-      },
-    });
+    const { page = 1, limit = 20, filters, sortBy, sortOrder, search } = params;
+
+    const queryParams: Record<string, string | number | boolean | undefined> = {
+      page,
+      limit,
+      sortBy,
+      order: sortOrder,
+    };
+
+    if (search) queryParams.q = search;
+    if (filters?.specializations?.length) {
+      queryParams.specialization = filters.specializations.join(',');
+    }
+    if (filters?.languages?.length) {
+      queryParams.languages = filters.languages.join(',');
+    }
+    if (filters?.minRating) queryParams.minRating = filters.minRating;
+    if (filters?.maxPrice) queryParams.maxPrice = filters.maxPrice;
+    if (filters?.minPrice) queryParams.minPrice = filters.minPrice;
+
+    return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
+      API_ENDPOINTS.CALL.AVAILABLE_ASTROLOGERS,
+      { params: queryParams }
+    );
   }
 
   /**
-   * Get single astrologer details
+   * Get single astrologer by ID
    */
   async getAstrologerById(id: string): Promise<ApiResponse<Astrologer>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const astrologer = MOCK_ASTROLOGERS.find(a => a.id === id);
-      if (!astrologer) {
-        return {
-          success: false,
-          message: 'Astrologer not found',
-        };
-      }
-      return {
-        success: true,
-        data: astrologer,
-      };
-    }
-
     return apiClient.get<ApiResponse<Astrologer>>(
       API_ENDPOINTS.ASTROLOGERS.DETAIL(id)
     );
@@ -213,71 +140,19 @@ class AstrologerService {
    */
   async getAstrologerReviews(
     id: string,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<ApiResponse<PaginatedResponse<AstrologerReview>>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const reviews = MOCK_REVIEWS.filter(r => r.astrologerId === id).map(r => ({
-        id: r.id,
-        userId: r.userId,
-        userName: r.userName,
-        rating: r.rating,
-        comment: r.comment || '',
-        createdAt: r.createdAt,
-      }));
-
-      return {
-        success: true,
-        data: {
-          data: reviews,
-          page,
-          limit,
-          totalPages: 1,
-          totalItems: reviews.length,
-          hasNext: false,
-          hasPrev: false,
-        },
-      };
-    }
-
-    return apiClient.get<ApiResponse<PaginatedResponse<AstrologerReview>>>(
+    page = 1,
+    limit = 10
+  ): Promise<ApiResponse<PaginatedResponse<Review>>> {
+    return apiClient.get<ApiResponse<PaginatedResponse<Review>>>(
       API_ENDPOINTS.ASTROLOGERS.REVIEWS(id),
       { params: { page, limit } }
     );
   }
 
   /**
-   * Get astrologer availability slots
+   * Get top-rated astrologers
    */
-  async getAstrologerAvailability(
-    id: string,
-    date?: string
-  ): Promise<ApiResponse<{ slots: string[]; isOnline: boolean }>> {
-    return apiClient.get<ApiResponse<{ slots: string[]; isOnline: boolean }>>(
-      API_ENDPOINTS.ASTROLOGERS.AVAILABILITY(id),
-      { params: { date } }
-    );
-  }
-
-  /**
-   * Get top rated astrologers
-   */
-  async getTopRatedAstrologers(
-    limit: number = 10
-  ): Promise<ApiResponse<Astrologer[]>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const topRated = [...MOCK_ASTROLOGERS]
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, limit);
-
-      return {
-        success: true,
-        data: topRated,
-      };
-    }
-
+  async getTopRatedAstrologers(limit = 10): Promise<ApiResponse<Astrologer[]>> {
     return apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.ASTROLOGERS.TOP_RATED,
       { params: { limit } }
@@ -285,28 +160,9 @@ class AstrologerService {
   }
 
   /**
-   * Search astrologers
+   * Search astrologers by query
    */
-  async searchAstrologers(
-    query: string,
-    limit: number = 20
-  ): Promise<ApiResponse<Astrologer[]>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const searchLower = query.toLowerCase();
-      const results = MOCK_ASTROLOGERS.filter(
-        a =>
-          a.name.toLowerCase().includes(searchLower) ||
-          a.specialization.some(s => s.toLowerCase().includes(searchLower)) ||
-          a.languages.some(l => l.toLowerCase().includes(searchLower))
-      ).slice(0, limit);
-
-      return {
-        success: true,
-        data: results,
-      };
-    }
-
+  async searchAstrologers(query: string, limit = 20): Promise<ApiResponse<Astrologer[]>> {
     return apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.ASTROLOGERS.SEARCH,
       { params: { q: query, limit } }
@@ -316,20 +172,51 @@ class AstrologerService {
   /**
    * Get filter options (specializations, languages, etc.)
    */
-  async getFilterOptions(): Promise<
-    ApiResponse<{
-      specializations: string[];
-      languages: string[];
-      priceRanges: { min: number; max: number }[];
-    }>
-  > {
-    return apiClient.get<
-      ApiResponse<{
-        specializations: string[];
-        languages: string[];
-        priceRanges: { min: number; max: number }[];
-      }>
-    >(API_ENDPOINTS.ASTROLOGERS.FILTERS);
+  async getFilterOptions(): Promise<ApiResponse<{
+    specializations: string[];
+    languages: string[];
+    priceRange: { min: number; max: number };
+  }>> {
+    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.FILTERS);
+  }
+
+  /**
+   * Get astrologer availability / online status
+   */
+  async getAstrologerAvailability(
+    id: string,
+    date?: string
+  ): Promise<ApiResponse<{ isOnline: boolean; isAvailableForChat: boolean; isAvailableForCall: boolean }>> {
+    const params: Record<string, string> = {};
+    if (date) params.date = date;
+    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.AVAILABILITY(id), { params });
+  }
+
+  /**
+   * Get astrologer photos
+   */
+  async getAstrologerPhotos(id: string): Promise<ApiResponse<string[]>> {
+    return apiClient.get<ApiResponse<string[]>>(
+      API_ENDPOINTS.ASTROLOGERS.PHOTOS(id)
+    );
+  }
+
+  /**
+   * Follow an astrologer
+   */
+  async followAstrologer(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post<ApiResponse<{ success: boolean }>>(
+      API_ENDPOINTS.ASTROLOGERS.FOLLOW(id)
+    );
+  }
+
+  /**
+   * Unfollow an astrologer
+   */
+  async unfollowAstrologer(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post<ApiResponse<{ success: boolean }>>(
+      API_ENDPOINTS.ASTROLOGERS.UNFOLLOW(id)
+    );
   }
 }
 

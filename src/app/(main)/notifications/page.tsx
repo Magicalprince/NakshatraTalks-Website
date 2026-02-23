@@ -6,7 +6,7 @@
  * shimmer skeletons, staggered animations, and inline clear-all confirmation.
  */
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import {
@@ -26,6 +26,7 @@ import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { cn } from '@/utils/cn';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { notificationService } from '@/lib/services/notification.service';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -48,92 +49,17 @@ interface Notification {
   };
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────────
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'notif-1',
-    type: 'chat',
-    title: 'Chat Session Ended',
-    message: 'Your chat session with Pandit Sharma has ended. Duration: 15 mins. Total: \u20B9375.',
-    timestamp: '10:30 AM',
-    date: 'Today',
-    isRead: false,
-    actionUrl: '/history/chat',
-    metadata: {
-      astrologerName: 'Pandit Sharma',
-      sessionId: 'session-1',
-    },
-  },
-  {
-    id: 'notif-2',
-    type: 'wallet',
-    title: 'Wallet Recharged',
-    message: 'Your wallet has been credited with \u20B9500. Current balance: \u20B91,250.',
-    timestamp: '09:45 AM',
-    date: 'Today',
-    isRead: false,
-    actionUrl: '/wallet',
-    metadata: {
-      amount: 500,
-    },
-  },
-  {
-    id: 'notif-3',
-    type: 'promo',
-    title: 'Special Offer!',
-    message: 'Get 20% extra on your next recharge of \u20B91,000 or more. Limited time offer!',
-    timestamp: '08:00 AM',
-    date: 'Today',
-    isRead: true,
-    actionUrl: '/recharge',
-  },
-  {
-    id: 'notif-4',
-    type: 'call',
-    title: 'Missed Call',
-    message: 'You missed a call from Astrologer Priya. Tap to call back.',
-    timestamp: '11:30 PM',
-    date: 'Yesterday',
-    isRead: true,
-    metadata: {
-      astrologerName: 'Astrologer Priya',
-    },
-  },
-  {
-    id: 'notif-5',
-    type: 'system',
-    title: 'Profile Updated',
-    message: 'Your birth details have been updated successfully.',
-    timestamp: '03:15 PM',
-    date: 'Yesterday',
-    isRead: true,
-  },
-  {
-    id: 'notif-6',
-    type: 'chat',
-    title: 'Rate Your Session',
-    message: 'How was your chat with Acharya Ji? Share your feedback.',
-    timestamp: '02:00 PM',
-    date: 'Yesterday',
-    isRead: true,
-    actionUrl: '/rating/session-2',
-    metadata: {
-      astrologerName: 'Acharya Ji',
-      sessionId: 'session-2',
-    },
-  },
-  {
-    id: 'notif-7',
-    type: 'wallet',
-    title: 'Low Balance Alert',
-    message: 'Your wallet balance is low. Recharge now to continue consultations.',
-    timestamp: '10:00 AM',
-    date: '2 days ago',
-    isRead: true,
-    actionUrl: '/recharge',
-  },
-];
+// Format notification date relative to today
+function formatNotifDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
 
 // ─── Tabs ───────────────────────────────────────────────────────────────────────
 
@@ -487,10 +413,43 @@ function NotificationSkeleton() {
 
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<TabOption>('all');
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isLoadingNotifs, setIsLoadingNotifs] = useState(true);
 
   const { isReady } = useRequireAuth();
+
+  // Fetch notifications from backend
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await notificationService.getNotifications(1, 50);
+        if (!cancelled && response.data?.notifications) {
+          const mapped: Notification[] = response.data.notifications.map((n) => ({
+            id: n.id,
+            type: (n.type === 'promotion' ? 'promo' : n.type || 'system') as NotificationType,
+            title: n.title,
+            message: n.message || '',
+            timestamp: new Date(n.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            date: formatNotifDate(n.createdAt),
+            isRead: n.isRead,
+            actionUrl: (n.data?.actionUrl as string) || undefined,
+            metadata: n.data as Notification['metadata'],
+          }));
+          setNotifications(mapped);
+        }
+      } catch {
+        // Silently fail — empty state will be shown
+      } finally {
+        if (!cancelled) setIsLoadingNotifs(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isReady]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -542,6 +501,7 @@ export default function NotificationsPage() {
 
   const handleMarkRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    notificationService.markAsRead(id).catch(() => {});
   }, []);
 
   const handleDelete = useCallback((id: string) => {
@@ -550,6 +510,7 @@ export default function NotificationsPage() {
 
   const handleMarkAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    notificationService.markAllAsRead().catch(() => {});
   }, []);
 
   const handleClearAll = useCallback(() => {
@@ -559,7 +520,7 @@ export default function NotificationsPage() {
 
   // ── Loading State ──────────────────────────────────────────────────────────
 
-  if (!isReady) {
+  if (!isReady || isLoadingNotifs) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <PageContainer size="md">

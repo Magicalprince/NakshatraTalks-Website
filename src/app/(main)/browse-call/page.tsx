@@ -7,10 +7,11 @@ import { SearchBar } from '@/components/features/home/SearchBar';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FilterSidebar } from '@/components/layout/FilterSidebar';
+import { ConnectionRequestModal } from '@/components/features/queue';
 import { useCallAstrologers, useFilterOptions, useSearchAstrologers } from '@/hooks/useBrowseData';
+import { useConnectionRequest } from '@/hooks/useConnectionRequest';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
-import { useQueueStore } from '@/stores/queue-store';
 import { AstrologerFilters, Astrologer } from '@/types/api.types';
 import { SlidersHorizontal, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -30,7 +31,16 @@ export default function BrowseCallPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { addToast } = useUIStore();
-  const { createRequest, setSelectedAstrologer } = useQueueStore();
+  const {
+    isModalOpen,
+    requestStatus,
+    selectedAstrologer: connectionAstrologer,
+    activeRequest,
+    initiateRequest,
+    handleCancel: handleCancelRequest,
+    handleNavigateToSession,
+    handleCloseModal,
+  } = useConnectionRequest();
 
   const [filters, setFilters] = useState<AstrologerFilters>({});
   const [sortBy, setSortBy] = useState<'rating' | 'price' | 'experience' | 'orders'>('rating');
@@ -95,8 +105,7 @@ export default function BrowseCallPage() {
       addToast({ type: 'warning', title: 'Astrologer Unavailable', message: `${astrologer.name} is currently busy.` });
       return;
     }
-    setSelectedAstrologer(astrologer);
-    createRequest(astrologer, 'call');
+    initiateRequest(astrologer, 'call');
   };
 
   const handleSearch = (query: string) => {
@@ -244,6 +253,17 @@ export default function BrowseCallPage() {
           </div>
         </div>
       </PageContainer>
+
+      {/* Connection Request Modal */}
+      <ConnectionRequestModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onCancel={handleCancelRequest}
+        onNavigateToSession={handleNavigateToSession}
+        requestStatus={requestStatus}
+        selectedAstrologer={connectionAstrologer}
+        activeRequest={activeRequest}
+      />
     </div>
   );
 }

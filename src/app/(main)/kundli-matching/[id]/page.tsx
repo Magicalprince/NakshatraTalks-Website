@@ -25,8 +25,6 @@ import {
   X,
   AlertCircle,
   Share2,
-  Copy,
-  ExternalLink,
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -36,8 +34,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { kundliService } from '@/lib/services/kundli.service';
-import { shouldUseMockData } from '@/lib/mock';
-import { MatchingReport } from '@/types/api.types';
+import { SavedMatching, MatchingReport } from '@/types/api.types';
 
 // Ashtakoot Guna data structure
 interface GunaItem {
@@ -49,13 +46,6 @@ interface GunaItem {
   boyAttribute: string;
   girlAttribute: string;
   verdict: 'excellent' | 'good' | 'average' | 'poor';
-}
-
-// Extended matching type
-interface SavedMatching extends MatchingReport {
-  boy: { name: string; dateOfBirth: string };
-  girl: { name: string; dateOfBirth: string };
-  score: number;
 }
 
 // Fallback Ashtakoot data
@@ -119,31 +109,6 @@ function generateFallbackAshtakootData(totalScore: number): GunaItem[] {
     },
   ];
 }
-
-// Mock data
-const MOCK_MATCHINGS: SavedMatching[] = [
-  {
-    id: 'matching-1', totalPoints: 28, maxPoints: 36, percentage: 78,
-    categories: {}, recommendation: 'Good match with minor adjustments needed.',
-    createdAt: '2024-01-15T10:00:00.000Z',
-    boy: { name: 'Rahul Kumar', dateOfBirth: '1990-05-15' },
-    girl: { name: 'Priya Sharma', dateOfBirth: '1992-08-22' }, score: 28,
-  },
-  {
-    id: 'matching-2', totalPoints: 32, maxPoints: 36, percentage: 89,
-    categories: {}, recommendation: 'Excellent match! Highly compatible.',
-    createdAt: '2024-01-10T08:30:00.000Z',
-    boy: { name: 'Amit Singh', dateOfBirth: '1988-12-03' },
-    girl: { name: 'Neha Patel', dateOfBirth: '1991-04-18' }, score: 32,
-  },
-  {
-    id: 'matching-3', totalPoints: 18, maxPoints: 36, percentage: 50,
-    categories: {}, recommendation: 'Average match. Remedies suggested.',
-    createdAt: '2024-01-05T15:20:00.000Z',
-    boy: { name: 'Vikram Reddy', dateOfBirth: '1993-07-25' },
-    girl: { name: 'Kavya Menon', dateOfBirth: '1995-11-12' }, score: 18,
-  },
-];
 
 function getVerdict(score: number) {
   if (score >= 25) return {
@@ -337,35 +302,69 @@ export default function KundliMatchingReportPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch matching data
-  const { data: matchingData, isLoading } = useQuery({
+  // Fetch saved matching (basic info: boy/girl names, score)
+  const { data: matchingData, isLoading: isMatchingLoading } = useQuery({
     queryKey: ['matching', 'detail', matchingId],
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const mock = MOCK_MATCHINGS.find((m) => m.id === matchingId) || MOCK_MATCHINGS[0];
-        return mock;
-      }
       const response = await kundliService.getMatchingById(matchingId);
       return response.data as SavedMatching;
     },
     enabled: !!matchingId,
   });
 
+  // Fetch full matching report (ashtakoot gunas, dosha analysis)
+  const { data: reportData, isLoading: isReportLoading } = useQuery({
+    queryKey: ['matching', 'report', matchingId],
+    queryFn: async () => {
+      const response = await kundliService.getMatchingReport(matchingId);
+      return response.data as MatchingReport;
+    },
+    enabled: !!matchingId,
+  });
+
+  const isLoading = isMatchingLoading || isReportLoading;
   const matching = matchingData;
-  const score = matching?.score || matching?.totalPoints || 0;
-  const maxScore = 36;
+  const report = reportData;
+
+  // Score from saved matching or from full report
+  const score = matching?.score || report?.totalScore || 0;
+  const maxScore = matching?.maxScore || report?.maxScore || 36;
   const percentage = Math.round((score / maxScore) * 100);
   const verdict = getVerdict(score);
 
-  // Generate ashtakoot gunas
+  // Boy/girl names from saved matching or from report
+  const boyName = matching?.boy?.name || report?.boy?.name || 'Boy';
+  const girlName = matching?.girl?.name || report?.girl?.name || 'Girl';
+
+  // Parse ashtakoot gunas from report or fallback
   const gunas = useMemo(() => {
+    // Use ashtakootGunas from the full report
+    if (report?.ashtakootGunas && report.ashtakootGunas.length > 0) {
+      return report.ashtakootGunas.map((g) => {
+        const ratio = g.maxPoints > 0 ? g.obtainedPoints / g.maxPoints : 0;
+        const v = ratio >= 0.75 ? 'excellent' : ratio >= 0.5 ? 'good' : ratio >= 0.25 ? 'average' : 'poor';
+        // Map 'below_average' to 'poor' for our display
+        const mappedVerdict = g.verdict === 'below_average' ? 'poor' : g.verdict;
+        return {
+          id: g.id,
+          name: g.name,
+          maxPoints: g.maxPoints,
+          obtainedPoints: g.obtainedPoints,
+          description: g.description,
+          boyAttribute: g.boyAttribute,
+          girlAttribute: g.girlAttribute,
+          verdict: (mappedVerdict as GunaItem['verdict']) || v,
+        } as GunaItem;
+      });
+    }
+
+    // Fallback to generating from total score
     return generateFallbackAshtakootData(score);
-  }, [score]);
+  }, [report?.ashtakootGunas, score]);
 
   const handleShare = async () => {
-    if (!matching) return;
-    const shareText = `Kundli Matching Report\n${matching.boy.name} & ${matching.girl.name}\nCompatibility Score: ${score}/36\nVerdict: ${verdict.text}\n\nGenerated by NakshatraTalks`;
+    if (!matching && !report) return;
+    const shareText = `Kundli Matching Report\n${boyName} & ${girlName}\nCompatibility Score: ${score}/${maxScore}\nVerdict: ${verdict.text}\n\nGenerated by NakshatraTalks`;
 
     try {
       await navigator.share({
@@ -409,7 +408,7 @@ export default function KundliMatchingReportPage() {
     );
   }
 
-  if (!matching) {
+  if (!matching && !report) {
     return (
       <div className="min-h-screen bg-background-offWhite">
         <PageContainer size="sm">
@@ -496,7 +495,7 @@ export default function KundliMatchingReportPage() {
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <span className="text-white font-semibold font-lexend">{matching.boy.name.charAt(0)}</span>
+                  <span className="text-white font-semibold font-lexend">{boyName.charAt(0)}</span>
                 </motion.div>
                 <motion.div
                   className="w-9 h-9 rounded-full bg-gradient-to-br from-red-400 to-red-500 flex items-center justify-center ring-3 ring-white shadow-sm"
@@ -512,7 +511,7 @@ export default function KundliMatchingReportPage() {
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <span className="text-white font-semibold font-lexend">{matching.girl.name.charAt(0)}</span>
+                  <span className="text-white font-semibold font-lexend">{girlName.charAt(0)}</span>
                 </motion.div>
               </div>
 
@@ -522,7 +521,7 @@ export default function KundliMatchingReportPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                {matching.boy.name} & {matching.girl.name}
+                {boyName} & {girlName}
               </motion.h1>
 
               {/* Verdict Badge with matching shadow */}

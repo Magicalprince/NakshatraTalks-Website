@@ -65,6 +65,7 @@ export default function AstrologerPendingPage() {
           src="/images/logo.png"
           alt="NakshatraTalks"
           fill
+          sizes="192px"
           className="object-contain"
         />
       </div>

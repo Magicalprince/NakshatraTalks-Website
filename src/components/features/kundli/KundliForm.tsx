@@ -11,6 +11,7 @@ import { KundliInput } from '@/types/api.types';
 
 const kundliSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
+  gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   timeOfBirth: z.string().min(1, 'Time of birth is required'),
   placeOfBirth: z.string().min(2, 'Place of birth is required'),
@@ -44,6 +45,7 @@ export function KundliForm({
     resolver: zodResolver(kundliSchema),
     defaultValues: {
       name: initialData?.name || '',
+      gender: initialData?.gender || 'male',
       dateOfBirth: initialData?.dateOfBirth || '',
       timeOfBirth: initialData?.timeOfBirth || '',
       placeOfBirth: initialData?.placeOfBirth || '',
@@ -52,10 +54,16 @@ export function KundliForm({
 
   const handleFormSubmit = (data: KundliFormData) => {
     onSubmit({
-      ...data,
-      latitude: data.latitude || 0,
-      longitude: data.longitude || 0,
-      timezone: data.timezone || 'Asia/Kolkata',
+      name: data.name,
+      gender: data.gender,
+      dateOfBirth: data.dateOfBirth,
+      timeOfBirth: data.timeOfBirth,
+      birthPlace: {
+        name: data.placeOfBirth,
+        latitude: data.latitude || 0,
+        longitude: data.longitude || 0,
+        timezone: data.timezone || 'Asia/Kolkata',
+      },
     });
   };
 
@@ -137,16 +145,28 @@ export function MatchingForm({ onSubmit, isLoading }: MatchingFormProps) {
       girlForm.handleSubmit((girlData) => {
         onSubmit(
           {
-            ...boyData,
-            latitude: boyData.latitude || 0,
-            longitude: boyData.longitude || 0,
-            timezone: boyData.timezone || 'Asia/Kolkata',
+            name: boyData.name,
+            gender: boyData.gender || 'male',
+            dateOfBirth: boyData.dateOfBirth,
+            timeOfBirth: boyData.timeOfBirth,
+            birthPlace: {
+              name: boyData.placeOfBirth,
+              latitude: boyData.latitude || 0,
+              longitude: boyData.longitude || 0,
+              timezone: boyData.timezone || 'Asia/Kolkata',
+            },
           },
           {
-            ...girlData,
-            latitude: girlData.latitude || 0,
-            longitude: girlData.longitude || 0,
-            timezone: girlData.timezone || 'Asia/Kolkata',
+            name: girlData.name,
+            gender: girlData.gender || 'female',
+            dateOfBirth: girlData.dateOfBirth,
+            timeOfBirth: girlData.timeOfBirth,
+            birthPlace: {
+              name: girlData.placeOfBirth,
+              latitude: girlData.latitude || 0,
+              longitude: girlData.longitude || 0,
+              timezone: girlData.timezone || 'Asia/Kolkata',
+            },
           }
         );
       })();

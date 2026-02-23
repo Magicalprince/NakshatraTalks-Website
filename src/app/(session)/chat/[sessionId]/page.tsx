@@ -12,6 +12,8 @@ import {
 } from '@/hooks/useChatSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
+import { socketService } from '@/lib/services/socket.service';
+import { ChatMessage } from '@/types/api.types';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -53,6 +55,7 @@ export default function ChatSessionPage() {
   // Chat state (typing indicators, real-time updates)
   const {
     astrologerTyping,
+    setAstrologerTyping,
     handleTyping,
     addMessage,
     updateMessageStatus,
@@ -145,25 +148,55 @@ export default function ChatSessionPage() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Set up real-time subscriptions (Supabase Broadcast)
+  // Set up real-time subscriptions via Socket.io
   useEffect(() => {
     if (!sessionId) return;
 
-    // In a real implementation, this would connect to Supabase Broadcast
-    // for real-time message updates
-    // const channel = supabase.channel(`chat-messages-${sessionId}`)
-    //   .on('broadcast', { event: 'new-message' }, (payload) => {
-    //     addMessage(payload.message);
-    //   })
-    //   .on('broadcast', { event: 'typing' }, (payload) => {
-    //     setAstrologerTyping(payload.isTyping);
-    //   })
-    //   .subscribe();
+    // Join the chat session room
+    socketService.joinChatSession(sessionId);
 
-    // return () => {
-    //   supabase.removeChannel(channel);
-    // };
-  }, [sessionId, addMessage, updateMessageStatus]);
+    // Listen for new messages
+    const unsubMessage = socketService.on('chat_message', (data: unknown) => {
+      const payload = data as { message: ChatMessage };
+      if (payload?.message) {
+        addMessage(payload.message);
+      }
+    });
+
+    // Listen for typing indicators
+    const unsubTyping = socketService.on('chat_typing', (data: unknown) => {
+      const payload = data as { sessionId: string; isTyping: boolean };
+      if (payload?.sessionId === sessionId) {
+        setAstrologerTyping(payload.isTyping);
+      }
+    });
+
+    // Listen for message status updates (delivered, read)
+    const unsubStatus = socketService.on('message_status', (data: unknown) => {
+      const payload = data as { messageId: string; status: string };
+      if (payload?.messageId) {
+        updateMessageStatus(payload.messageId, payload.status);
+      }
+    });
+
+    // Listen for session ended by astrologer
+    const unsubEnd = socketService.on('chat_ended', () => {
+      addToast({
+        type: 'info',
+        title: 'Session Ended',
+        message: 'The astrologer has ended the chat session.',
+      });
+      refetchSession();
+    });
+
+    return () => {
+      socketService.leaveChatSession(sessionId);
+      unsubMessage();
+      unsubTyping();
+      unsubStatus();
+      unsubEnd();
+    };
+  }, [sessionId, addMessage, updateMessageStatus, setAstrologerTyping, addToast, refetchSession]);
 
   // Auth loading state
   if (!isReady) {

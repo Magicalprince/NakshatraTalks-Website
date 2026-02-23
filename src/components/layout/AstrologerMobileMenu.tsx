@@ -66,6 +66,7 @@ export function AstrologerMobileMenu() {
                     src="/images/logo.png"
                     alt="NakshatraTalks"
                     fill
+                    sizes="48px"
                     className="object-contain"
                   />
                 </div>

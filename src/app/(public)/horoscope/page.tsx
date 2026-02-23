@@ -11,7 +11,7 @@
  * - Improved accessibility with ARIA labels
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ZodiacCarousel,
@@ -20,15 +20,15 @@ import {
   type HoroscopeDay,
   type HoroscopeCategory,
 } from '@/components/features/horoscope';
-import { ZODIAC_SIGNS } from '@/lib/services/horoscope.service';
+import { ZODIAC_SIGNS, horoscopeService } from '@/lib/services/horoscope.service';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { HeroSection } from '@/components/layout/HeroSection';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Palette, Hash, Heart, Sparkles, ArrowRight, Star } from 'lucide-react';
 
-// Mock horoscope data - In production, this would come from API
-const MOCK_HOROSCOPES: Record<string, Record<HoroscopeDay, {
+// Horoscope data type
+interface HoroscopeData {
   general: string;
   love: string;
   career: string;
@@ -36,66 +36,7 @@ const MOCK_HOROSCOPES: Record<string, Record<HoroscopeDay, {
   luckyNumber: number;
   luckyColor: string;
   compatibility: string;
-}>> = {
-  aries: {
-    yesterday: {
-      general: 'Yesterday brought some reflective moments that helped you understand your path better. The energy was introspective, allowing you to reconnect with your inner motivations.',
-      love: 'Your romantic relationships needed patience yesterday. Communication with your partner may have felt challenging, but understanding was achieved by day\'s end.',
-      career: 'Work projects moved at a slower pace, but this gave you time to refine your strategies. Colleagues appreciated your thoughtful approach.',
-      health: 'Energy levels were moderate. Rest was important, and those who prioritized sleep felt more balanced.',
-      luckyNumber: 7,
-      luckyColor: 'Crimson',
-      compatibility: 'Leo',
-    },
-    today: {
-      general: 'Today brings a surge of confident energy that will help you tackle any challenge. Mars, your ruling planet, aligns favorably with Jupiter, amplifying your natural leadership abilities. Trust your instincts and take bold action.',
-      love: 'Romance is highlighted today as Venus sends harmonious vibes your way. Single Aries may encounter someone intriguing, while those in relationships will enjoy deeper emotional connections.',
-      career: 'Professional opportunities are abundant. Your innovative ideas will be well-received by colleagues and superiors alike. A new project or responsibility may come your way.',
-      health: 'Your physical energy is at its peak. Channel this vitality into exercise or outdoor activities. Stay hydrated and maintain your momentum throughout the day.',
-      luckyNumber: 9,
-      luckyColor: 'Red',
-      compatibility: 'Sagittarius',
-    },
-    tomorrow: {
-      general: 'Tomorrow promises exciting developments as the cosmic energy shifts in your favor. Be prepared for unexpected opportunities that could change your direction positively.',
-      love: 'Emotional connections deepen tomorrow. Express your feelings openly and watch how your relationships transform for the better.',
-      career: 'A significant career milestone awaits. Your hard work will finally be recognized. Stay confident in presentations and meetings.',
-      health: 'Focus on mental wellness tomorrow. Meditation or yoga will help maintain your energetic balance and clarity.',
-      luckyNumber: 3,
-      luckyColor: 'Orange',
-      compatibility: 'Leo',
-    },
-  },
-  taurus: {
-    yesterday: {
-      general: 'Yesterday was about grounding yourself and appreciating the simple pleasures in life. You found comfort in familiar routines.',
-      love: 'Romantic energy was steady and reassuring. Quality time with loved ones brought contentment.',
-      career: 'Financial matters required attention. Your practical approach helped navigate any challenges.',
-      health: 'Physical comfort was important. Treating yourself to good food and rest was beneficial.',
-      luckyNumber: 6,
-      luckyColor: 'Emerald',
-      compatibility: 'Virgo',
-    },
-    today: {
-      general: 'Venus showers you with abundance today, Taurus. Your appreciation for beauty and comfort will be heightened. Financial matters look favorable, and your patient approach will yield results.',
-      love: 'Love flourishes under today\'s gentle cosmic influence. Your sensual nature attracts admirers, while existing relationships deepen with shared pleasures and heartfelt conversations.',
-      career: 'Steady progress marks your professional life today. Your reliability and dedication are noticed. A financial opportunity or raise may be on the horizon.',
-      health: 'Pamper yourself today. Your body craves comfort and nourishment. A massage, healthy meal, or nature walk will rejuvenate your spirit.',
-      luckyNumber: 4,
-      luckyColor: 'Green',
-      compatibility: 'Cancer',
-    },
-    tomorrow: {
-      general: 'Tomorrow brings stability and growth. Your methodical approach to challenges will prove successful. Trust in your abilities.',
-      love: 'Deep conversations strengthen bonds tomorrow. Share your dreams and listen to your partner\'s aspirations.',
-      career: 'A collaborative project gains momentum. Your input will be invaluable to the team\'s success.',
-      health: 'Outdoor activities benefit you tomorrow. Fresh air and nature will revitalize your energy.',
-      luckyNumber: 2,
-      luckyColor: 'Pink',
-      compatibility: 'Capricorn',
-    },
-  },
-};
+}
 
 // Generate fallback horoscope for signs not in mock data
 const generateFallbackHoroscope = (signName: string, day: HoroscopeDay) => {
@@ -154,16 +95,47 @@ function HoroscopeLoadingSkeleton() {
 export default function HoroscopePage() {
   const [selectedSign, setSelectedSign] = useState('aries');
   const [activeDay, setActiveDay] = useState<HoroscopeDay>('today');
+  const [apiData, setApiData] = useState<Record<string, HoroscopeData | null>>({});
 
-  // Get current horoscope data
+  // Fetch horoscope from backend when sign or day changes
+  useEffect(() => {
+    const cacheKey = `${selectedSign}_${activeDay}`;
+    if (apiData[cacheKey] !== undefined) return;
+
+    let cancelled = false;
+
+    horoscopeService.getDailyHoroscope(selectedSign, activeDay).then((res) => {
+      if (cancelled || !res.data) return;
+      const d = res.data;
+      const sign = ZODIAC_SIGNS.find(s => s.id === selectedSign);
+      const fallback = generateFallbackHoroscope(sign?.name || 'Your sign', activeDay);
+      setApiData((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          general: d.horoscope?.general || d.prediction || fallback.general,
+          love: d.horoscope?.love || fallback.love,
+          career: d.horoscope?.career || fallback.career,
+          health: d.horoscope?.health || fallback.health,
+          luckyNumber: d.luckyNumber ?? fallback.luckyNumber,
+          luckyColor: d.luckyColor || fallback.luckyColor,
+          compatibility: d.compatibility || fallback.compatibility,
+        },
+      }));
+    }).catch(() => {
+      if (!cancelled) setApiData((prev) => ({ ...prev, [cacheKey]: null }));
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedSign, activeDay, apiData]);
+
+  // Get current horoscope data — prefer API data, fallback to generated
   const currentHoroscope = useMemo(() => {
-    const signData = MOCK_HOROSCOPES[selectedSign];
-    if (signData && signData[activeDay]) {
-      return signData[activeDay];
-    }
+    const cacheKey = `${selectedSign}_${activeDay}`;
+    const cached = apiData[cacheKey];
+    if (cached && cached.general) return cached;
     const sign = ZODIAC_SIGNS.find(s => s.id === selectedSign);
     return generateFallbackHoroscope(sign?.name || 'Your sign', activeDay);
-  }, [selectedSign, activeDay]);
+  }, [selectedSign, activeDay, apiData]);
 
   const currentSign = ZODIAC_SIGNS.find(s => s.id === selectedSign);
   const categories: HoroscopeCategory[] = ['general', 'love', 'career', 'health'];

@@ -1,5 +1,8 @@
 /**
- * Auth Service - Authentication API calls
+ * Auth Service - Real Backend Authentication
+ *
+ * Handles OTP-based phone authentication via MSG91 (backend).
+ * Same auth system shared with the NakshatraTalks mobile app.
  */
 
 import { apiClient } from '@/lib/api/client';
@@ -10,7 +13,6 @@ import {
   VerifyOtpResponse,
   GetMeResponse,
 } from '@/types/api.types';
-import { mockApi, shouldUseMockData, MOCK_USER, MOCK_ASTROLOGERS } from '@/lib/mock';
 
 export interface SendOtpParams {
   phone: string;
@@ -25,172 +27,101 @@ export interface VerifyOtpParams {
 
 class AuthService {
   /**
-   * Send OTP to phone number
+   * Send OTP to phone number (via MSG91 on backend)
    */
   async sendOtp(params: SendOtpParams): Promise<ApiResponse<SendOtpResponse>> {
-    // Use mock in development
-    if (shouldUseMockData()) {
-      await mockApi.auth.sendOtp(params.phone);
-      return {
-        success: true,
-        data: {
-          success: true,
-          message: 'OTP sent successfully',
-        },
-        message: 'OTP sent successfully',
-      };
-    }
-
     return apiClient.post<ApiResponse<SendOtpResponse>>(
       API_ENDPOINTS.AUTH.SEND_OTP,
       {
         phone: params.phone,
-        countryCode: params.countryCode || '+91',
       }
     );
   }
 
   /**
-   * Verify OTP and login
+   * Verify OTP and login — returns JWT tokens + user/astrologer data
+   *
+   * NOTE: Backend returns a flat response (fields at root level, not under `data`).
+   * We normalize it into ApiResponse<VerifyOtpResponse> for consistency.
    */
   async verifyOtp(params: VerifyOtpParams): Promise<ApiResponse<VerifyOtpResponse>> {
-    // Use mock in development
-    if (shouldUseMockData()) {
-      // Accept any 6-digit OTP for testing
-      if (params.otp.length === 6) {
-        // Check if phone matches astrologer for testing astrologer dashboard
-        const isAstrologer = params.phone === '9876543210';
-        const mockAstrologer = MOCK_ASTROLOGERS[0];
-
-        apiClient.setAccessToken('mock-access-token-12345');
-
-        return {
-          success: true,
-          data: {
-            success: true,
-            message: 'Login successful',
-            userType: isAstrologer ? 'astrologer' as const : 'user' as const,
-            access_token: 'mock-access-token-12345',
-            refresh_token: 'mock-refresh-token-67890',
-            user: isAstrologer
-              ? {
-                  ...MOCK_USER,
-                  id: mockAstrologer.id,
-                  phone: mockAstrologer.phone,
-                  name: mockAstrologer.name,
-                  email: mockAstrologer.email,
-                  role: 'astrologer' as const,
-                }
-              : MOCK_USER,
-            astrologer: isAstrologer
-              ? {
-                  id: mockAstrologer.id,
-                  name: mockAstrologer.name,
-                  phone: mockAstrologer.phone,
-                  email: mockAstrologer.email || undefined,
-                  image: mockAstrologer.image,
-                  bio: mockAstrologer.bio || undefined,
-                  specialization: mockAstrologer.specialization,
-                  languages: mockAstrologer.languages,
-                  experience: mockAstrologer.experience,
-                  education: mockAstrologer.education,
-                  chatPricePerMinute: mockAstrologer.chatPricePerMinute || 25,
-                  callPricePerMinute: mockAstrologer.callPricePerMinute || 30,
-                  rating: mockAstrologer.rating,
-                  totalCalls: mockAstrologer.totalCalls,
-                  totalReviews: mockAstrologer.totalReviews || 0,
-                  isAvailable: mockAstrologer.isAvailable,
-                  chatAvailable: mockAstrologer.chatAvailable || true,
-                  callAvailable: mockAstrologer.callAvailable || true,
-                  isLive: mockAstrologer.isLive,
-                  workingHours: {},
-                  status: 'approved' as const,
-                  createdAt: mockAstrologer.createdAt || new Date().toISOString(),
-                  updatedAt: mockAstrologer.updatedAt || new Date().toISOString(),
-                }
-              : undefined,
-          },
-          message: 'Login successful',
-        };
-      }
-      return {
-        success: false,
-        message: 'Invalid OTP. Please try again.',
-      };
-    }
-
-    const response = await apiClient.post<ApiResponse<VerifyOtpResponse>>(
+    const raw = await apiClient.post<VerifyOtpResponse & { success?: boolean; message?: string }>(
       API_ENDPOINTS.AUTH.VERIFY_OTP,
       {
         phone: params.phone,
         otp: params.otp,
-        countryCode: params.countryCode || '+91',
       }
     );
 
-    // If successful, set the access token
-    if (response.success && response.data?.access_token) {
-      apiClient.setAccessToken(response.data.access_token);
+    // Backend returns flat: { success, message, userType, access_token, user, ... }
+    // Normalize into ApiResponse<VerifyOtpResponse>
+    const isSuccess = raw.success ?? !!raw.access_token;
+
+    if (isSuccess && raw.access_token) {
+      apiClient.setAccessToken(raw.access_token);
     }
 
-    return response;
+    return {
+      success: isSuccess,
+      message: raw.message,
+      data: isSuccess ? raw : undefined,
+    };
   }
 
   /**
-   * Get current user profile
+   * Get current authenticated user profile
+   *
+   * NOTE: Backend returns flat: { success, user, astrologer? }
    */
   async getMe(): Promise<ApiResponse<GetMeResponse>> {
-    // Use mock in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: {
-          success: true,
-          user: MOCK_USER,
-        },
-        message: 'Success',
-      };
+    const raw = await apiClient.get<GetMeResponse & { success?: boolean }>(API_ENDPOINTS.AUTH.ME);
+    // Normalize: if backend returns flat, wrap in data
+    if ('user' in raw && !('data' in raw)) {
+      return { success: raw.success ?? true, data: raw };
     }
-
-    return apiClient.get<ApiResponse<GetMeResponse>>(API_ENDPOINTS.AUTH.ME);
+    return raw as unknown as ApiResponse<GetMeResponse>;
   }
 
   /**
-   * Refresh access token
+   * Refresh access token using refresh token (httpOnly cookie)
+   *
+   * NOTE: Backend returns flat: { success, access_token }
    */
   async refresh(): Promise<ApiResponse<{ access_token: string; refresh_token?: string }>> {
-    return apiClient.post<ApiResponse<{ access_token: string; refresh_token?: string }>>(
+    const raw = await apiClient.post<{ success?: boolean; access_token?: string; refresh_token?: string }>(
       API_ENDPOINTS.AUTH.REFRESH
     );
+    // Normalize: if backend returns flat, wrap in data
+    if ('access_token' in raw && !('data' in raw)) {
+      return { success: raw.success ?? !!raw.access_token, data: raw as { access_token: string; refresh_token?: string } };
+    }
+    return raw as unknown as ApiResponse<{ access_token: string; refresh_token?: string }>;
   }
 
   /**
-   * Logout - Clear tokens
+   * Logout — clear tokens client-side
    */
   logout(): void {
     apiClient.clearAccessToken();
-    // Note: The httpOnly refresh token cookie should be cleared by the server
-    // on a logout endpoint, or will expire naturally
   }
 
   /**
-   * Check if user is authenticated
+   * Check if user is currently authenticated
    */
   isAuthenticated(): boolean {
     return apiClient.isAuthenticated();
   }
 
   /**
-   * Validate phone number format
+   * Validate Indian phone number (10 digits starting with 6-9)
    */
   validatePhone(phone: string): boolean {
-    // Indian phone number validation (10 digits)
-    const phoneRegex = /^[6-9]\d{9}$/;
-    return phoneRegex.test(phone.replace(/\D/g, ''));
+    const cleaned = phone.replace(/\D/g, '');
+    return /^[6-9]\d{9}$/.test(cleaned);
   }
 
   /**
-   * Format phone number for display
+   * Format phone for display: "98765 43210"
    */
   formatPhone(phone: string): string {
     const cleaned = phone.replace(/\D/g, '');

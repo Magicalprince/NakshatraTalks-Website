@@ -1,14 +1,23 @@
 /**
- * API Client - Web version
- * Axios client with request/response interceptors
- * Uses httpOnly cookies for refresh token (secure)
- * Uses memory for access token (not localStorage)
+ * API Client - Production-Ready Web Client
+ *
+ * Features:
+ * - JWT Bearer token auth with auto-refresh
+ * - Request queuing during token refresh
+ * - Graceful error handling with typed errors
+ * - Request deduplication for GET requests
+ * - Auth event system for logout/session management
  */
 
-import axios, { AxiosInstance, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosInstance,
+  AxiosError,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from 'axios';
 import { API_CONFIG, API_ENDPOINTS } from './endpoints';
 
-// Auth event types
+// ─── Auth Event System ───────────────────────────────────────────────
 type AuthEventType = 'logout_required' | 'session_invalid' | 'token_refreshed';
 type AuthEventHandler = (reason?: string) => void;
 
@@ -27,17 +36,12 @@ class AuthEventEmitter {
     const eventHandlers = this.handlers.get(event);
     if (eventHandlers) {
       const index = eventHandlers.indexOf(handler);
-      if (index > -1) {
-        eventHandlers.splice(index, 1);
-      }
+      if (index > -1) eventHandlers.splice(index, 1);
     }
   }
 
   emit(event: AuthEventType, reason?: string) {
-    const eventHandlers = this.handlers.get(event);
-    if (eventHandlers) {
-      eventHandlers.forEach(handler => handler(reason));
-    }
+    this.handlers.get(event)?.forEach((handler) => handler(reason));
   }
 
   logoutRequired(reason: string) {
@@ -55,10 +59,40 @@ class AuthEventEmitter {
 
 export const authEvents = new AuthEventEmitter();
 
+// ─── Typed API Error ─────────────────────────────────────────────────
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code?: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  get isUnauthorized() {
+    return this.statusCode === 401;
+  }
+  get isForbidden() {
+    return this.statusCode === 403;
+  }
+  get isNotFound() {
+    return this.statusCode === 404;
+  }
+  get isServerError() {
+    return this.statusCode >= 500;
+  }
+  get isNetworkError() {
+    return this.statusCode === 0;
+  }
+}
+
+// ─── API Client ──────────────────────────────────────────────────────
 class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
-  private isRefreshing: boolean = false;
+  private isRefreshing = false;
   private refreshPromise: Promise<boolean> | null = null;
   private failedRequestsQueue: Array<{
     resolve: (value: unknown) => void;
@@ -66,96 +100,113 @@ class ApiClient {
     config: InternalAxiosRequestConfig;
   }> = [];
 
+  // Deduplication: track in-flight GET requests
+  private inflightGets: Map<string, Promise<unknown>> = new Map();
+
   constructor() {
     this.client = axios.create({
       baseURL: API_CONFIG.BASE_URL,
       timeout: API_CONFIG.TIMEOUT,
       headers: API_CONFIG.HEADERS,
-      withCredentials: true, // Important: Send cookies with requests
+      withCredentials: true,
     });
 
     this.setupInterceptors();
   }
 
-  /**
-   * Setup request and response interceptors
-   */
+  // ─── Interceptors ──────────────────────────────────────────────────
   private setupInterceptors() {
-    // Request interceptor - Add auth token
+    // Request: attach Bearer token
     this.client.interceptors.request.use(
-      async (config) => {
-        // Add Authorization header if token exists
+      (config) => {
         if (this.accessToken) {
           config.headers.Authorization = `Bearer ${this.accessToken}`;
         }
         return config;
       },
-      (error) => {
-        return Promise.reject(error);
-      }
+      (error) => Promise.reject(error)
     );
 
-    // Response interceptor - Handle errors with token refresh
+    // Response: handle 401 with auto-refresh
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+          _retry?: boolean;
+        };
 
-        // Handle 401 Unauthorized - Token expired
-        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-          // Don't retry auth endpoints to avoid infinite loops
+        // Network error (no response)
+        if (!error.response) {
+          return Promise.reject(
+            new ApiError(
+              error.message || 'Network error. Please check your connection.',
+              0,
+              'NETWORK_ERROR'
+            )
+          );
+        }
+
+        const { status, data } = error.response as {
+          status: number;
+          data: { message?: string; error?: { code?: string; message?: string } };
+        };
+
+        // 401 Unauthorized → token refresh
+        if (status === 401 && originalRequest && !originalRequest._retry) {
           const isAuthEndpoint = originalRequest.url?.includes('/auth/');
           if (isAuthEndpoint) {
-            if (process.env.NODE_ENV === 'development') console.log('[ApiClient] 401 on auth endpoint, clearing tokens');
             this.clearAccessToken();
             authEvents.sessionInvalid('Auth endpoint returned 401');
-            return Promise.reject(error);
+            return Promise.reject(
+              new ApiError('Session expired', 401, 'SESSION_EXPIRED')
+            );
           }
 
-          // Mark this request as retried
           originalRequest._retry = true;
 
-          // If already refreshing, queue this request
           if (this.isRefreshing) {
             return new Promise((resolve, reject) => {
-              this.failedRequestsQueue.push({ resolve, reject, config: originalRequest });
+              this.failedRequestsQueue.push({
+                resolve,
+                reject,
+                config: originalRequest,
+              });
             });
           }
 
-          // Start token refresh
           try {
             const refreshed = await this.refreshAccessToken();
             if (refreshed) {
-              // Retry original request with new token
               originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
               return this.client(originalRequest);
-            } else {
-              // Refresh failed, logout required
-              this.clearAccessToken();
-              authEvents.logoutRequired('Token refresh failed');
-              return Promise.reject(error);
             }
-          } catch (refreshError) {
-            if (process.env.NODE_ENV === 'development') console.error('[ApiClient] Token refresh error:', refreshError);
+            this.clearAccessToken();
+            authEvents.logoutRequired('Token refresh failed');
+            return Promise.reject(
+              new ApiError('Session expired', 401, 'TOKEN_REFRESH_FAILED')
+            );
+          } catch {
             this.clearAccessToken();
             authEvents.logoutRequired('Token refresh error');
-            return Promise.reject(refreshError);
+            return Promise.reject(
+              new ApiError('Session expired', 401, 'TOKEN_REFRESH_ERROR')
+            );
           }
         }
 
-        // Handle 403 Forbidden
-        if (error.response?.status === 403) {
-          if (process.env.NODE_ENV === 'development') console.log('[ApiClient] 403 Forbidden - Session may be invalid');
-        }
+        // Build typed error from response
+        const message =
+          data?.error?.message ||
+          data?.message ||
+          `Request failed with status ${status}`;
+        const code = data?.error?.code || `HTTP_${status}`;
 
-        return Promise.reject(error);
+        return Promise.reject(new ApiError(message, status, code, data));
       }
     );
   }
 
-  /**
-   * Refresh the access token using the refresh token (stored in httpOnly cookie)
-   */
+  // ─── Token Refresh ─────────────────────────────────────────────────
   private async refreshAccessToken(): Promise<boolean> {
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise;
@@ -174,15 +225,8 @@ class ApiClient {
     }
   }
 
-  /**
-   * Internal token refresh implementation
-   */
   private async _doRefreshToken(): Promise<boolean> {
     try {
-      if (process.env.NODE_ENV === 'development') console.log('[ApiClient] Attempting token refresh...');
-
-      // Make direct axios call to refresh endpoint
-      // The refresh token is automatically sent via httpOnly cookie
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`,
         {},
@@ -194,112 +238,93 @@ class ApiClient {
       );
 
       if (response.data?.success && response.data?.access_token) {
-        if (process.env.NODE_ENV === 'development') console.log('[ApiClient] Token refresh successful');
         this.accessToken = response.data.access_token;
         authEvents.tokenRefreshed();
         return true;
       }
-
-      if (process.env.NODE_ENV === 'development') console.warn('[ApiClient] Token refresh response invalid:', response.data);
       return false;
-    } catch (error: unknown) {
-      const axiosError = error as AxiosError;
-      if (process.env.NODE_ENV === 'development') console.error('[ApiClient] Token refresh failed:', axiosError?.response?.status, axiosError?.message);
+    } catch {
       return false;
     }
   }
 
-  /**
-   * Process queued requests after token refresh
-   */
-  private processQueue(success: boolean): void {
+  private processQueue(success: boolean) {
     this.failedRequestsQueue.forEach(({ resolve, reject, config }) => {
       if (success) {
         config.headers.Authorization = `Bearer ${this.accessToken}`;
         resolve(this.client(config));
       } else {
-        reject(new Error('Token refresh failed'));
+        reject(new ApiError('Token refresh failed', 401, 'TOKEN_REFRESH_FAILED'));
       }
     });
     this.failedRequestsQueue = [];
   }
 
-  /**
-   * Set access token (in memory only - secure)
-   */
-  setAccessToken(token: string): void {
+  // ─── Token Management ──────────────────────────────────────────────
+  setAccessToken(token: string) {
     this.accessToken = token;
   }
 
-  /**
-   * Clear access token
-   */
-  clearAccessToken(): void {
+  clearAccessToken() {
     this.accessToken = null;
     this.failedRequestsQueue = [];
+    this.inflightGets.clear();
   }
 
-  /**
-   * Get current access token
-   */
   getAccessToken(): string | null {
     return this.accessToken;
   }
 
-  /**
-   * Check if authenticated
-   */
   isAuthenticated(): boolean {
     return !!this.accessToken;
   }
 
-  /**
-   * Generic GET request
-   */
+  // ─── HTTP Methods ──────────────────────────────────────────────────
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response = await this.client.get<T>(url, config);
-    return response.data;
+    // Deduplicate identical in-flight GET requests
+    const cacheKey = `${url}|${JSON.stringify(config?.params || {})}`;
+    const inflight = this.inflightGets.get(cacheKey);
+    if (inflight) return inflight as Promise<T>;
+
+    const promise = this.client
+      .get<T>(url, config)
+      .then((r) => {
+        this.inflightGets.delete(cacheKey);
+        return r.data;
+      })
+      .catch((err) => {
+        this.inflightGets.delete(cacheKey);
+        throw err;
+      });
+
+    this.inflightGets.set(cacheKey, promise);
+    return promise;
   }
 
-  /**
-   * Generic POST request
-   */
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.post<T>(url, data, config);
     return response.data;
   }
 
-  /**
-   * Generic PUT request
-   */
   async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.put<T>(url, data, config);
     return response.data;
   }
 
-  /**
-   * Generic PATCH request
-   */
   async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.patch<T>(url, data, config);
     return response.data;
   }
 
-  /**
-   * Generic DELETE request
-   */
   async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.client.delete<T>(url, config);
     return response.data;
   }
 
-  /**
-   * GET request with query parameters
-   */
   async getWithParams<T>(url: string, params: Record<string, unknown>): Promise<T> {
     return this.get<T>(url, { params });
   }
 }
 
-// Export singleton instance
+// Singleton
 export const apiClient = new ApiClient();

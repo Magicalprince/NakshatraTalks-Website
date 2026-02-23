@@ -1,21 +1,13 @@
 'use client';
 
-/**
- * Live Sessions Page
- * Enhanced 2026 design with glow-live LIVE badge, ping dot animation,
- * hover Join button, Eye icon viewer count, better shimmer skeletons,
- * improved gradient overlays, and accessibility.
- */
-
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Radio, Users, Clock, Search, X, Eye, Play, Sparkles } from 'lucide-react';
+import { Radio, Search, X, Eye, Clock, Sparkles } from 'lucide-react';
 import { useHomeData } from '@/hooks/useHomeData';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LiveSession } from '@/types/api.types';
 
@@ -33,26 +25,12 @@ function formatDuration(startedAt: string): string {
 
 function LiveSessionSkeletonCard() {
   return (
-    <div className="rounded-xl bg-white border border-gray-100 overflow-hidden shadow-web-sm">
-      {/* Thumbnail skeleton */}
-      <div className="relative aspect-video bg-gray-100 skeleton-shimmer">
-        {/* LIVE badge placeholder */}
-        <div className="absolute top-3 left-3 h-6 w-14 rounded-md bg-gray-200/60 skeleton-shimmer" />
-        {/* Viewer count placeholder */}
-        <div className="absolute top-3 right-3 h-6 w-16 rounded-md bg-gray-200/60 skeleton-shimmer" />
-        {/* Duration placeholder */}
-        <div className="absolute bottom-3 right-3 h-6 w-14 rounded-md bg-gray-200/60 skeleton-shimmer" />
-      </div>
-      {/* Info skeleton */}
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-100 skeleton-shimmer flex-shrink-0" />
-          <div className="flex-1 space-y-2.5">
-            <div className="h-4 w-3/4 rounded-md bg-gray-100 skeleton-shimmer" />
-            <div className="h-3 w-1/2 rounded-md bg-gray-100 skeleton-shimmer" />
-            <div className="h-3 w-full rounded-md bg-gray-100 skeleton-shimmer" />
-          </div>
-        </div>
+    <div className="flex items-center gap-4 p-3 rounded-2xl bg-white border border-gray-100 shadow-web-sm">
+      <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-xl bg-gray-100 skeleton-shimmer flex-shrink-0" />
+      <div className="flex-1 min-w-0 space-y-2.5 py-1">
+        <div className="h-4 w-3/4 rounded-md bg-gray-100 skeleton-shimmer" />
+        <div className="h-3 w-1/2 rounded-md bg-gray-100 skeleton-shimmer" />
+        <div className="h-3 w-1/3 rounded-md bg-gray-100 skeleton-shimmer" />
       </div>
     </div>
   );
@@ -63,87 +41,74 @@ function LiveSessionSkeletonCard() {
 function LiveSessionCard({ session, index }: { session: LiveSession; index: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, type: 'spring', stiffness: 300, damping: 30 }}
+      transition={{ delay: index * 0.05, type: 'spring', stiffness: 300, damping: 30 }}
     >
-      <Link href={`/live-sessions/${session.id}`} className="block group" aria-label={`Join live session: ${session.title} by ${session.astrologerName}`}>
-        <Card className="overflow-hidden border border-gray-100 hover:border-primary/15 hover:shadow-web-lg transition-all duration-300 card-hover-lift">
-          {/* Thumbnail */}
-          <div className="relative aspect-video bg-gray-100 overflow-hidden">
-            <Image
-              src={session.thumbnailUrl || session.astrologerImage || '/images/astrologer/astrologer3.png'}
-              alt={`${session.title} - ${session.astrologerName}`}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-            />
+      <Link
+        href={`/live-sessions/${session.id}`}
+        className="group flex items-center gap-4 p-3 rounded-2xl bg-white border border-gray-100 hover:border-primary/15 hover:shadow-web-md transition-all duration-300"
+        aria-label={`Join ${session.title} by ${session.astrologerName}`}
+      >
+        {/* Thumbnail */}
+        <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+          <Image
+            src={session.thumbnailUrl || session.astrologerImage || '/images/astrologer/astrologer3.png'}
+            alt={session.astrologerName}
+            fill
+            sizes="128px"
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
 
-            {/* Gradient Overlay - stronger for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
-
-            {/* LIVE Badge with glow + ping animation */}
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-500 text-white px-2.5 py-1 rounded-md shadow-glow-live">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" aria-hidden="true" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
-              </span>
-              <span className="text-xs font-bold font-lexend tracking-wider">LIVE</span>
-            </div>
-
-            {/* Viewer Count with Eye icon */}
-            <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white px-2.5 py-1 rounded-md">
-              <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="text-xs font-semibold font-lexend">{session.viewerCount}</span>
-            </div>
-
-            {/* Duration */}
-            {session.startedAt && (
-              <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/50 backdrop-blur-md text-white px-2 py-1 rounded-md">
-                <Clock className="w-3 h-3" aria-hidden="true" />
-                <span className="text-xs font-medium font-lexend">{formatDuration(session.startedAt)}</span>
-              </div>
-            )}
-
-            {/* Hover Join Button Overlay */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <motion.div
-                initial={false}
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 bg-primary/90 backdrop-blur-sm text-white px-5 py-2.5 rounded-xl shadow-lg shadow-primary/30 font-lexend font-semibold text-sm"
-              >
-                <Play className="w-4 h-4 fill-current" aria-hidden="true" />
-                Join Session
-              </motion.div>
-            </div>
+          {/* LIVE badge */}
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white px-2 py-0.5 rounded-md shadow-glow-live">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+            </span>
+            <span className="text-[10px] font-bold font-lexend tracking-wider">LIVE</span>
           </div>
 
-          {/* Info */}
-          <div className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 ring-2 ring-red-100 ring-offset-1">
-                <Image
-                  src={session.astrologerImage || '/images/astrologer/astrologer3.png'}
-                  alt={session.astrologerName}
-                  fill
-                  className="object-cover"
-                />
-                {/* Tiny live indicator dot on avatar */}
-                <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-text-primary font-lexend truncate text-base leading-snug">
-                  {session.title}
-                </h3>
-                <p className="text-sm text-text-secondary font-nunito mt-0.5">{session.astrologerName}</p>
-                {session.description && (
-                  <p className="text-xs text-text-muted font-nunito mt-1.5 line-clamp-2 leading-relaxed">
-                    {session.description}
-                  </p>
-                )}
-              </div>
-            </div>
+          {/* Viewer count bottom-right */}
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 backdrop-blur-md text-white px-1.5 py-0.5 rounded-md">
+            <Eye className="w-3 h-3" />
+            <span className="text-[10px] font-semibold font-lexend">{session.viewerCount}</span>
           </div>
-        </Card>
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 py-1">
+          <h3 className="font-semibold text-text-primary font-lexend text-[15px] leading-snug line-clamp-2">
+            {session.title}
+          </h3>
+
+          <div className="flex items-center gap-2 mt-1.5">
+            <div className="relative w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 ring-1 ring-red-200">
+              <Image
+                src={session.astrologerImage || '/images/astrologer/astrologer3.png'}
+                alt={session.astrologerName}
+                fill
+                sizes="24px"
+                className="object-cover"
+              />
+            </div>
+            <p className="text-sm text-text-secondary font-nunito truncate">{session.astrologerName}</p>
+          </div>
+
+          {session.startedAt && (
+            <div className="flex items-center gap-1 mt-2 text-text-muted">
+              <Clock className="w-3 h-3" />
+              <span className="text-xs font-nunito">{formatDuration(session.startedAt)} ago</span>
+            </div>
+          )}
+
+          {session.description && (
+            <p className="text-xs text-text-muted font-nunito mt-1.5 line-clamp-1">
+              {session.description}
+            </p>
+          )}
+        </div>
       </Link>
     </motion.div>
   );
@@ -216,8 +181,8 @@ export default function LiveSessionsPage() {
 
         {/* Loading State */}
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
               <LiveSessionSkeletonCard key={i} />
             ))}
           </div>
@@ -260,10 +225,10 @@ export default function LiveSessionsPage() {
           </motion.div>
         )}
 
-        {/* Sessions Grid */}
+        {/* Sessions List */}
         {!loading && filteredSessions.length > 0 && (
           <>
-            <div className="flex items-center gap-2 mb-5">
+            <div className="flex items-center gap-2 mb-4">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" aria-hidden="true" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
@@ -272,7 +237,7 @@ export default function LiveSessionsPage() {
                 <span className="font-semibold text-text-primary">{filteredSessions.length}</span> live session{filteredSessions.length !== 1 ? 's' : ''} now
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+            <div className="space-y-3 pb-12">
               {filteredSessions.map((session, index) => (
                 <LiveSessionCard key={session.id} session={session} index={index} />
               ))}

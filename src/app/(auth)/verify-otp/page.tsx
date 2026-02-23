@@ -8,23 +8,31 @@ import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { Button, OTPInput } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
-import { MOCK_USER, MOCK_ASTROLOGER_USER, MOCK_ASTROLOGER_DATA } from '@/lib/mock/data';
+import { authService } from '@/lib/services/auth.service';
+import { useUIStore } from '@/stores/ui-store';
 
 function VerifyOTPContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const phone = searchParams.get('phone') || '9876543210';
-  const role = searchParams.get('role');
-  const redirect = searchParams.get('redirect') || (role === 'astrologer' ? '/astrologer/dashboard' : '/');
+  const phone = searchParams.get('phone') || '';
+  const redirect = searchParams.get('redirect') || '/';
   const { setAuth } = useAuthStore();
+  const { addToast } = useUIStore();
 
-  // Get auth state directly
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isHydrated = useAuthStore((state) => state.isHydrated);
 
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(30);
+
+  // Redirect if no phone number
+  useEffect(() => {
+    if (!phone) {
+      router.replace('/login');
+    }
+  }, [phone, router]);
 
   // Resend OTP countdown timer
   useEffect(() => {
@@ -42,44 +50,71 @@ function VerifyOTPContent() {
 
   const handleOtpChange = (value: string) => {
     setOtp(value);
+    setError('');
   };
 
   const handleVerify = async () => {
-    setIsLoading(true);
-
-    // Simulate brief loading
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    if (role === 'astrologer') {
-      // Log in as astrologer with mock data
-      setAuth({
-        user: {
-          ...MOCK_ASTROLOGER_USER,
-          phone: phone,
-        },
-        astrologer: MOCK_ASTROLOGER_DATA,
-        accessToken: 'mock-astrologer-token-12345',
-        userType: 'astrologer',
-      });
-    } else {
-      // Log in as regular user with mock data
-      setAuth({
-        user: {
-          ...MOCK_USER,
-          phone: phone,
-        },
-        accessToken: 'mock-access-token-12345',
-        userType: 'user',
-      });
+    if (!otp || otp.length < 6) {
+      setError('Please enter the 6-digit OTP sent to your phone');
+      return;
     }
 
-    // Navigate to home or redirect
-    router.replace(redirect);
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await authService.verifyOtp({ phone, otp });
+
+      if (response.success && response.data) {
+        const { user, astrologer, access_token, userType } = response.data;
+
+        setAuth({
+          user,
+          astrologer: astrologer || undefined,
+          accessToken: access_token,
+          userType,
+        });
+
+        addToast({
+          type: 'success',
+          title: 'Welcome!',
+          message: `Logged in as ${user.name || 'User'}`,
+        });
+
+        // Redirect astrologers to their dashboard by default
+        const finalRedirect = userType === 'astrologer' && redirect === '/'
+          ? '/astrologer/dashboard'
+          : redirect;
+
+        router.replace(finalRedirect);
+      } else {
+        setError(response.message || 'Invalid OTP. Please try again.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Verification failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    try {
+      const response = await authService.sendOtp({ phone });
+      if (response.success) {
+        setResendTimer(30);
+        addToast({ type: 'success', title: 'OTP Sent', message: 'A new OTP has been sent to your phone' });
+      } else {
+        addToast({ type: 'error', title: 'Error', message: response.message || 'Failed to resend OTP' });
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Error', message: 'Failed to resend OTP. Please try again.' });
+    }
   };
 
   const formattedPhone = phone
-    ? `+91 ${phone.slice(0, 5)} ${phone.slice(5)}`
-    : '+91 98765 43210';
+    ? `+91 ${authService.formatPhone(phone)}`
+    : '';
 
   return (
     <motion.div
@@ -95,6 +130,7 @@ function VerifyOTPContent() {
               src="/images/logo.png"
               alt="NakshatraTalks"
               fill
+              sizes="48px"
               className="object-contain"
             />
           </div>
@@ -134,9 +170,9 @@ function VerifyOTPContent() {
           disabled={isLoading}
         />
 
-        <p className="text-xs text-text-muted text-center font-lexend">
-          Leave empty and click button for demo mode
-        </p>
+        {error && (
+          <p className="text-xs text-status-error text-center font-lexend">{error}</p>
+        )}
 
         {/* Resend OTP */}
         <div className="text-center">
@@ -147,7 +183,7 @@ function VerifyOTPContent() {
           ) : (
             <button
               type="button"
-              onClick={() => setResendTimer(30)}
+              onClick={handleResendOtp}
               className="text-sm text-primary font-semibold font-lexend hover:underline transition-colors"
             >
               Resend OTP
@@ -160,8 +196,9 @@ function VerifyOTPContent() {
           fullWidth
           size="lg"
           isLoading={isLoading}
+          disabled={otp.length < 6}
         >
-          {otp.length === 0 ? 'Skip & Continue (Demo)' : 'Verify & Continue'}
+          Verify & Continue
         </Button>
 
         {/* Change number */}

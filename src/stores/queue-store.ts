@@ -119,8 +119,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   setSelectedAstrologer: (astrologer) => set({ selectedAstrologer: astrologer }),
 
   createRequest: (astrologer, type) => {
-    // Create a new connection request
-    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Prepare local state for the request — real requestId comes from API response
+    const requestId = `pending-${Date.now()}`;
     // Handle multiple property name conventions
     const pricePerMinute = type === 'chat'
       ? (astrologer.chatPrice ?? astrologer.chatPricePerMinute ?? astrologer.pricePerMinute ?? 0)
@@ -143,14 +143,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       },
     });
 
-    // Simulate connection flow (in real app, this would be API calls)
-    // For now, just change status after a delay
-    setTimeout(() => {
-      const state = get();
-      if (state.requestStatus === 'connecting') {
-        set({ requestStatus: 'waiting' });
-      }
-    }, 2000);
+    // Status transitions (connecting → waiting → connected) are handled
+    // by polling hooks (useCallRequestStatus, useChatRequestStatus)
   },
 
   setRequestStatus: (status) => set({ requestStatus: status }),

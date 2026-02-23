@@ -71,6 +71,7 @@ export const API_ENDPOINTS = {
       CHAT_QUEUE_CONNECT: (queueId: string) => `/api/v1/astrologer/chat/queue/${queueId}/connect`,
       CHAT_QUEUE_CANCEL: (queueId: string) => `/api/v1/astrologer/chat/queue/${queueId}/cancel`,
       WAITLIST: '/api/v1/astrologer/waitlist',
+      DASHBOARD: '/api/v1/astrologer/dashboard',
     },
   },
 
@@ -205,6 +206,14 @@ export const API_ENDPOINTS = {
     GET_REPORT: (kundliId: string) => `/api/v1/kundli/${kundliId}/report`,
     UPDATE: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
     DELETE: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
+  },
+
+  // Astrologer Earnings
+  EARNINGS: {
+    SUMMARY: '/api/v1/astrologer/earnings/summary',
+    HISTORY: '/api/v1/astrologer/earnings/history',
+    DETAILS: (id: string) => `/api/v1/astrologer/earnings/details/${id}`,
+    WITHDRAW_REQUEST: '/api/v1/astrologer/earnings/withdraw',
   },
 
   // Kundli Matching

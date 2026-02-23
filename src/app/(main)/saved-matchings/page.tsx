@@ -33,57 +33,9 @@ import { Button, Card, Skeleton, Modal } from '@/components/ui';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { kundliService } from '@/lib/services/kundli.service';
-import { shouldUseMockData } from '@/lib/mock';
-import { MatchingReport } from '@/types/api.types';
+import { SavedMatching } from '@/types/api.types';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
-
-// Extended matching type with additional fields
-interface SavedMatching extends MatchingReport {
-  boy: { name: string; dateOfBirth: string };
-  girl: { name: string; dateOfBirth: string };
-  score: number;
-}
-
-// Mock Matching data for development
-const MOCK_MATCHINGS: SavedMatching[] = [
-  {
-    id: 'matching-1',
-    totalPoints: 28,
-    maxPoints: 36,
-    percentage: 78,
-    categories: {},
-    recommendation: 'Good match with minor adjustments needed.',
-    createdAt: '2024-01-15T10:00:00.000Z',
-    boy: { name: 'Rahul Kumar', dateOfBirth: '1990-05-15' },
-    girl: { name: 'Priya Sharma', dateOfBirth: '1992-08-22' },
-    score: 28,
-  },
-  {
-    id: 'matching-2',
-    totalPoints: 32,
-    maxPoints: 36,
-    percentage: 89,
-    categories: {},
-    recommendation: 'Excellent match! Highly compatible.',
-    createdAt: '2024-01-10T08:30:00.000Z',
-    boy: { name: 'Amit Singh', dateOfBirth: '1988-12-03' },
-    girl: { name: 'Neha Patel', dateOfBirth: '1991-04-18' },
-    score: 32,
-  },
-  {
-    id: 'matching-3',
-    totalPoints: 18,
-    maxPoints: 36,
-    percentage: 50,
-    categories: {},
-    recommendation: 'Average match. Remedies suggested.',
-    createdAt: '2024-01-05T15:20:00.000Z',
-    boy: { name: 'Vikram Reddy', dateOfBirth: '1993-07-25' },
-    girl: { name: 'Kavya Menon', dateOfBirth: '1995-11-12' },
-    score: 18,
-  },
-];
 
 // Get initials from name
 const getInitials = (name: string): string => {
@@ -349,12 +301,7 @@ export default function KundliMatchingDashboardPage() {
   const { data: matchingsData, isLoading: isMatchingsLoading } = useQuery({
     queryKey: ['matchings'],
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return { success: true, data: MOCK_MATCHINGS };
-      }
-      const response = await kundliService.getMatchingList();
-      return response;
+      return kundliService.getMatchingList();
     },
     enabled: isReady,
   });
@@ -362,10 +309,6 @@ export default function KundliMatchingDashboardPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (matchingId: string) => {
-      if (shouldUseMockData()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return { success: true };
-      }
       return kundliService.deleteMatching(matchingId);
     },
     onSuccess: () => {

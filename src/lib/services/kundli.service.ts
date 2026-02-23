@@ -1,5 +1,7 @@
 /**
- * Kundli Service - Kundli Generation & Matching API calls
+ * Kundli Service - Real Backend Integration
+ *
+ * Handles kundli generation, matching, and reports via ProKerala API (backend).
  */
 
 import { apiClient } from '@/lib/api/client';
@@ -10,93 +12,72 @@ import {
   KundliInput,
   KundliReport,
   MatchingInput,
+  SavedMatching,
   MatchingReport,
 } from '@/types/api.types';
 
+export interface KundliReportParams {
+  language?: 'en' | 'ta';
+  chartStyle?: 'south_indian' | 'north_indian';
+  refresh?: boolean;
+}
+
 class KundliService {
-  /**
-   * Generate a new kundli
-   */
+  // ─── Kundli (Birth Chart) ────────────────────────────────────────
   async generateKundli(data: KundliInput): Promise<ApiResponse<Kundli>> {
-    return apiClient.post<ApiResponse<Kundli>>(API_ENDPOINTS.KUNDLI.GENERATE, data);
+    return apiClient.post(API_ENDPOINTS.KUNDLI.GENERATE, data);
   }
 
-  /**
-   * Get user's kundli list
-   */
   async getKundliList(): Promise<ApiResponse<Kundli[]>> {
-    return apiClient.get<ApiResponse<Kundli[]>>(API_ENDPOINTS.KUNDLI.LIST);
+    return apiClient.get(API_ENDPOINTS.KUNDLI.LIST);
   }
 
-  /**
-   * Get kundli by ID
-   */
   async getKundliById(kundliId: string): Promise<ApiResponse<Kundli>> {
-    return apiClient.get<ApiResponse<Kundli>>(API_ENDPOINTS.KUNDLI.GET_BY_ID(kundliId));
+    return apiClient.get(API_ENDPOINTS.KUNDLI.GET_BY_ID(kundliId));
   }
 
-  /**
-   * Get kundli report
-   */
-  async getKundliReport(kundliId: string): Promise<ApiResponse<KundliReport>> {
-    return apiClient.get<ApiResponse<KundliReport>>(API_ENDPOINTS.KUNDLI.GET_REPORT(kundliId));
+  async getKundliReport(
+    kundliId: string,
+    params: KundliReportParams = {}
+  ): Promise<ApiResponse<KundliReport>> {
+    const queryParams: Record<string, string> = {};
+    if (params.language) queryParams.language = params.language;
+    if (params.chartStyle) {
+      // Convert from 'south_indian' to 'south-indian' format for API
+      queryParams.chartStyle = params.chartStyle.replace('_', '-');
+    }
+    if (params.refresh) queryParams.refresh = 'true';
+
+    return apiClient.getWithParams(API_ENDPOINTS.KUNDLI.GET_REPORT(kundliId), queryParams);
   }
 
-  /**
-   * Update kundli
-   */
   async updateKundli(kundliId: string, data: Partial<KundliInput>): Promise<ApiResponse<Kundli>> {
-    return apiClient.put<ApiResponse<Kundli>>(API_ENDPOINTS.KUNDLI.UPDATE(kundliId), data);
+    return apiClient.put(API_ENDPOINTS.KUNDLI.UPDATE(kundliId), data);
   }
 
-  /**
-   * Delete kundli
-   */
   async deleteKundli(kundliId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.delete<ApiResponse<{ success: boolean }>>(
-      API_ENDPOINTS.KUNDLI.DELETE(kundliId)
-    );
+    return apiClient.delete(API_ENDPOINTS.KUNDLI.DELETE(kundliId));
   }
 
-  /**
-   * Generate matching report
-   */
-  async generateMatching(data: MatchingInput): Promise<ApiResponse<MatchingReport>> {
-    return apiClient.post<ApiResponse<MatchingReport>>(API_ENDPOINTS.MATCHING.GENERATE, data);
+  // ─── Matching (Compatibility) ────────────────────────────────────
+  async generateMatching(data: MatchingInput): Promise<ApiResponse<SavedMatching>> {
+    return apiClient.post(API_ENDPOINTS.MATCHING.GENERATE, data);
   }
 
-  /**
-   * Get user's matching reports list
-   */
-  async getMatchingList(): Promise<ApiResponse<MatchingReport[]>> {
-    return apiClient.get<ApiResponse<MatchingReport[]>>(API_ENDPOINTS.MATCHING.LIST);
+  async getMatchingList(): Promise<ApiResponse<SavedMatching[]>> {
+    return apiClient.get(API_ENDPOINTS.MATCHING.LIST);
   }
 
-  /**
-   * Get matching report by ID
-   */
-  async getMatchingById(matchingId: string): Promise<ApiResponse<MatchingReport>> {
-    return apiClient.get<ApiResponse<MatchingReport>>(
-      API_ENDPOINTS.MATCHING.GET_BY_ID(matchingId)
-    );
+  async getMatchingById(matchingId: string): Promise<ApiResponse<SavedMatching>> {
+    return apiClient.get(API_ENDPOINTS.MATCHING.GET_BY_ID(matchingId));
   }
 
-  /**
-   * Get detailed matching report
-   */
   async getMatchingReport(matchingId: string): Promise<ApiResponse<MatchingReport>> {
-    return apiClient.get<ApiResponse<MatchingReport>>(
-      API_ENDPOINTS.MATCHING.GET_REPORT(matchingId)
-    );
+    return apiClient.get(API_ENDPOINTS.MATCHING.GET_REPORT(matchingId));
   }
 
-  /**
-   * Delete matching report
-   */
   async deleteMatching(matchingId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.delete<ApiResponse<{ success: boolean }>>(
-      API_ENDPOINTS.MATCHING.DELETE(matchingId)
-    );
+    return apiClient.delete(API_ENDPOINTS.MATCHING.DELETE(matchingId));
   }
 }
 

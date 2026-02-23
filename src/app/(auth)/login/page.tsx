@@ -5,21 +5,24 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Phone, ArrowRight, Star } from 'lucide-react';
+import { Phone, ArrowRight } from 'lucide-react';
 import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
+import { authService } from '@/lib/services/auth.service';
+import { useUIStore } from '@/stores/ui-store';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
+  const { addToast } = useUIStore();
 
-  // Get auth state directly
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isHydrated = useAuthStore((state) => state.isHydrated);
 
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // Redirect if already authenticated (after hydration)
   useEffect(() => {
@@ -29,25 +32,42 @@ function LoginContent() {
   }, [isHydrated, isAuthenticated, router, redirect]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow digits
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPhone(value);
+    setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
 
-    // Simulate brief loading
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // Validate phone number
-    const phoneToUse = phone || (process.env.NODE_ENV === 'development' ? '9876543210' : '');
-    if (!phoneToUse || phoneToUse.length < 10) {
-      setIsLoading(false);
+    if (!phone || phone.length < 10) {
+      setError('Please enter a valid 10-digit phone number');
       return;
     }
-    router.push(`/verify-otp?phone=${phoneToUse}&redirect=${encodeURIComponent(redirect)}`);
+
+    if (!authService.validatePhone(phone)) {
+      setError('Please enter a valid Indian phone number');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await authService.sendOtp({ phone });
+
+      if (response.success) {
+        router.push(`/verify-otp?phone=${phone}&redirect=${encodeURIComponent(redirect)}`);
+      } else {
+        setError(response.message || 'Failed to send OTP. Please try again.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      setError(message);
+      addToast({ type: 'error', title: 'Error', message });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -64,6 +84,7 @@ function LoginContent() {
               src="/images/logo.png"
               alt="NakshatraTalks"
               fill
+              sizes="48px"
               className="object-contain"
             />
           </div>
@@ -95,7 +116,7 @@ function LoginContent() {
               type="tel"
               value={phone}
               onChange={handlePhoneChange}
-              placeholder="Enter number (optional)"
+              placeholder="Enter your phone number"
               leftIcon={<Phone className="h-5 w-5" />}
               disabled={isLoading}
               className="flex-1"
@@ -103,9 +124,9 @@ function LoginContent() {
               inputMode="numeric"
             />
           </div>
-          <p className="text-xs text-text-muted mt-1 font-lexend">
-            Leave empty for demo mode
-          </p>
+          {error && (
+            <p className="text-xs text-status-error mt-1.5 font-lexend">{error}</p>
+          )}
         </div>
 
         <Button
@@ -113,6 +134,7 @@ function LoginContent() {
           fullWidth
           size="lg"
           isLoading={isLoading}
+          disabled={phone.length < 10}
           rightIcon={<ArrowRight className="h-5 w-5" />}
         >
           Continue
@@ -128,17 +150,6 @@ function LoginContent() {
             Privacy Policy
           </Link>
         </p>
-
-        {/* Astrologer Login */}
-        <div className="text-center pt-4 border-t border-gray-100">
-          <Link
-            href="/verify-otp?phone=9876543210&role=astrologer&redirect=/astrologer/dashboard"
-            className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-primary font-lexend transition-colors"
-          >
-            <Star className="h-4 w-4" />
-            Login as Astrologer (Demo)
-          </Link>
-        </div>
       </form>
 
       {/* Additional info for mobile */}

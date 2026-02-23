@@ -30,11 +30,11 @@ export function useZodiacSigns() {
 /**
  * Hook for fetching daily horoscope for a specific sign
  */
-export function useDailyHoroscope(sign: string) {
+export function useDailyHoroscope(sign: string, day?: string) {
   return useQuery({
-    queryKey: HOROSCOPE_QUERY_KEYS.daily(sign),
+    queryKey: [...HOROSCOPE_QUERY_KEYS.daily(sign), day || 'today'],
     queryFn: async () => {
-      const response = await horoscopeService.getDailyHoroscope(sign);
+      const response = await horoscopeService.getDailyHoroscope(sign, day);
       return response.data;
     },
     enabled: !!sign,

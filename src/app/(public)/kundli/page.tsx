@@ -7,7 +7,7 @@
  * - Form submits via the API and navigates to the result page.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
@@ -20,7 +20,8 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { useGenerateKundli, useKundliList, useMatchingList } from '@/hooks/useKundli';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { Kundli, MatchingReport } from '@/types/api.types';
+import { placesService, Place } from '@/lib/services/places.service';
+import { Kundli, SavedMatching } from '@/types/api.types';
 import {
   FileText,
   User,
@@ -103,12 +104,15 @@ export default function KundliPage() {
 
     const kundliInput = {
       name: formData.name,
+      gender: formData.gender as 'male' | 'female' | 'other',
       dateOfBirth: formData.dateOfBirth,
       timeOfBirth: formData.timeOfBirth,
-      placeOfBirth: formData.birthPlace.name,
-      latitude: formData.birthPlace.latitude,
-      longitude: formData.birthPlace.longitude,
-      timezone: formData.birthPlace.timezone,
+      birthPlace: {
+        name: formData.birthPlace.name,
+        latitude: formData.birthPlace.latitude,
+        longitude: formData.birthPlace.longitude,
+        timezone: formData.birthPlace.timezone,
+      },
     };
 
     generateKundli(kundliInput, {
@@ -141,13 +145,70 @@ export default function KundliPage() {
     });
   };
 
+  // Place search state
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [placeResults, setPlaceResults] = useState<Place[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [showPlaceDropdown, setShowPlaceDropdown] = useState(false);
+  const placeSearchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const placeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debounced place search
+  const searchPlaces = useCallback((query: string) => {
+    if (placeSearchTimeout.current) clearTimeout(placeSearchTimeout.current);
+    if (query.trim().length < 2) {
+      setPlaceResults([]);
+      setShowPlaceDropdown(false);
+      return;
+    }
+    placeSearchTimeout.current = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      try {
+        const response = await placesService.searchPlaces(query);
+        const places = response.data || [];
+        setPlaceResults(places);
+        setShowPlaceDropdown(places.length > 0);
+      } catch {
+        setPlaceResults([]);
+      } finally {
+        setIsSearchingPlaces(false);
+      }
+    }, 300);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (placeDropdownRef.current && !placeDropdownRef.current.contains(e.target as Node)) {
+        setShowPlaceDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectPlace = (place: Place) => {
+    setFormData({
+      ...formData,
+      birthPlace: {
+        name: place.fullName || place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        timezone: place.timezone,
+      },
+    });
+    setPlaceQuery(place.fullName || place.name);
+    setShowPlaceDropdown(false);
+  };
+
   const isFormValid = () => {
     return (
       formData.name.trim().length >= 2 &&
       formData.gender !== '' &&
       formData.dateOfBirth !== '' &&
       formData.timeOfBirth !== '' &&
-      formData.birthPlace.name !== ''
+      formData.birthPlace.name !== '' &&
+      formData.birthPlace.latitude !== 0
     );
   };
 
@@ -161,10 +222,11 @@ export default function KundliPage() {
         timezone: city.timezone,
       },
     });
+    setPlaceQuery(city.name);
   };
 
   const previousReports: Kundli[] = kundliList || [];
-  const previousMatchings: (MatchingReport & { boy?: { name: string }; girl?: { name: string } })[] = matchingList || [];
+  const previousMatchings: SavedMatching[] = matchingList || [];
 
   // Landing page
   if (!showForm) {
@@ -269,7 +331,7 @@ export default function KundliPage() {
                                 {kundli.name}
                               </p>
                               <p className="text-xs text-text-secondary truncate font-nunito">
-                                {formatDate(kundli.dateOfBirth, kundli.timeOfBirth)} &middot; {kundli.placeOfBirth}
+                                {formatDate(kundli.dateOfBirth, kundli.timeOfBirth)} &middot; {kundli.birthPlace?.name || kundli.placeOfBirth || ''}
                               </p>
                             </div>
                             <ChevronRight className="w-5 h-5 text-text-muted flex-shrink-0 group-hover:text-primary transition-colors" />
@@ -326,12 +388,15 @@ export default function KundliPage() {
               ) : (
                 <div className="space-y-3">
                   {previousMatchings.slice(0, 5).map((matching, index) => {
+                    const s = matching.score || 0;
+                    const m = matching.maxScore || 36;
+                    const pct = Math.round((s / m) * 100);
                     const scoreColor =
-                      matching.totalPoints >= 25
+                      s >= 25
                         ? 'text-green-600 bg-green-50'
-                        : matching.totalPoints >= 18
+                        : s >= 18
                           ? 'text-blue-600 bg-blue-50'
-                          : matching.totalPoints >= 12
+                          : s >= 12
                             ? 'text-yellow-600 bg-yellow-50'
                             : 'text-red-600 bg-red-50';
 
@@ -353,11 +418,11 @@ export default function KundliPage() {
                                   {matching.boy?.name || 'Boy'} & {matching.girl?.name || 'Girl'}
                                 </p>
                                 <p className="text-xs text-text-secondary font-nunito">
-                                  {matching.totalPoints}/{matching.maxPoints} points &middot; {matching.percentage}% compatible
+                                  {s}/{m} points &middot; {pct}% compatible
                                 </p>
                               </div>
                               <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${scoreColor}`}>
-                                {matching.totalPoints}/{matching.maxPoints}
+                                {s}/{m}
                               </span>
                             </div>
                           </Card>
@@ -550,22 +615,60 @@ export default function KundliPage() {
               </div>
             </div>
 
-            {/* Search Input */}
-            <div className="mb-4">
+            {/* Search Input with Autocomplete */}
+            <div className="mb-4 relative" ref={placeDropdownRef}>
               <label className="block text-sm font-medium text-text-secondary mb-2">
                 City/Town <span className="text-red-500">*</span>
               </label>
-              <Input
-                type="text"
-                placeholder="Search for your birth city..."
-                value={formData.birthPlace.name}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    birthPlace: { ...formData.birthPlace, name: e.target.value },
-                  })
-                }
-              />
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search for your birth city..."
+                  value={placeQuery}
+                  onChange={(e) => {
+                    setPlaceQuery(e.target.value);
+                    searchPlaces(e.target.value);
+                    // Clear lat/lng when user types manually
+                    if (formData.birthPlace.latitude !== 0) {
+                      setFormData({
+                        ...formData,
+                        birthPlace: { name: e.target.value, latitude: 0, longitude: 0, timezone: 'Asia/Kolkata' },
+                      });
+                    }
+                  }}
+                  onFocus={() => { if (placeResults.length > 0) setShowPlaceDropdown(true); }}
+                />
+                {isSearchingPlaces && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />
+                )}
+              </div>
+              {formData.birthPlace.latitude !== 0 && (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  {formData.birthPlace.name} ({formData.birthPlace.latitude.toFixed(2)}°, {formData.birthPlace.longitude.toFixed(2)}°)
+                </p>
+              )}
+              {/* Autocomplete dropdown */}
+              {showPlaceDropdown && placeResults.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-web-md max-h-48 overflow-y-auto">
+                  {placeResults.map((place, idx) => (
+                    <button
+                      key={`${place.name}-${idx}`}
+                      type="button"
+                      onClick={() => selectPlace(place)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-primary/5 transition-colors flex items-center gap-2 border-b border-gray-50 last:border-0"
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-text-primary font-nunito truncate">{place.fullName || place.name}</p>
+                        {place.state && (
+                          <p className="text-xs text-text-muted">{place.state}{place.country ? `, ${place.country}` : ''}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Popular Cities */}
@@ -628,6 +731,32 @@ export default function KundliPage() {
             Your data is secure and will only be used for generating your Kundli report
           </p>
         </motion.form>
+
+        {/* Full-screen loading overlay while generating */}
+        {isPending && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
+          >
+            <div className="flex flex-col items-center">
+              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+              </div>
+              <h3 className="text-xl font-semibold text-text-primary font-lexend mb-2">
+                Generating Your Kundli
+              </h3>
+              <p className="text-sm text-text-secondary font-lexend text-center max-w-xs">
+                Calculating planetary positions and preparing your birth chart report...
+              </p>
+              <div className="flex items-center gap-2 mt-4">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </motion.div>
+        )}
       </PageContainer>
     </div>
   );

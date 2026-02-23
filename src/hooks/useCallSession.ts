@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { callService, InitiateCallParams } from '@/lib/services/call.service';
+import { callService } from '@/lib/services/call.service';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Query keys
@@ -49,7 +49,7 @@ export function useTwilioToken(sessionId: string) {
  */
 export function useInitiateCall() {
   return useMutation({
-    mutationFn: (params: InitiateCallParams) => callService.initiateCall(params),
+    mutationFn: (astrologerId: string) => callService.initiateCall(astrologerId),
   });
 }
 

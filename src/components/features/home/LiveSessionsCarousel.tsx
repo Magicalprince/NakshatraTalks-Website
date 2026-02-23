@@ -120,6 +120,7 @@ function SessionCard({
           }
           alt={session.astrologerName}
           fill
+          sizes="(max-width: 768px) 160px, 20vw"
           className="object-cover group-hover:scale-105 transition-transform duration-300"
         />
 

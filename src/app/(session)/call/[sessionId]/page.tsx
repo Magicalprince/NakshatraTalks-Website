@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CallInterface } from '@/components/features/call';
 import {
   useCallSession,
+  useTwilioToken,
   useEndCallSession,
   useCallTimer,
 } from '@/hooks/useCallSession';
@@ -27,7 +28,7 @@ export default function CallSessionPage() {
 
   // Local state
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -38,6 +39,10 @@ export default function CallSessionPage() {
     totalCost: number;
   } | null>(null);
 
+  // Twilio room reference
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomRef = useRef<any>(null);
+
   // Fetch session data
   const {
     data: sessionData,
@@ -46,14 +51,15 @@ export default function CallSessionPage() {
     refetch: refetchSession,
   } = useCallSession(sessionId);
 
+  // Fetch Twilio token
+  const { data: twilioTokenData } = useTwilioToken(sessionId);
+
   // End session mutation
   const { mutate: endSession } = useEndCallSession(sessionId);
 
   // Extract session info
   const session = sessionData?.session;
   const astrologer = sessionData?.astrologer;
-  // Note: twilioData would be used in production for Twilio Video SDK integration
-  // const twilioData = sessionData?.twilio;
   const callType = (session?.sessionType === 'video' ? 'video' : 'audio') as 'audio' | 'video';
 
   // Call timer
@@ -62,83 +68,184 @@ export default function CallSessionPage() {
     session?.pricePerMinute
   );
 
-  // Initialize media streams
-  const initializeMedia = useCallback(async () => {
-    try {
-      const constraints = {
-        audio: true,
-        video: callType === 'video',
-      };
+  // Attach remote participant tracks to a MediaStream
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const attachParticipantTracks = useCallback((participant: any) => {
+    const stream = new MediaStream();
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      setLocalStream(stream);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const addTrack = (track: any) => {
+      if (track.kind === 'audio' || track.kind === 'video') {
+        stream.addTrack(track.mediaStreamTrack);
+        setRemoteStream(new MediaStream(stream.getTracks()));
+      }
+    };
 
-      // In a real implementation, this would connect to Twilio
-      // For now, we'll simulate the connection
-      setCallStatus('ringing');
+    // Attach existing tracks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    participant.tracks.forEach((publication: any) => {
+      if (publication.isSubscribed && publication.track) {
+        addTrack(publication.track);
+      }
+    });
 
-      // Simulate connection after 2 seconds
-      setTimeout(() => {
-        setCallStatus('connected');
-      }, 2000);
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') console.error('Failed to get media devices:', error);
-      const isDenied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError');
-      addToast({
-        type: 'error',
-        title: isDenied ? 'Permission Denied' : 'Media Error',
-        message: isDenied
-          ? 'Camera/microphone access was denied. Please allow access in your browser settings and reload the page.'
-          : 'Failed to access camera/microphone. Please check that your device is connected and try again.',
-      });
-    }
-  }, [callType, addToast]);
+    // Listen for new tracks
+    participant.on('trackSubscribed', addTrack);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    participant.on('trackUnsubscribed', (track: any) => {
+      if (track.mediaStreamTrack) {
+        stream.removeTrack(track.mediaStreamTrack);
+        setRemoteStream(new MediaStream(stream.getTracks()));
+      }
+    });
+  }, []);
 
-  // Initialize on mount
+  // Connect to Twilio room
   useEffect(() => {
-    if (sessionData && !localStream) {
-      initializeMedia();
+    if (!twilioTokenData?.token || !twilioTokenData?.roomName || roomRef.current) return;
+
+    // Capture as non-null for closure
+    const twilioToken: string = twilioTokenData.token;
+    const twilioRoomName: string = twilioTokenData.roomName;
+    let cancelled = false;
+
+    async function connectToRoom() {
+      try {
+        // Dynamically import twilio-video (browser-only)
+        const Video = await import('twilio-video');
+
+        setCallStatus('ringing');
+
+        const localTracks = await Video.createLocalTracks({
+          audio: true,
+          video: callType === 'video',
+        });
+
+        // Set local stream from local tracks
+        const localMediaStream = new MediaStream();
+        localTracks.forEach((track) => {
+          if ('mediaStreamTrack' in track) {
+            localMediaStream.addTrack(track.mediaStreamTrack);
+          }
+        });
+        if (!cancelled) {
+          setLocalStream(localMediaStream);
+        }
+
+        // Connect to the Twilio room
+        const room = await Video.connect(twilioToken, {
+          name: twilioRoomName,
+          tracks: localTracks,
+        });
+
+        if (cancelled) {
+          room.disconnect();
+          return;
+        }
+
+        roomRef.current = room;
+        setCallStatus('connected');
+
+        // Handle existing participants
+        room.participants.forEach(attachParticipantTracks);
+
+        // Handle new participants joining
+        room.on('participantConnected', attachParticipantTracks);
+
+        // Handle participants leaving
+        room.on('participantDisconnected', () => {
+          setRemoteStream(null);
+        });
+
+        // Handle room disconnection
+        room.on('disconnected', () => {
+          setCallStatus('ended');
+          localTracks.forEach((track) => {
+            if ('stop' in track) track.stop();
+          });
+        });
+      } catch (error) {
+        if (cancelled) return;
+        if (process.env.NODE_ENV === 'development') console.error('Twilio connect error:', error);
+
+        const isDenied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError');
+        addToast({
+          type: 'error',
+          title: isDenied ? 'Permission Denied' : 'Connection Error',
+          message: isDenied
+            ? 'Camera/microphone access was denied. Please allow access in your browser settings and reload.'
+            : 'Failed to connect to call. Please try again.',
+        });
+      }
     }
-  }, [sessionData, localStream, initializeMedia]);
+
+    connectToRoom();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [twilioTokenData, callType, attachParticipantTracks, addToast]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Stop all tracks
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
       localStream?.getTracks().forEach(track => track.stop());
-      remoteStream?.getTracks().forEach(track => track.stop());
     };
-  }, [localStream, remoteStream]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsMuted(prev => !prev);
+    if (roomRef.current) {
+      roomRef.current.localParticipant.audioTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (publication: any) => {
+          if (isMuted) {
+            publication.track.enable();
+          } else {
+            publication.track.disable();
+          }
+        }
+      );
     }
-  }, [localStream]);
+    setIsMuted(prev => !prev);
+  }, [isMuted]);
 
   // Handle video toggle
   const handleToggleVideo = useCallback(() => {
-    if (localStream && callType === 'video') {
-      localStream.getVideoTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsVideoEnabled(prev => !prev);
+    if (roomRef.current && callType === 'video') {
+      roomRef.current.localParticipant.videoTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (publication: any) => {
+          if (isVideoEnabled) {
+            publication.track.disable();
+          } else {
+            publication.track.enable();
+          }
+        }
+      );
     }
-  }, [localStream, callType]);
+    setIsVideoEnabled(prev => !prev);
+  }, [isVideoEnabled, callType]);
 
   // Handle speaker toggle
   const handleToggleSpeaker = useCallback(() => {
-    // In a real implementation, this would switch audio output
     setIsSpeakerOn(prev => !prev);
   }, []);
 
   // Handle end call
   const handleEndCall = useCallback(() => {
     setCallStatus('ended');
+
+    // Disconnect from Twilio room
+    if (roomRef.current) {
+      roomRef.current.disconnect();
+      roomRef.current = null;
+    }
 
     // Stop local media
     localStream?.getTracks().forEach(track => track.stop());
@@ -164,30 +271,47 @@ export default function CallSessionPage() {
 
   // Handle flip camera
   const handleFlipCamera = useCallback(async () => {
-    if (!localStream || callType !== 'video') return;
+    if (!roomRef.current || callType !== 'video') return;
 
     try {
-      // Get current video track settings
-      const videoTrack = localStream.getVideoTracks()[0];
-      const settings = videoTrack.getSettings();
+      const Video = await import('twilio-video');
+
+      // Get current local video track
+      const localParticipant = roomRef.current.localParticipant;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let currentPublication: any = null;
+      localParticipant.videoTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (pub: any) => { currentPublication = pub; }
+      );
+
+      if (!currentPublication?.track) return;
+
+      const settings = currentPublication.track.mediaStreamTrack.getSettings();
       const currentFacingMode = settings.facingMode;
-
-      // Stop current track
-      videoTrack.stop();
-
-      // Get new stream with opposite facing mode
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacingMode },
-        audio: false,
+
+      // Stop and unpublish old track
+      currentPublication.track.stop();
+      localParticipant.unpublishTrack(currentPublication.track);
+
+      // Create new track with opposite facing mode
+      const newTrack = await Video.createLocalVideoTrack({
+        facingMode: newFacingMode,
       });
 
-      // Replace video track
-      const newVideoTrack = newStream.getVideoTracks()[0];
-      localStream.removeTrack(videoTrack);
-      localStream.addTrack(newVideoTrack);
+      // Publish new track
+      localParticipant.publishTrack(newTrack);
 
-      // In Twilio, you would also need to update the published track
+      // Update local stream
+      const newStream = new MediaStream([newTrack.mediaStreamTrack]);
+      localParticipant.audioTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (pub: any) => {
+          if (pub.track) newStream.addTrack(pub.track.mediaStreamTrack);
+        }
+      );
+      setLocalStream(newStream);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') console.error('Failed to flip camera:', error);
       addToast({
@@ -196,7 +320,7 @@ export default function CallSessionPage() {
         message: 'Failed to switch camera',
       });
     }
-  }, [localStream, callType, addToast]);
+  }, [callType, addToast]);
 
   // Handle start new call
   const handleStartNewCall = useCallback(() => {

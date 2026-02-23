@@ -133,6 +133,7 @@ export function CategoryIcons() {
                     alt={category.label}
                     width={28}
                     height={28}
+                    style={{ height: 'auto' }}
                     className="object-contain"
                   />
                 </div>

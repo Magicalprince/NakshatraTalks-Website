@@ -1,17 +1,23 @@
 /**
- * Chat Service - Chat Session API calls
+ * Chat Service - Real Backend Integration
+ *
+ * Handles chat session lifecycle: initiate, messages, end, history.
+ * Real-time messaging will be handled via Socket.io (see socket.service.ts).
  */
 
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
-import { ApiResponse, ChatSession, ChatMessage } from '@/types/api.types';
 import {
-  shouldUseMockData,
-  MOCK_CHAT_SESSIONS,
-  MOCK_CHAT_MESSAGES,
-  MOCK_ASTROLOGERS,
-  MOCK_USER,
-} from '@/lib/mock';
+  ApiResponse,
+  ChatSession,
+  ChatMessage,
+  BalanceValidationResponse,
+  CreateChatRequestResponse,
+  ChatRequestStatusResponse,
+  EndChatSessionResponse,
+  JoinQueueResponse,
+  QueueInfoResponse,
+} from '@/types/api.types';
 
 export interface SendMessageParams {
   sessionId: string;
@@ -26,272 +32,126 @@ export interface GetMessagesParams {
   before?: string;
 }
 
-export interface InitiateChatParams {
-  astrologerId: string;
-}
-
-export interface InitiateChatResponse {
-  requestId: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  expiresAt: string;
-  remainingSeconds: number;
-}
-
-export interface ChatSessionResponse {
-  session: ChatSession;
-  messages: ChatMessage[];
-  astrologer: {
-    id: string;
-    name: string;
-    image: string;
-    isOnline: boolean;
-  };
-  user?: {
-    id: string;
-    name: string;
-    image?: string;
-  };
-}
-
 class ChatService {
-  /**
-   * Initiate a chat session with an astrologer
-   */
-  async initiateChat(params: InitiateChatParams): Promise<ApiResponse<InitiateChatResponse>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: {
-          requestId: `chat-req-${Date.now()}`,
-          status: 'accepted',
-          expiresAt: new Date(Date.now() + 120000).toISOString(),
-          remainingSeconds: 120,
-        },
-      };
-    }
-
-    return apiClient.post<ApiResponse<InitiateChatResponse>>(
-      API_ENDPOINTS.CHAT.INITIATE,
-      params
-    );
+  // ─── Balance Validation ──────────────────────────────────────────
+  async validateBalance(astrologerId: string): Promise<ApiResponse<BalanceValidationResponse>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.VALIDATE_BALANCE, { astrologerId });
   }
 
-  /**
-   * Get chat session details
-   */
-  async getSession(sessionId: string): Promise<ApiResponse<ChatSessionResponse>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const session = MOCK_CHAT_SESSIONS.find(s => s.id === sessionId) || MOCK_CHAT_SESSIONS[0];
-      const astrologer = MOCK_ASTROLOGERS.find(a => a.id === session.astrologerId) || MOCK_ASTROLOGERS[0];
-
-      return {
-        success: true,
-        data: {
-          session,
-          messages: MOCK_CHAT_MESSAGES,
-          astrologer: {
-            id: astrologer.id,
-            name: astrologer.name,
-            image: astrologer.image,
-            isOnline: astrologer.isAvailable,
-          },
-          user: {
-            id: MOCK_USER.id,
-            name: MOCK_USER.name || 'User',
-            image: MOCK_USER.profileImage || undefined,
-          },
-        },
-      };
-    }
-
-    return apiClient.get<ApiResponse<ChatSessionResponse>>(
-      API_ENDPOINTS.CHAT.SESSION(sessionId)
-    );
+  // ─── Request Flow ────────────────────────────────────────────────
+  async createRequest(astrologerId: string): Promise<ApiResponse<CreateChatRequestResponse>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.REQUEST, { astrologerId });
   }
 
-  /**
-   * Get chat messages
-   */
+  async getRequestStatus(requestId: string): Promise<ApiResponse<ChatRequestStatusResponse>> {
+    return apiClient.get(API_ENDPOINTS.CHAT.REQUEST_STATUS(requestId));
+  }
+
+  async cancelRequest(requestId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.CANCEL_REQUEST(requestId));
+  }
+
+  async getPendingRequest(): Promise<ApiResponse<CreateChatRequestResponse | null>> {
+    return apiClient.get(API_ENDPOINTS.CHAT.PENDING_REQUEST);
+  }
+
+  // ─── Queue Flow ──────────────────────────────────────────────────
+  async joinQueue(astrologerId: string): Promise<ApiResponse<JoinQueueResponse>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.QUEUE_JOIN, { astrologerId });
+  }
+
+  async getQueueInfo(astrologerId: string): Promise<ApiResponse<QueueInfoResponse>> {
+    return apiClient.get(API_ENDPOINTS.CHAT.QUEUE_INFO(astrologerId));
+  }
+
+  async leaveQueue(queueId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.QUEUE_LEAVE(queueId));
+  }
+
+  // ─── Session Management ──────────────────────────────────────────
+  async getActiveSession(): Promise<ApiResponse<ChatSession | null>> {
+    return apiClient.get(API_ENDPOINTS.CHAT.ACTIVE_SESSION);
+  }
+
+  async getSession(sessionId: string): Promise<ApiResponse<{
+    session: ChatSession;
+    astrologer: { id: string; name: string; image: string; isOnline: boolean };
+    user?: { id: string; name: string; image?: string };
+  }>> {
+    return apiClient.get(API_ENDPOINTS.CHAT.SESSION(sessionId));
+  }
+
+  async connectSession(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.CONNECT_SESSION(sessionId));
+  }
+
+  async endSession(sessionId: string): Promise<ApiResponse<EndChatSessionResponse>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.END(sessionId));
+  }
+
+  async declineSession(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.DECLINE_SESSION(sessionId));
+  }
+
+  // ─── Messages ────────────────────────────────────────────────────
   async getMessages(params: GetMessagesParams): Promise<ApiResponse<{
     messages: ChatMessage[];
     hasMore: boolean;
     nextCursor?: string;
   }>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: {
-          messages: MOCK_CHAT_MESSAGES,
-          hasMore: false,
-        },
-      };
-    }
-
     const { sessionId, page = 1, limit = 50, before } = params;
-    return apiClient.get<ApiResponse<{
-      messages: ChatMessage[];
-      hasMore: boolean;
-      nextCursor?: string;
-    }>>(
-      API_ENDPOINTS.CHAT.MESSAGES(sessionId),
-      { params: { page, limit, before } }
-    );
+    return apiClient.get(API_ENDPOINTS.CHAT.MESSAGES(sessionId), {
+      params: { page, limit, before },
+    });
   }
 
-  /**
-   * Send a message
-   */
   async sendMessage(params: SendMessageParams): Promise<ApiResponse<ChatMessage>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const { sessionId, content, type = 'text' } = params;
-      const newMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        sessionId,
-        senderId: MOCK_USER.id,
-        senderType: 'user',
-        message: content,
-        content,
-        type,
-        isRead: false,
-        status: 'sent',
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        success: true,
-        data: newMessage,
-      };
-    }
-
     const { sessionId, content, type = 'text' } = params;
-    return apiClient.post<ApiResponse<ChatMessage>>(
-      API_ENDPOINTS.CHAT.SEND(sessionId),
-      { content, type }
-    );
+    return apiClient.post(API_ENDPOINTS.CHAT.SEND(sessionId), { content, type });
   }
 
-  /**
-   * Mark messages as read
-   */
   async markAsRead(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post<ApiResponse<{ success: boolean }>>(
-      API_ENDPOINTS.CHAT.MARK_READ(sessionId)
-    );
+    return apiClient.post(API_ENDPOINTS.CHAT.MARK_READ(sessionId));
   }
 
-  /**
-   * End chat session
-   */
-  async endSession(sessionId: string): Promise<ApiResponse<{
-    session: ChatSession;
-    summary: {
-      duration: number;
-      totalMessages: number;
-      totalCost: number;
-    };
-  }>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      const session = MOCK_CHAT_SESSIONS.find(s => s.id === sessionId) || MOCK_CHAT_SESSIONS[0];
-      return {
-        success: true,
-        data: {
-          session: {
-            ...session,
-            status: 'completed',
-            endTime: new Date().toISOString(),
-            duration: 15,
-            totalCost: 375,
-          },
-          summary: {
-            duration: 15,
-            totalMessages: MOCK_CHAT_MESSAGES.length,
-            totalCost: 375,
-          },
-        },
-      };
-    }
-
-    return apiClient.post<ApiResponse<{
-      session: ChatSession;
-      summary: {
-        duration: number;
-        totalMessages: number;
-        totalCost: number;
-      };
-    }>>(API_ENDPOINTS.CHAT.END(sessionId));
+  async sendTypingIndicator(sessionId: string, typing: boolean): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.TYPING(sessionId), { typing });
   }
 
-  /**
-   * Get user's chat history
-   */
-  async getChatHistory(
-    page: number = 1,
-    limit: number = 20
-  ): Promise<ApiResponse<{
+  // ─── Rating ──────────────────────────────────────────────────────
+  async rateSession(
+    sessionId: string,
+    rating: number,
+    review?: string
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.CHAT.RATING(sessionId), { rating, review });
+  }
+
+  // ─── History ─────────────────────────────────────────────────────
+  async getChatHistory(page = 1, limit = 20): Promise<ApiResponse<{
     sessions: ChatSession[];
     totalPages: number;
     page: number;
   }>> {
-    // Use mock data in development
-    if (shouldUseMockData()) {
-      return {
-        success: true,
-        data: {
-          sessions: MOCK_CHAT_SESSIONS,
-          totalPages: 1,
-          page,
-        },
-      };
-    }
-
-    return apiClient.get<ApiResponse<{
-      sessions: ChatSession[];
-      totalPages: number;
-      page: number;
-    }>>(API_ENDPOINTS.CHAT.HISTORY, { params: { page, limit } });
+    return apiClient.get(API_ENDPOINTS.CHAT.HISTORY, { params: { page, limit } });
   }
 
-  /**
-   * Send typing indicator
-   */
-  async sendTypingIndicator(sessionId: string, isTyping: boolean): Promise<void> {
-    // This would typically be handled via WebSocket/Supabase
-    // Keeping as a placeholder for REST fallback
-    await apiClient.post(API_ENDPOINTS.CHAT.TYPING(sessionId), { isTyping });
-  }
-
-  /**
-   * Upload image for chat
-   */
+  // ─── File Upload ─────────────────────────────────────────────────
   async uploadImage(sessionId: string, file: File): Promise<ApiResponse<{ url: string }>> {
     const formData = new FormData();
     formData.append('image', file);
-
-    return apiClient.post<ApiResponse<{ url: string }>>(
-      API_ENDPOINTS.CHAT.UPLOAD(sessionId),
-      formData
-    );
+    return apiClient.post(API_ENDPOINTS.CHAT.UPLOAD(sessionId), formData);
   }
 
-  /**
-   * Format duration for display
-   */
+  // ─── Formatting Helpers ──────────────────────────────────────────
   formatDuration(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
-  /**
-   * Format timestamp for message display
-   */
   formatMessageTime(timestamp: string): string {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-IN', {
+    return new Date(timestamp).toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
     });

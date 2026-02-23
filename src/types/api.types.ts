@@ -466,22 +466,54 @@ export interface AstrologerData {
   updatedAt: string;
 }
 
-// Astrologer Statistics
-export interface AstrologerStats {
+// Astrologer Stats Response (from GET /api/v1/astrologers/{id}/stats)
+export interface AstrologerStatsResponse {
+  totalSessions: number;
+  chatSessions: number;
+  callSessions: number;
+  videoSessions: number;
   totalEarnings: number;
-  todayEarnings: number;
-  weeklyEarnings: number;
-  monthlyEarnings: number;
-  totalConsultations: number;
-  todayConsultations: number;
-  weeklyConsultations: number;
-  monthlyConsultations: number;
-  totalChatSessions: number;
-  totalCallSessions: number;
-  averageRating: number;
+  totalDuration: number;
+  avgDuration: number;
+  avgSessionDuration: number;
+  rating: number;
   totalReviews: number;
-  averageSessionDuration: number;
+  ratingDistribution: Record<string, number>;
+  totalCalls: number;
 }
+
+// Recent session from dashboard
+export interface RecentSession {
+  sessionId: string;
+  sessionType: 'chat' | 'call' | 'video';
+  user: { id: string; name: string; image: string | null };
+  startTime: string;
+  endTime: string;
+  duration: number;
+  totalCost: number;
+  earnings: number;
+}
+
+// Astrologer Dashboard Response (from GET /api/v1/astrologer/dashboard)
+export interface AstrologerDashboardResponse {
+  incomingRequests: IncomingRequest[];
+  waitlist: WaitlistEntry[];
+  activeCall: ActiveSession | null;
+  activeChat: ActiveSession | null;
+  recentSessions: RecentSession[];
+  profile: {
+    isOnline: boolean;
+    totalEarningsToday: number;
+    totalSessionsToday: number;
+    totalMinutesToday: number;
+  };
+  notifications: {
+    unreadCount: number;
+  };
+}
+
+// Legacy alias for backward compatibility
+export type AstrologerStats = AstrologerStatsResponse;
 
 // Waitlist Item
 export interface WaitlistItem {
@@ -721,6 +753,49 @@ export enum ErrorCode {
   DATABASE_ERROR = 'DATABASE_ERROR',
 }
 
+// Astrologer Earnings
+export interface EarningsSummary {
+  totalEarnings: number;
+  thisMonthEarnings: number;
+  todayEarnings: number;
+  pendingEarnings: number;
+  totalWithdrawn: number;
+  availableBalance: number;
+  currency: string;
+  commissionRate: number;
+  stats: {
+    totalSessions: number;
+    thisMonthSessions: number;
+    todaySessions: number;
+    activeSessions: number;
+  };
+  last7Days: Array<{ date: string; earnings: number; sessions: number }>;
+}
+
+export interface EarningEntry {
+  id: string;
+  sessionId: string;
+  sessionType: 'chat' | 'call' | 'video';
+  user: { id: string; name: string; image?: string | null };
+  startTime: string;
+  endTime: string;
+  duration: number;
+  durationSeconds: number;
+  pricePerMinute: number;
+  totalCost: number;
+  earnings: number;
+  platformFee: number;
+  rating?: number;
+  createdAt: string;
+}
+
+export interface EarningsHistoryResponse {
+  earnings: EarningEntry[];
+  page: number;
+  totalPages: number;
+  totalItems: number;
+}
+
 // Horoscope Types
 export interface HoroscopeSign {
   id: string;
@@ -734,60 +809,137 @@ export interface HoroscopeSign {
 export interface DailyHoroscope {
   sign: string;
   date: string;
-  prediction: string;
-  luckyNumber?: number;
-  luckyColor?: string;
-  mood?: string;
+  day: string;
+  horoscope: {
+    general: string;
+    love?: string;
+    career?: string;
+    health?: string;
+  };
+  luckyNumber: number;
+  luckyColor: string;
+  compatibility: string;
+  // Legacy field for backward compat
+  prediction?: string;
 }
 
 // Kundli Types
-export interface KundliInput {
+export interface BirthPlaceInput {
   name: string;
-  dateOfBirth: string;
-  timeOfBirth: string;
-  placeOfBirth: string;
   latitude: number;
   longitude: number;
   timezone: string;
 }
 
+export interface KundliInput {
+  name: string;
+  gender: 'male' | 'female' | 'other';
+  dateOfBirth: string; // YYYY-MM-DD
+  timeOfBirth: string; // HH:mm
+  birthPlace: BirthPlaceInput;
+}
+
 export interface Kundli {
   id: string;
-  userId: string;
+  userId?: string;
   name: string;
+  gender?: 'male' | 'female' | 'other';
   dateOfBirth: string;
   timeOfBirth: string;
-  placeOfBirth: string;
+  placeOfBirth?: string;
+  birthPlace?: BirthPlaceInput;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface KundliReport {
   kundliId: string;
   basicInfo: Record<string, unknown>;
-  charts: Record<string, unknown>;
+  charts?: Record<string, unknown>;
   planets: Record<string, unknown>;
   doshas: Record<string, unknown>;
+  dasha?: Record<string, unknown>;
+  remedies?: Record<string, unknown>;
+  predictions?: Record<string, unknown>;
 }
 
 // Matching Types
-export interface MatchingInput {
-  boyKundliId?: string;
-  girlKundliId?: string;
-  boyDetails?: KundliInput;
-  girlDetails?: KundliInput;
+export interface MatchingPerson {
+  name: string;
+  gender?: 'male' | 'female' | 'other';
+  dateOfBirth: string; // YYYY-MM-DD
+  timeOfBirth: string; // HH:mm
+  birthPlace: BirthPlaceInput;
 }
 
-export interface MatchingReport {
+export interface MatchingInput {
+  boy: MatchingPerson;
+  girl: MatchingPerson;
+}
+
+// SavedMatching — returned by POST /matching/generate and GET /matching/:id
+export interface SavedMatching {
   id: string;
-  totalPoints: number;
-  maxPoints: number;
-  percentage: number;
-  categories: Record<string, unknown>;
-  recommendation: string;
+  boy: MatchingPerson;
+  girl: MatchingPerson;
+  score: number;
+  maxScore: number;
   createdAt: string;
+  updatedAt?: string;
+}
+
+// MatchingReport — returned by GET /matching/:id/report (full Ashtakoot analysis)
+export interface MatchingReport {
+  matchingId: string;
+  boy: {
+    name: string;
+    nakshatra?: string;
+    rasi?: string;
+    nakshatraLord?: string;
+  };
+  girl: {
+    name: string;
+    nakshatra?: string;
+    rasi?: string;
+    nakshatraLord?: string;
+  };
+  totalScore: number;
+  maxScore: number;
+  verdict?: {
+    rating: string;
+    description: string;
+    recommendation: string;
+  };
+  ashtakootGunas?: {
+    id: string;
+    name: string;
+    description: string;
+    maxPoints: number;
+    obtainedPoints: number;
+    boyAttribute: string;
+    girlAttribute: string;
+    verdict: string;
+  }[];
+  doshaAnalysis?: {
+    mangalDosha?: {
+      boyHasDosha: boolean;
+      girlHasDosha: boolean;
+      cancellation: string | null;
+      status: string;
+    };
+    nadiDosha?: {
+      present: boolean;
+      description: string;
+    };
+  };
+  summary?: string;
+  recommendations?: string[];
+  createdAt?: string;
 }
 
 // Live Session Types
+export type SessionCategory = 'love' | 'career' | 'health' | 'finance' | 'general';
+
 export interface LiveSession {
   id: string;
   astrologerId: string;
@@ -796,14 +948,21 @@ export interface LiveSession {
   thumbnailUrl?: string;
   title: string;
   description?: string;
-  status: 'scheduled' | 'live' | 'ended';
+  status: 'scheduled' | 'live' | 'ended' | 'cancelled';
+  category?: string;
+  tags?: string[];
   scheduledAt?: string;
   startedAt?: string;
   endedAt?: string;
   viewerCount: number;
   maxViewers?: number;
+  peakViewers?: number;
+  twilioRoomSid?: string;
   twilioRoomName?: string;
+  streamUrl?: string;
+  isFollowing?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface LiveSessionMessage {
@@ -812,6 +971,81 @@ export interface LiveSessionMessage {
   userId: string;
   userName: string;
   userImage?: string;
+  userAvatar?: string;
   message: string;
+  type?: 'text' | 'emoji' | 'system';
+  createdAt: string;
+}
+
+export interface LiveSessionViewer {
+  id: string;
+  sessionId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  joinedAt: string;
+  leftAt?: string | null;
+  isActive: boolean;
+}
+
+export interface CreateLiveSessionData {
+  title: string;
+  description?: string;
+  category?: SessionCategory;
+  tags?: string[];
+  scheduledStartTime?: string;
+}
+
+export interface JoinLiveSessionResponse {
+  session: LiveSession;
+  twilioToken?: string;
+  twilioRoomName?: string;
+  streamUrl?: string;
+  accessGranted: boolean;
+}
+
+export interface StartLiveSessionResponse {
+  id: string;
+  status: string;
+  startTime: string;
+  twilioRoomSid: string;
+  twilioRoomName: string;
+  twilioToken: string;
+  streamUrl?: string;
+}
+
+export interface EndLiveSessionResponse {
+  sessionId: string;
+  duration: number;
+  peakViewers: number;
+  totalUniqueViewers: number;
+  totalMessages: number;
+}
+
+export interface AstrologerScheduledSession {
+  id: string;
+  astrologerId: string;
+  title: string;
+  description?: string;
+  category?: SessionCategory;
+  scheduledStartTime?: string;
+  scheduledAt?: string;
+  status: 'scheduled' | 'live' | 'ended' | 'cancelled';
+  createdAt: string;
+}
+
+export interface AstrologerSessionHistory {
+  id: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  durationFormatted?: string;
+  peakViewers: number;
+  totalViewers: number;
+  totalUniqueViewers?: number;
+  totalMessages?: number;
   createdAt: string;
 }

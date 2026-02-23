@@ -5,7 +5,7 @@
  * Web-standard design with HeroSection, PageContainer, and Breadcrumbs
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/Card';
@@ -16,6 +16,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { useGenerateMatching } from '@/hooks/useKundli';
 import { useUIStore } from '@/stores/ui-store';
+import { placesService, Place } from '@/lib/services/places.service';
 import {
   Heart,
   User,
@@ -24,6 +25,7 @@ import {
   MapPin,
   ChevronRight,
   CheckCircle,
+  Check,
   Sparkles,
   Loader2,
 } from 'lucide-react';
@@ -80,45 +82,131 @@ export default function KundliMatchingPage() {
   const { addToast } = useUIStore();
   const generateMatching = useGenerateMatching();
 
+  // Place search state for boy and girl
+  const [boyPlaceQuery, setBoyPlaceQuery] = useState('');
+  const [girlPlaceQuery, setGirlPlaceQuery] = useState('');
+  const [boyPlaceResults, setBoyPlaceResults] = useState<Place[]>([]);
+  const [girlPlaceResults, setGirlPlaceResults] = useState<Place[]>([]);
+  const [isSearchingBoy, setIsSearchingBoy] = useState(false);
+  const [isSearchingGirl, setIsSearchingGirl] = useState(false);
+  const [showBoyDropdown, setShowBoyDropdown] = useState(false);
+  const [showGirlDropdown, setShowGirlDropdown] = useState(false);
+  const boySearchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const girlSearchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const boyDropdownRef = useRef<HTMLDivElement>(null);
+  const girlDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debounced place search
+  const searchPlacesFor = useCallback((person: 'boy' | 'girl', query: string) => {
+    const timeoutRef = person === 'boy' ? boySearchTimeout : girlSearchTimeout;
+    const setResults = person === 'boy' ? setBoyPlaceResults : setGirlPlaceResults;
+    const setSearching = person === 'boy' ? setIsSearchingBoy : setIsSearchingGirl;
+    const setDropdown = person === 'boy' ? setShowBoyDropdown : setShowGirlDropdown;
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (query.trim().length < 2) {
+      setResults([]);
+      setDropdown(false);
+      return;
+    }
+    timeoutRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const response = await placesService.searchPlaces(query);
+        const places = response.data || [];
+        setResults(places);
+        setDropdown(places.length > 0);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (boyDropdownRef.current && !boyDropdownRef.current.contains(e.target as Node)) {
+        setShowBoyDropdown(false);
+      }
+      if (girlDropdownRef.current && !girlDropdownRef.current.contains(e.target as Node)) {
+        setShowGirlDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectPlace = (person: 'boy' | 'girl', place: Place) => {
+    const setData = person === 'boy' ? setBoyData : setGirlData;
+    const data = person === 'boy' ? boyData : girlData;
+    const setQuery = person === 'boy' ? setBoyPlaceQuery : setGirlPlaceQuery;
+    const setDropdown = person === 'boy' ? setShowBoyDropdown : setShowGirlDropdown;
+
+    setData({
+      ...data,
+      birthPlace: {
+        name: place.fullName || place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        timezone: place.timezone,
+      },
+    });
+    setQuery(place.fullName || place.name);
+    setDropdown(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const matchingInput = {
-      boyDetails: {
+      boy: {
         name: boyData.name,
+        gender: 'male' as const,
         dateOfBirth: boyData.dateOfBirth,
         timeOfBirth: boyData.timeOfBirth,
-        placeOfBirth: boyData.birthPlace.name,
-        latitude: boyData.birthPlace.latitude,
-        longitude: boyData.birthPlace.longitude,
-        timezone: boyData.birthPlace.timezone,
+        birthPlace: {
+          name: boyData.birthPlace.name,
+          latitude: boyData.birthPlace.latitude,
+          longitude: boyData.birthPlace.longitude,
+          timezone: boyData.birthPlace.timezone,
+        },
       },
-      girlDetails: {
+      girl: {
         name: girlData.name,
+        gender: 'female' as const,
         dateOfBirth: girlData.dateOfBirth,
         timeOfBirth: girlData.timeOfBirth,
-        placeOfBirth: girlData.birthPlace.name,
-        latitude: girlData.birthPlace.latitude,
-        longitude: girlData.birthPlace.longitude,
-        timezone: girlData.birthPlace.timezone,
+        birthPlace: {
+          name: girlData.birthPlace.name,
+          latitude: girlData.birthPlace.latitude,
+          longitude: girlData.birthPlace.longitude,
+          timezone: girlData.birthPlace.timezone,
+        },
       },
     };
 
     generateMatching.mutate(matchingInput, {
       onSuccess: (response) => {
-        const matchingId = response?.data?.id || `match-${Date.now()}`;
-        router.push(`/kundli-matching/${matchingId}`);
+        const matchingId = response?.data?.id;
+        if (matchingId) {
+          router.push(`/kundli-matching/${matchingId}`);
+        } else {
+          addToast({
+            type: 'success',
+            title: 'Matching Generated',
+            message: 'Redirecting to your saved matchings...',
+          });
+          router.push('/saved-matchings');
+        }
       },
-      onError: () => {
-        // Fallback: generate a local ID and navigate to result page
-        // The result page has built-in fallback mock data
-        const fallbackId = `match-${Date.now()}`;
+      onError: (error) => {
         addToast({
-          type: 'info',
-          title: 'Demo Mode',
-          message: 'Showing sample matching results. Connect API for actual analysis.',
+          type: 'error',
+          title: 'Matching Failed',
+          message: error instanceof Error ? error.message : 'Failed to generate matching. Please try again.',
         });
-        router.push(`/kundli-matching/${fallbackId}`);
       },
     });
   };
@@ -128,7 +216,8 @@ export default function KundliMatchingPage() {
       data.name.trim().length >= 2 &&
       data.dateOfBirth !== '' &&
       data.timeOfBirth !== '' &&
-      data.birthPlace.name !== ''
+      data.birthPlace.name !== '' &&
+      data.birthPlace.latitude !== 0
     );
   };
 
@@ -139,6 +228,7 @@ export default function KundliMatchingPage() {
   const selectCity = (person: 'boy' | 'girl', city: typeof POPULAR_CITIES[0]) => {
     const setData = person === 'boy' ? setBoyData : setGirlData;
     const data = person === 'boy' ? boyData : girlData;
+    const setQuery = person === 'boy' ? setBoyPlaceQuery : setGirlPlaceQuery;
     setData({
       ...data,
       birthPlace: {
@@ -148,6 +238,7 @@ export default function KundliMatchingPage() {
         timezone: city.timezone,
       },
     });
+    setQuery(city.name);
   };
 
   // Landing page
@@ -323,23 +414,44 @@ export default function KundliMatchingPage() {
                   </div>
                 </div>
 
-                {/* Birth Place */}
-                <div>
+                {/* Birth Place with Autocomplete */}
+                <div className="relative" ref={boyDropdownRef}>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">
                     <MapPin className="w-3.5 h-3.5 inline mr-1" />
                     Birth Place <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    type="text"
-                    placeholder="Search city..."
-                    value={boyData.birthPlace.name}
-                    onChange={(e) =>
-                      setBoyData({
-                        ...boyData,
-                        birthPlace: { ...boyData.birthPlace, name: e.target.value },
-                      })
-                    }
-                  />
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="Search city..."
+                      value={boyPlaceQuery}
+                      onChange={(e) => {
+                        setBoyPlaceQuery(e.target.value);
+                        searchPlacesFor('boy', e.target.value);
+                        if (boyData.birthPlace.latitude !== 0) {
+                          setBoyData({ ...boyData, birthPlace: { name: e.target.value, latitude: 0, longitude: 0, timezone: 'Asia/Kolkata' } });
+                        }
+                      }}
+                      onFocus={() => { if (boyPlaceResults.length > 0) setShowBoyDropdown(true); }}
+                    />
+                    {isSearchingBoy && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />}
+                  </div>
+                  {boyData.birthPlace.latitude !== 0 && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> {boyData.birthPlace.name}
+                    </p>
+                  )}
+                  {showBoyDropdown && boyPlaceResults.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-web-md max-h-40 overflow-y-auto">
+                      {boyPlaceResults.map((place, idx) => (
+                        <button key={`${place.name}-${idx}`} type="button" onClick={() => selectPlace('boy', place)}
+                          className="w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors flex items-center gap-2 border-b border-gray-50 last:border-0">
+                          <MapPin className="w-3 h-3 text-text-muted flex-shrink-0" />
+                          <span className="text-sm text-text-primary font-nunito truncate">{place.fullName || place.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {POPULAR_CITIES.slice(0, 4).map((city) => (
                       <button
@@ -422,23 +534,44 @@ export default function KundliMatchingPage() {
                   </div>
                 </div>
 
-                {/* Birth Place */}
-                <div>
+                {/* Birth Place with Autocomplete */}
+                <div className="relative" ref={girlDropdownRef}>
                   <label className="block text-sm font-medium text-text-secondary mb-1.5">
                     <MapPin className="w-3.5 h-3.5 inline mr-1" />
                     Birth Place <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    type="text"
-                    placeholder="Search city..."
-                    value={girlData.birthPlace.name}
-                    onChange={(e) =>
-                      setGirlData({
-                        ...girlData,
-                        birthPlace: { ...girlData.birthPlace, name: e.target.value },
-                      })
-                    }
-                  />
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="Search city..."
+                      value={girlPlaceQuery}
+                      onChange={(e) => {
+                        setGirlPlaceQuery(e.target.value);
+                        searchPlacesFor('girl', e.target.value);
+                        if (girlData.birthPlace.latitude !== 0) {
+                          setGirlData({ ...girlData, birthPlace: { name: e.target.value, latitude: 0, longitude: 0, timezone: 'Asia/Kolkata' } });
+                        }
+                      }}
+                      onFocus={() => { if (girlPlaceResults.length > 0) setShowGirlDropdown(true); }}
+                    />
+                    {isSearchingGirl && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted animate-spin" />}
+                  </div>
+                  {girlData.birthPlace.latitude !== 0 && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> {girlData.birthPlace.name}
+                    </p>
+                  )}
+                  {showGirlDropdown && girlPlaceResults.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-web-md max-h-40 overflow-y-auto">
+                      {girlPlaceResults.map((place, idx) => (
+                        <button key={`${place.name}-${idx}`} type="button" onClick={() => selectPlace('girl', place)}
+                          className="w-full text-left px-3 py-2 hover:bg-pink-50 transition-colors flex items-center gap-2 border-b border-gray-50 last:border-0">
+                          <MapPin className="w-3 h-3 text-text-muted flex-shrink-0" />
+                          <span className="text-sm text-text-primary font-nunito truncate">{place.fullName || place.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {POPULAR_CITIES.slice(0, 4).map((city) => (
                       <button

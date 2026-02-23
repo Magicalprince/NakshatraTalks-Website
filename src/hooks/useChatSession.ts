@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export const CHAT_QUERY_KEYS = {
   session: (sessionId: string) => ['chat', 'session', sessionId] as const,
   messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
+  requestStatus: (requestId: string) => ['chat', 'request', requestId] as const,
   history: ['chat', 'history'] as const,
 };
 
@@ -112,6 +113,80 @@ export function useSendMessage(sessionId: string) {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: CHAT_QUERY_KEYS.messages(sessionId) });
     },
+  });
+}
+
+/**
+ * Hook for initiating a chat request
+ */
+export function useInitiateChatRequest() {
+  return useMutation({
+    mutationFn: (astrologerId: string) => chatService.createRequest(astrologerId),
+  });
+}
+
+/**
+ * Hook for polling chat request status
+ */
+export function useChatRequestStatus(requestId: string | null, options?: {
+  onAccepted?: (sessionId: string) => void;
+  onRejected?: (reason?: string) => void;
+  onTimeout?: () => void;
+}) {
+  const [isPolling, setIsPolling] = useState(!!requestId);
+
+  const query = useQuery({
+    queryKey: CHAT_QUERY_KEYS.requestStatus(requestId || ''),
+    queryFn: async () => {
+      if (!requestId) throw new Error('No request ID');
+      const response = await chatService.getRequestStatus(requestId);
+      return response.data;
+    },
+    enabled: !!requestId && isPolling,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 2000;
+
+      // Stop polling if status is terminal
+      if (['accepted', 'rejected', 'timeout', 'cancelled'].includes(data.status)) {
+        return false;
+      }
+      return 2000; // Poll every 2 seconds
+    },
+  });
+
+  // Handle status changes
+  useEffect(() => {
+    if (!query.data) return;
+
+    const { status } = query.data;
+
+    if (status === 'accepted' && query.data.session) {
+      setIsPolling(false);
+      options?.onAccepted?.(query.data.session.sessionId);
+    } else if (status === 'rejected') {
+      setIsPolling(false);
+      options?.onRejected?.(query.data.rejectReason);
+    } else if (status === 'timeout') {
+      setIsPolling(false);
+      options?.onTimeout?.();
+    }
+  }, [query.data, options]);
+
+  return {
+    ...query,
+    isPolling,
+    stopPolling: () => setIsPolling(false),
+    startPolling: () => setIsPolling(true),
+  };
+}
+
+/**
+ * Hook for canceling chat request
+ */
+export function useCancelChatRequest() {
+  return useMutation({
+    mutationFn: (requestId: string) => chatService.cancelRequest(requestId),
   });
 }
 

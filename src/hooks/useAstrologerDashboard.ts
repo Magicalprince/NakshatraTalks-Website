@@ -4,24 +4,35 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { astrologerDashboardService } from '@/lib/services/astrologer-dashboard.service';
+import type { EarningEntry } from '@/lib/services/astrologer-dashboard.service';
+import { liveSessionService } from '@/lib/services/live-session.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useEffect, useRef, useCallback } from 'react';
-import { shouldUseMockData, mockApi } from '@/lib/mock';
+import type {
+  Pagination,
+  CreateLiveSessionData,
+  AstrologerScheduledSession,
+  AstrologerSessionHistory,
+} from '@/types/api.types';
 
-// Query keys
+export type { EarningEntry };
+
 export const ASTROLOGER_QUERY_KEYS = {
   stats: ['astrologer', 'stats'] as const,
+  dashboard: ['astrologer', 'dashboard'] as const,
   availability: ['astrologer', 'availability'] as const,
   incomingRequests: ['astrologer', 'incoming'] as const,
   waitlist: ['astrologer', 'waitlist'] as const,
   activeChat: ['astrologer', 'active', 'chat'] as const,
   activeCall: ['astrologer', 'active', 'call'] as const,
   chatMessages: (sessionId: string) => ['astrologer', 'chat', 'messages', sessionId] as const,
+  liveSessionHistory: ['astrologer', 'live', 'history'] as const,
+  liveScheduledSessions: ['astrologer', 'live', 'scheduled'] as const,
+  liveActiveSession: ['astrologer', 'live', 'active'] as const,
+  earningsSummary: ['astrologer', 'earnings', 'summary'] as const,
+  earningsHistory: (sessionType?: string) => ['astrologer', 'earnings', 'history', sessionType ?? 'all'] as const,
 };
 
-/**
- * Hook for fetching astrologer statistics
- */
 export function useAstrologerStats() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -29,21 +40,102 @@ export function useAstrologerStats() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.stats,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getStats();
-        return response.data;
-      }
-      const response = await astrologerDashboardService.getStats();
+      if (!user?.id) return null;
+      const response = await astrologerDashboardService.getStats(user.id);
       return response.data;
     },
-    enabled: isAstrologer,
-    refetchInterval: 60000, // Refetch every minute
+    enabled: isAstrologer && !!user?.id,
+    refetchInterval: 60000,
   });
 }
 
 /**
- * Hook for fetching availability status
+ * Hook for fetching the astrologer dashboard
+ * Returns today's earnings, recent sessions, profile summary, etc.
  */
+export function useAstrologerDashboardData() {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery({
+    queryKey: ASTROLOGER_QUERY_KEYS.dashboard,
+    queryFn: async () => {
+      const response = await astrologerDashboardService.getDashboard();
+      return response.data;
+    },
+    enabled: isAstrologer,
+    refetchInterval: 60000,
+  });
+}
+
+/**
+ * Hook for fetching the earnings summary (all-time, this month, today, pending).
+ * Uses GET /api/v1/astrologer/earnings/summary
+ */
+export function useEarningsSummary() {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery({
+    queryKey: ASTROLOGER_QUERY_KEYS.earningsSummary,
+    queryFn: async () => {
+      const response = await astrologerDashboardService.getEarningsSummary();
+      return response.data;
+    },
+    enabled: isAstrologer,
+    refetchInterval: 60000,
+  });
+}
+
+/**
+ * Hook for fetching paginated earnings history from the dedicated endpoint.
+ * Uses GET /api/v1/astrologer/earnings/history with sessionType filter and pagination.
+ */
+export function useEarningsHistory(
+  sessionType?: 'chat' | 'call' | 'video',
+  page = 1,
+  limit = 20,
+) {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery<{ data: EarningEntry[]; pagination: Pagination }>({
+    queryKey: [...ASTROLOGER_QUERY_KEYS.earningsHistory(sessionType), page, limit],
+    queryFn: async () => {
+      const response = await astrologerDashboardService.getEarningsHistory(page, limit, sessionType);
+      return {
+        data: response.data ?? [],
+        pagination: response.pagination ?? {
+          currentPage: page,
+          totalPages: 1,
+          totalItems: 0,
+          itemsPerPage: limit,
+          hasNext: false,
+          hasPrev: false,
+        },
+      };
+    },
+    enabled: isAstrologer,
+  });
+}
+
+/**
+ * Hook for fetching astrologer's live session history
+ */
+export function useLiveSessionHistory(page = 1, limit = 20) {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery<AstrologerSessionHistory[]>({
+    queryKey: [...ASTROLOGER_QUERY_KEYS.liveSessionHistory, page, limit],
+    queryFn: async () => {
+      const response = await liveSessionService.getSessionHistory(page, limit);
+      return (response.data ?? []) as AstrologerSessionHistory[];
+    },
+    enabled: isAstrologer,
+  });
+}
+
 export function useAvailabilityStatus() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -51,71 +143,45 @@ export function useAvailabilityStatus() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.availability,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getAvailability();
-        return response.data;
-      }
       const response = await astrologerDashboardService.getAvailabilityStatus();
       return response.data;
     },
     enabled: isAstrologer,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 }
 
-// Alias for backwards compatibility
 export const useAstrologerAvailability = useAvailabilityStatus;
 
-/**
- * Hook for toggling availability
- */
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (type?: 'chat' | 'call' | 'all') => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.updateAvailability({
-          chat: type === 'chat' || type === 'all',
-          call: type === 'call' || type === 'all',
-        });
-      }
-      return astrologerDashboardService.toggleAvailability(type);
-    },
+    mutationFn: (type?: 'chat' | 'call' | 'all') =>
+      astrologerDashboardService.toggleAvailability(type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
     },
   });
 }
 
-/**
- * Hook for updating availability with specific settings
- */
 export function useUpdateAvailability() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (availability: { chat?: boolean; call?: boolean; video?: boolean }) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.updateAvailability(availability);
-      }
-      return astrologerDashboardService.updateAvailability(availability);
-    },
+    mutationFn: (availability: { chat?: boolean; call?: boolean; video?: boolean }) =>
+      astrologerDashboardService.updateAvailability(availability),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
     },
   });
 }
 
-/**
- * Hook for sending heartbeat
- */
-export function useHeartbeat(enabled: boolean = true) {
+export function useHeartbeat(enabled = true) {
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
 
   const sendHeartbeat = useCallback(async () => {
     try {
-      if (shouldUseMockData()) return; // Skip heartbeat in mock mode
       await astrologerDashboardService.sendHeartbeat();
     } catch {
       // Ignore heartbeat errors
@@ -124,24 +190,14 @@ export function useHeartbeat(enabled: boolean = true) {
 
   useEffect(() => {
     if (!enabled) return;
-
-    // Send initial heartbeat
     sendHeartbeat();
-
-    // Set up interval
-    heartbeatInterval.current = setInterval(sendHeartbeat, 30000); // Every 30 seconds
-
+    heartbeatInterval.current = setInterval(sendHeartbeat, 30000);
     return () => {
-      if (heartbeatInterval.current) {
-        clearInterval(heartbeatInterval.current);
-      }
+      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
     };
   }, [enabled, sendHeartbeat]);
 }
 
-/**
- * Hook for fetching incoming requests
- */
 export function useIncomingRequests() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -149,21 +205,14 @@ export function useIncomingRequests() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getIncomingRequests();
-        return response.data;
-      }
       const response = await astrologerDashboardService.getIncomingRequests();
       return response.data;
     },
     enabled: isAstrologer,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 5000,
   });
 }
 
-/**
- * Hook for fetching waitlist
- */
 export function useWaitlist() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -171,31 +220,20 @@ export function useWaitlist() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.waitlist,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getWaitlist();
-        return response.data;
-      }
       const response = await astrologerDashboardService.getWaitlist();
       return response.data;
     },
     enabled: isAstrologer,
-    refetchInterval: 10000, // Poll every 10 seconds
+    refetchInterval: 10000,
   });
 }
 
-/**
- * Hook for accepting/rejecting chat requests
- */
 export function useChatRequestActions() {
   const queryClient = useQueryClient();
 
   const acceptMutation = useMutation({
-    mutationFn: async (requestId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.acceptRequest(requestId);
-      }
-      return astrologerDashboardService.acceptChatRequest(requestId);
-    },
+    mutationFn: (requestId: string) =>
+      astrologerDashboardService.acceptChatRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
@@ -203,12 +241,8 @@ export function useChatRequestActions() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ requestId, reason }: { requestId: string; reason?: string }) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.rejectRequest(requestId);
-      }
-      return astrologerDashboardService.rejectChatRequest(requestId, reason);
-    },
+    mutationFn: ({ requestId, reason }: { requestId: string; reason?: string }) =>
+      astrologerDashboardService.rejectChatRequest(requestId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
     },
@@ -222,19 +256,12 @@ export function useChatRequestActions() {
   };
 }
 
-/**
- * Hook for accepting a request (generic)
- */
 export function useAcceptRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (requestId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.acceptRequest(requestId);
-      }
-      return astrologerDashboardService.acceptChatRequest(requestId);
-    },
+    mutationFn: (requestId: string) =>
+      astrologerDashboardService.acceptChatRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
@@ -243,19 +270,12 @@ export function useAcceptRequest() {
   });
 }
 
-/**
- * Hook for rejecting a request (generic)
- */
 export function useRejectRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (requestId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.rejectRequest(requestId);
-      }
-      return astrologerDashboardService.rejectChatRequest(requestId);
-    },
+    mutationFn: (requestId: string) =>
+      astrologerDashboardService.rejectChatRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
@@ -263,19 +283,12 @@ export function useRejectRequest() {
   });
 }
 
-/**
- * Hook for accepting/rejecting call requests
- */
 export function useCallRequestActions() {
   const queryClient = useQueryClient();
 
   const acceptMutation = useMutation({
-    mutationFn: async (requestId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.acceptRequest(requestId);
-      }
-      return astrologerDashboardService.acceptCallRequest(requestId);
-    },
+    mutationFn: (requestId: string) =>
+      astrologerDashboardService.acceptCallRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
@@ -283,12 +296,8 @@ export function useCallRequestActions() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ requestId, reason }: { requestId: string; reason?: string }) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.rejectRequest(requestId);
-      }
-      return astrologerDashboardService.rejectCallRequest(requestId, reason);
-    },
+    mutationFn: ({ requestId, reason }: { requestId: string; reason?: string }) =>
+      astrologerDashboardService.rejectCallRequest(requestId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
     },
@@ -302,9 +311,6 @@ export function useCallRequestActions() {
   };
 }
 
-/**
- * Hook for fetching active chat session
- */
 export function useActiveChat() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -312,10 +318,6 @@ export function useActiveChat() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.activeChat,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getActiveChat();
-        return response.data;
-      }
       const response = await astrologerDashboardService.getActiveChatSession();
       return response.data;
     },
@@ -324,9 +326,6 @@ export function useActiveChat() {
   });
 }
 
-/**
- * Hook for fetching active call session
- */
 export function useActiveCall() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -334,10 +333,6 @@ export function useActiveCall() {
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.activeCall,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = await mockApi.astrologerDashboard.getActiveCall();
-        return response.data;
-      }
       const response = await astrologerDashboardService.getActiveCallSession();
       return response.data;
     },
@@ -346,9 +341,6 @@ export function useActiveCall() {
   });
 }
 
-/**
- * Hook for fetching active sessions by type
- */
 export function useActiveSessions(type: 'chat' | 'call') {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
@@ -356,12 +348,6 @@ export function useActiveSessions(type: 'chat' | 'call') {
   return useQuery({
     queryKey: type === 'chat' ? ASTROLOGER_QUERY_KEYS.activeChat : ASTROLOGER_QUERY_KEYS.activeCall,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        const response = type === 'chat'
-          ? await mockApi.astrologerDashboard.getActiveChat()
-          : await mockApi.astrologerDashboard.getActiveCall();
-        return response.data;
-      }
       const response = type === 'chat'
         ? await astrologerDashboardService.getActiveChatSession()
         : await astrologerDashboardService.getActiveCallSession();
@@ -372,20 +358,12 @@ export function useActiveSessions(type: 'chat' | 'call') {
   });
 }
 
-/**
- * Hook for ending chat session (astrologer)
- */
 export function useEndChatSessionAstrologer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
-      if (shouldUseMockData()) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return { success: true, data: { sessionId, ended: true } };
-      }
-      return astrologerDashboardService.endChatSession(sessionId);
-    },
+    mutationFn: (sessionId: string) =>
+      astrologerDashboardService.endChatSession(sessionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.stats });
@@ -393,20 +371,12 @@ export function useEndChatSessionAstrologer() {
   });
 }
 
-/**
- * Hook for ending call session (astrologer)
- */
 export function useEndCallSessionAstrologer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
-      if (shouldUseMockData()) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return { success: true, data: { sessionId, ended: true } };
-      }
-      return astrologerDashboardService.endCallSession(sessionId);
-    },
+    mutationFn: (sessionId: string) =>
+      astrologerDashboardService.endCallSession(sessionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.stats });
@@ -414,55 +384,24 @@ export function useEndCallSessionAstrologer() {
   });
 }
 
-/**
- * Hook for sending messages (astrologer)
- */
 export function useSendMessageAstrologer(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ content, type = 'text' }: { content: string; type?: 'text' | 'image' }) => {
-      if (shouldUseMockData()) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-        return {
-          success: true,
-          data: {
-            message: {
-              id: `msg-${Date.now()}`,
-              sessionId,
-              senderId: 'astrologer-1',
-              senderType: 'astrologer',
-              message: content,
-              content,
-              type,
-              isRead: false,
-              status: 'sent',
-              createdAt: new Date().toISOString(),
-            },
-          },
-        };
-      }
-      return astrologerDashboardService.sendMessage(sessionId, content, type);
-    },
+    mutationFn: ({ content, type = 'text' }: { content: string; type?: 'text' | 'image' }) =>
+      astrologerDashboardService.sendMessage(sessionId, content, type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.chatMessages(sessionId) });
     },
   });
 }
 
-/**
- * Hook for connecting to queued users
- */
 export function useQueueConnect() {
   const queryClient = useQueryClient();
 
   const connectChat = useMutation({
-    mutationFn: async (queueId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.acceptRequest(queueId);
-      }
-      return astrologerDashboardService.connectChatQueue(queueId);
-    },
+    mutationFn: (queueId: string) =>
+      astrologerDashboardService.connectChatQueue(queueId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
@@ -470,12 +409,8 @@ export function useQueueConnect() {
   });
 
   const connectCall = useMutation({
-    mutationFn: async (queueId: string) => {
-      if (shouldUseMockData()) {
-        return mockApi.astrologerDashboard.acceptRequest(queueId);
-      }
-      return astrologerDashboardService.connectCallQueue(queueId);
-    },
+    mutationFn: (queueId: string) =>
+      astrologerDashboardService.connectCallQueue(queueId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
@@ -489,3 +424,87 @@ export function useQueueConnect() {
     isConnectingCall: connectCall.isPending,
   };
 }
+
+// ─── Live Session Hooks ──────────────────────────────────────────
+
+/**
+ * Hook for fetching astrologer's scheduled live sessions
+ */
+export function useScheduledLiveSessions() {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery<AstrologerScheduledSession[]>({
+    queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions,
+    queryFn: async () => {
+      const response = await liveSessionService.getScheduledSessions();
+      return (response.data ?? []) as AstrologerScheduledSession[];
+    },
+    enabled: isAstrologer,
+    refetchInterval: 30000,
+  });
+}
+
+/**
+ * Hook for creating a new live session
+ */
+export function useCreateLiveSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateLiveSessionData) =>
+      liveSessionService.createSession(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions });
+    },
+  });
+}
+
+/**
+ * Hook for starting a live session (get Twilio token)
+ */
+export function useStartLiveSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      liveSessionService.startSession(sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveActiveSession });
+    },
+  });
+}
+
+/**
+ * Hook for ending a live session
+ */
+export function useEndLiveSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      liveSessionService.endSession(sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveActiveSession });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveSessionHistory });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions });
+    },
+  });
+}
+
+/**
+ * Hook for canceling/deleting a scheduled live session
+ */
+export function useCancelLiveSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      liveSessionService.deleteSession(sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions });
+    },
+  });
+}
+

@@ -33,9 +33,9 @@ export function middleware(request: NextRequest) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://api.nakshatratalks.com wss://api.nakshatratalks.com https:",
+      "connect-src 'self' https://api.nakshatratalks.com wss://api.nakshatratalks.com https: wss://*.twilio.com wss://*.chunderw-vpc-gll.twilio.com https://*.twilio.com",
       "frame-src 'self' https://checkout.razorpay.com",
-      "media-src 'self' blob:",
+      "media-src 'self' blob: https://*.twilio.com",
     ].join('; ')
   );
 

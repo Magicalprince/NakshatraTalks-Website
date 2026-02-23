@@ -6,7 +6,6 @@ import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 
-// Dynamically import devtools only in development
 const ReactQueryDevtools = dynamic(
   () =>
     import('@tanstack/react-query-devtools').then((mod) => ({
@@ -15,16 +14,24 @@ const ReactQueryDevtools = dynamic(
   { ssr: false }
 );
 
-// Create a client
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // With SSR, we want to avoid refetching immediately on mount
-        staleTime: 60 * 1000, // 1 minute
-        gcTime: 5 * 60 * 1000, // 5 minutes (previously cacheTime)
-        retry: 1,
+        staleTime: 60 * 1000,       // 1 minute
+        gcTime: 5 * 60 * 1000,      // 5 minutes
+        retry: (failureCount, error) => {
+          // Don't retry on auth or client errors
+          if (error && 'statusCode' in error) {
+            const statusCode = (error as { statusCode: number }).statusCode;
+            if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
+              return false;
+            }
+          }
+          return failureCount < 2;
+        },
         refetchOnWindowFocus: false,
+        refetchOnReconnect: true,
       },
       mutations: {
         retry: 0,
@@ -33,17 +40,14 @@ function makeQueryClient() {
   });
 }
 
-let browserQueryClient: QueryClient | undefined = undefined;
+let browserQueryClient: QueryClient | undefined;
 
 function getQueryClient() {
   if (typeof window === 'undefined') {
-    // Server: always make a new query client
     return makeQueryClient();
-  } else {
-    // Browser: make a new query client if we don't already have one
-    if (!browserQueryClient) browserQueryClient = makeQueryClient();
-    return browserQueryClient;
   }
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();
+  return browserQueryClient;
 }
 
 interface ProvidersProps {
@@ -54,7 +58,6 @@ export function Providers({ children }: ProvidersProps) {
   const queryClient = getQueryClient();
   const [showDevtools, setShowDevtools] = useState(false);
 
-  // Only show devtools in development after mount
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       setShowDevtools(true);

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
   useAstrologerStats,
+  useAstrologerDashboardData,
   useAstrologerAvailability,
   useUpdateAvailability,
   useIncomingRequests,
@@ -57,6 +58,7 @@ const SIDEBAR_LINKS: QuickLinkItem[] = [
 
 export default function AstrologerDashboardPage() {
   const { data: stats, isLoading: statsLoading } = useAstrologerStats();
+  const { data: dashboard } = useAstrologerDashboardData();
   const { data: availability } = useAstrologerAvailability();
   const { mutate: updateAvailability, isPending: isUpdating } = useUpdateAvailability();
   const { data: requestsData, isLoading: requestsLoading } = useIncomingRequests();
@@ -80,10 +82,10 @@ export default function AstrologerDashboardPage() {
   };
 
   const statCards = [
-    { icon: IndianRupee, value: formatCurrency(stats?.todayEarnings || 0), label: "Today's Earnings", color: 'text-primary', bg: 'bg-primary/10', accent: 'bg-primary' },
-    { icon: Users, value: stats?.todayConsultations || 0, label: "Today's Sessions", color: 'text-status-success', bg: 'bg-status-success/10', accent: 'bg-status-success' },
-    { icon: Clock, value: `${stats?.averageSessionDuration || 0}m`, label: 'Avg Duration', color: 'text-status-warning', bg: 'bg-status-warning/10', accent: 'bg-status-warning' },
-    { icon: TrendingUp, value: stats?.averageRating?.toFixed(1) || '0.0', label: 'Average Rating', color: 'text-status-info', bg: 'bg-status-info/10', accent: 'bg-status-info' },
+    { icon: IndianRupee, value: formatCurrency(dashboard?.profile?.totalEarningsToday || 0), label: "Today's Earnings", color: 'text-primary', bg: 'bg-primary/10', accent: 'bg-primary' },
+    { icon: Users, value: dashboard?.profile?.totalSessionsToday || 0, label: "Today's Sessions", color: 'text-status-success', bg: 'bg-status-success/10', accent: 'bg-status-success' },
+    { icon: Clock, value: `${stats?.avgSessionDuration ? Math.round(stats.avgSessionDuration / 60) : 0}m`, label: 'Avg Duration', color: 'text-status-warning', bg: 'bg-status-warning/10', accent: 'bg-status-warning' },
+    { icon: TrendingUp, value: stats?.rating?.toFixed(1) || '0.0', label: 'Average Rating', color: 'text-status-info', bg: 'bg-status-info/10', accent: 'bg-status-info' },
   ];
 
   const availabilityItems = [
@@ -303,11 +305,11 @@ export default function AstrologerDashboardPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-text-secondary">Total Sessions</span>
-                      <span className="font-semibold text-sm font-lexend">{stats?.totalConsultations || 0}</span>
+                      <span className="font-semibold text-sm font-lexend">{stats?.totalSessions || 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-text-secondary">Weekly Earnings</span>
-                      <span className="font-semibold text-sm font-lexend">{formatCurrency(stats?.weeklyEarnings || 0)}</span>
+                      <span className="text-sm text-text-secondary">Total Earnings</span>
+                      <span className="font-semibold text-sm font-lexend">{formatCurrency(stats?.totalEarnings || 0)}</span>
                     </div>
                   </div>
                 </Card>

@@ -24,6 +24,7 @@ import {
 import { cn } from '@/utils/cn';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useWalletBalance } from '@/hooks/useWalletData';
 import { Avatar } from '@/components/ui';
 
 const navItems = [
@@ -48,6 +49,8 @@ export function MobileMenu() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuthStore();
   const { isSidebarOpen, closeSidebar } = useUIStore();
+  const { data: walletBalance } = useWalletBalance();
+  const displayBalance = walletBalance ?? user?.walletBalance ?? 0;
 
   return (
     <AnimatePresence>
@@ -78,6 +81,7 @@ export function MobileMenu() {
                     src="/images/logo.png"
                     alt="NakshatraTalks"
                     fill
+                    sizes="28px"
                     className="object-contain"
                   />
                 </div>
@@ -122,7 +126,7 @@ export function MobileMenu() {
                     Wallet Balance
                   </span>
                   <span className="text-sm font-semibold text-primary font-lexend">
-                    ₹{user.walletBalance?.toFixed(0) || 0}
+                    ₹{displayBalance.toFixed(0)}
                   </span>
                 </Link>
               </div>

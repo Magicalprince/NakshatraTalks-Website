@@ -66,7 +66,7 @@ export function HoroscopeContent({ horoscope, isLoading }: HoroscopeContentProps
           </div>
           <div>
             <h3 className="font-semibold text-text-primary mb-1">Today&apos;s Prediction</h3>
-            <p className="text-text-secondary leading-relaxed">{horoscope.prediction}</p>
+            <p className="text-text-secondary leading-relaxed">{horoscope.horoscope?.general || horoscope.prediction || 'No prediction available'}</p>
           </div>
         </div>
       </Card>
@@ -93,13 +93,13 @@ export function HoroscopeContent({ horoscope, isLoading }: HoroscopeContentProps
           </Card>
         )}
 
-        {horoscope.mood && (
+        {horoscope.compatibility && (
           <Card className="p-4 text-center">
             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-              <span className="text-lg">😊</span>
+              <span className="text-lg">💫</span>
             </div>
-            <p className="text-xs text-text-muted">Mood</p>
-            <p className="text-sm font-semibold text-text-primary">{horoscope.mood}</p>
+            <p className="text-xs text-text-muted">Compatibility</p>
+            <p className="text-sm font-semibold text-text-primary">{horoscope.compatibility}</p>
           </Card>
         )}
       </div>

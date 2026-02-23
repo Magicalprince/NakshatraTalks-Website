@@ -23,41 +23,9 @@ import { Button, Card, Skeleton, Modal } from '@/components/ui';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { kundliService } from '@/lib/services/kundli.service';
-import { shouldUseMockData } from '@/lib/mock';
 import { Kundli } from '@/types/api.types';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
-
-// Mock Kundli data for development
-const MOCK_KUNDLIS: Kundli[] = [
-  {
-    id: 'kundli-1',
-    userId: 'user-1',
-    name: 'Rahul Kumar',
-    dateOfBirth: '1990-05-15',
-    timeOfBirth: '10:30',
-    placeOfBirth: 'Mumbai, Maharashtra',
-    createdAt: '2024-01-15T10:00:00.000Z',
-  },
-  {
-    id: 'kundli-2',
-    userId: 'user-1',
-    name: 'Priya Sharma',
-    dateOfBirth: '1992-08-22',
-    timeOfBirth: '14:45',
-    placeOfBirth: 'Delhi, India',
-    createdAt: '2024-01-10T08:30:00.000Z',
-  },
-  {
-    id: 'kundli-3',
-    userId: 'user-1',
-    name: 'Amit Singh',
-    dateOfBirth: '1988-12-03',
-    timeOfBirth: '06:15',
-    placeOfBirth: 'Bangalore, Karnataka',
-    createdAt: '2024-01-05T15:20:00.000Z',
-  },
-];
 
 // Format date for display
 const formatDate = (dateString: string, timeString: string): string => {
@@ -112,7 +80,7 @@ function KundliCard({ kundli, index, onPress, onLongPress }: KundliCardProps) {
               {formatDate(kundli.dateOfBirth, kundli.timeOfBirth)}
             </p>
             <p className="text-xs text-text-muted truncate font-lexend">
-              {kundli.placeOfBirth}
+              {kundli.birthPlace?.name || kundli.placeOfBirth || ''}
             </p>
           </div>
 
@@ -186,10 +154,6 @@ export default function KundliDashboardPage() {
   const { data: kundlisData, isLoading: isKundlisLoading } = useQuery({
     queryKey: ['kundlis'],
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return { success: true, data: MOCK_KUNDLIS };
-      }
       return kundliService.getKundliList();
     },
     enabled: isReady,
@@ -198,10 +162,6 @@ export default function KundliDashboardPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (kundliId: string) => {
-      if (shouldUseMockData()) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        return { success: true };
-      }
       return kundliService.deleteKundli(kundliId);
     },
     onSuccess: () => {
@@ -232,7 +192,7 @@ export default function KundliDashboardPage() {
     return kundlis.filter(
       (k) =>
         k.name.toLowerCase().includes(query) ||
-        k.placeOfBirth.toLowerCase().includes(query)
+        (k.birthPlace?.name || k.placeOfBirth || '').toLowerCase().includes(query)
     );
   }, [kundlis, searchQuery]);
 

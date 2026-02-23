@@ -5,7 +5,8 @@ import { KundliForm } from '@/components/features/kundli';
 import { useGenerateKundli } from '@/hooks/useKundli';
 import { useUIStore } from '@/stores/ui-store';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { KundliInput } from '@/types/api.types';
 
@@ -69,6 +70,32 @@ export default function GenerateKundliPage() {
           For accurate predictions, please enter exact birth time and place.
         </p>
       </div>
+
+      {/* Full-screen loading overlay while generating */}
+      {isPending && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
+        >
+          <div className="flex flex-col items-center">
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            </div>
+            <h3 className="text-xl font-semibold text-text-primary font-lexend mb-2">
+              Generating Your Kundli
+            </h3>
+            <p className="text-sm text-text-secondary font-lexend text-center max-w-xs">
+              Calculating planetary positions and preparing your birth chart report...
+            </p>
+            <div className="flex items-center gap-2 mt-4">
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

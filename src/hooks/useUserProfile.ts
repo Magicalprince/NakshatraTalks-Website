@@ -10,7 +10,6 @@ import { useAuthStore } from '@/stores/auth-store';
 // Query keys
 export const USER_QUERY_KEYS = {
   profile: ['user', 'profile'] as const,
-  appState: ['user', 'app-state'] as const,
 };
 
 /**
@@ -79,19 +78,3 @@ export function useDeleteAccount() {
   });
 }
 
-/**
- * Hook for fetching app state
- */
-export function useAppState() {
-  const { isAuthenticated } = useAuthStore();
-
-  return useQuery({
-    queryKey: USER_QUERY_KEYS.appState,
-    queryFn: async () => {
-      const response = await userService.getAppState();
-      return response.data;
-    },
-    enabled: isAuthenticated,
-    refetchOnWindowFocus: true,
-  });
-}

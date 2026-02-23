@@ -16,6 +16,7 @@ export default function AuthLayout({
                 src="/images/logo.png"
                 alt="NakshatraTalks"
                 fill
+                sizes="48px"
                 className="object-contain p-1"
               />
             </div>

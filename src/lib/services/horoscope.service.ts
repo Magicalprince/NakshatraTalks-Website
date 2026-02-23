@@ -1,5 +1,7 @@
 /**
- * Horoscope Service - Horoscope API calls
+ * Horoscope Service - Real Backend Integration
+ *
+ * Fetches daily horoscope predictions from ProKerala via backend.
  */
 
 import { apiClient } from '@/lib/api/client';
@@ -7,39 +9,26 @@ import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { ApiResponse, DailyHoroscope, HoroscopeSign } from '@/types/api.types';
 
 class HoroscopeService {
-  /**
-   * Get all zodiac signs
-   */
   async getSigns(): Promise<ApiResponse<HoroscopeSign[]>> {
-    return apiClient.get<ApiResponse<HoroscopeSign[]>>(API_ENDPOINTS.HOROSCOPE.SIGNS);
+    return apiClient.get(API_ENDPOINTS.HOROSCOPE.SIGNS);
   }
 
-  /**
-   * Get daily horoscope for a sign
-   */
-  async getDailyHoroscope(sign: string, date?: string): Promise<ApiResponse<DailyHoroscope>> {
-    const params = date ? { date } : {};
-    return apiClient.get<ApiResponse<DailyHoroscope>>(
-      `${API_ENDPOINTS.HOROSCOPE.DAILY}/${sign}`,
-      { params }
-    );
+  async getDailyHoroscope(sign: string, day?: string, date?: string): Promise<ApiResponse<DailyHoroscope>> {
+    const params: Record<string, string> = { sign };
+    if (day) params.day = day;
+    if (date) params.date = date;
+    return apiClient.get(API_ENDPOINTS.HOROSCOPE.DAILY, { params });
   }
 
-  /**
-   * Get horoscopes for all signs
-   */
   async getAllDailyHoroscopes(date?: string): Promise<ApiResponse<DailyHoroscope[]>> {
     const params = date ? { date } : {};
-    return apiClient.get<ApiResponse<DailyHoroscope[]>>(
-      API_ENDPOINTS.HOROSCOPE.DAILY,
-      { params }
-    );
+    return apiClient.get(API_ENDPOINTS.HOROSCOPE.DAILY, { params });
   }
 }
 
 export const horoscopeService = new HoroscopeService();
 
-// Zodiac signs data (static for SEO)
+// Static zodiac signs data (for SEO and initial render)
 export const ZODIAC_SIGNS: HoroscopeSign[] = [
   { id: 'aries', name: 'Aries', symbol: '♈', element: 'fire', dateRange: 'Mar 21 - Apr 19', image: '/images/zodiac-signs/Aries.webp' },
   { id: 'taurus', name: 'Taurus', symbol: '♉', element: 'earth', dateRange: 'Apr 20 - May 20', image: '/images/zodiac-signs/Taurus.webp' },
@@ -55,7 +44,6 @@ export const ZODIAC_SIGNS: HoroscopeSign[] = [
   { id: 'pisces', name: 'Pisces', symbol: '♓', element: 'water', dateRange: 'Feb 19 - Mar 20', image: '/images/zodiac-signs/Pisces.webp' },
 ];
 
-// Element colors
 export const ELEMENT_COLORS: Record<string, { bg: string; text: string }> = {
   fire: { bg: 'bg-red-100', text: 'text-red-600' },
   earth: { bg: 'bg-amber-100', text: 'text-amber-700' },

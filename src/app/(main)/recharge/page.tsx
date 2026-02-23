@@ -150,7 +150,7 @@ export default function RechargePage() {
         throw new Error(response.message || 'Failed to initiate payment');
       }
 
-      const { razorpayOrderId, amount, currency } = response.data;
+      const { orderId: razorpayOrderId, amount, currency } = response.data;
 
       // Open Razorpay checkout
       const razorpayOptions: RazorpayOptions = {
