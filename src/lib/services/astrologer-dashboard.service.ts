@@ -122,12 +122,27 @@ class AstrologerDashboardService {
   }
 
   // ─── Active Sessions ────────────────────────────────────────────
+  // Backend returns { hasActiveChat/hasActiveCall, session? } — unwrap to return just session
   async getActiveChatSession(): Promise<ApiResponse<ActiveSession | null>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.CHAT_ACTIVE);
+    const response = await apiClient.get<ApiResponse<{ hasActiveChat: boolean; session?: ActiveSession }>>(
+      API_ENDPOINTS.ASTROLOGERS.ME.CHAT_ACTIVE
+    );
+    const data = response.data as unknown as { hasActiveChat?: boolean; session?: ActiveSession };
+    return {
+      ...response,
+      data: data?.hasActiveChat && data?.session ? data.session : null,
+    };
   }
 
   async getActiveCallSession(): Promise<ApiResponse<ActiveSession | null>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.CALL_ACTIVE);
+    const response = await apiClient.get<ApiResponse<{ hasActiveCall: boolean; session?: ActiveSession }>>(
+      API_ENDPOINTS.ASTROLOGERS.ME.CALL_ACTIVE
+    );
+    const data = response.data as unknown as { hasActiveCall?: boolean; session?: ActiveSession };
+    return {
+      ...response,
+      data: data?.hasActiveCall && data?.session ? data.session : null,
+    };
   }
 
   // ─── End Sessions ───────────────────────────────────────────────

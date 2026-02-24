@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+/**
+ * CallInterface — Full-screen immersive call experience
+ *
+ * Cosmic dark theme with animated star field, pulsing rings around avatar,
+ * glassmorphic floating controls. Handles audio, video, connecting, and ended states.
+ */
+
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { CallControls } from './CallControls';
 import { CallHeader } from './CallHeader';
 import { VideoPlayer, PipVideo } from './VideoPlayer';
@@ -34,7 +41,10 @@ interface CallInterfaceProps {
   onEndCall: () => void;
   onFlipCamera?: () => void;
   onStartNewCall?: () => void;
+  onClose?: () => void;
   isLoading?: boolean;
+  /** Label for cost in summary — "Total Cost" (user side) or "Amount Received" (astrologer side) */
+  costLabel?: string;
 }
 
 export function CallInterface({
@@ -59,39 +69,55 @@ export function CallInterface({
   onEndCall,
   onFlipCamera,
   onStartNewCall,
+  onClose,
   isLoading,
+  costLabel,
 }: CallInterfaceProps) {
-  const [, setIsFullscreen] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   const isVideoCall = callType === 'video';
+  const isConnected = status === 'connected';
+  const isPreConnect = status === 'connecting' || status === 'ringing';
 
-  // Handle fullscreen toggle
-  const handleToggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+  const isEnded = status === 'ended';
+
+  // Play remote audio stream (essential for audio calls — video calls use <video> element)
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream ?? null;
     }
-  }, []);
+  }, [remoteStream]);
 
-  // Show summary when call ends
+  // Speaker toggle: mute/unmute the remote audio element
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = !isSpeakerOn;
+    }
+  }, [isSpeakerOn]);
+
+  // End call — triggers onEndCall which calls API; summary shows via auto-show effect
   const handleEndCall = useCallback(() => {
     onEndCall();
-    if (status === 'connected') {
+  }, [onEndCall]);
+
+  // Auto-show summary on external call termination (remote disconnect, low balance, etc.)
+  useEffect(() => {
+    if (isEnded && sessionSummary && !showSummary) {
       setShowSummary(true);
     }
-  }, [onEndCall, status]);
+  }, [isEnded, sessionSummary, showSummary]);
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center">
-        <Skeleton className="w-24 h-24 rounded-full mb-4" />
-        <Skeleton className="w-32 h-5 mb-2" />
-        <Skeleton className="w-24 h-4" />
+      <div
+        className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+        style={{ background: 'linear-gradient(180deg, #070B14 0%, #0F1629 40%, #151D35 100%)' }}
+      >
+        <Skeleton className="w-28 h-28 rounded-full mb-6 bg-white/10" />
+        <Skeleton className="w-36 h-5 mb-2 bg-white/10" />
+        <Skeleton className="w-24 h-4 bg-white/10" />
       </div>
     );
   }
@@ -108,110 +134,165 @@ export function CallInterface({
         duration={sessionSummary.duration}
         durationFormatted={sessionSummary.durationFormatted}
         totalCost={sessionSummary.totalCost}
+        costLabel={costLabel}
         onStartNewCall={onStartNewCall}
-        onClose={() => setShowSummary(false)}
+        onClose={onClose || (() => setShowSummary(false))}
       />
     );
   }
 
-  return (
-    <div className="fixed inset-0 bg-gray-900">
-      {/* Background - Gradient for audio, remote video for video calls */}
-      {isVideoCall && status === 'connected' ? (
-        // Video Call - Remote Video as Background
+  // Video call (connected) — remote video background
+  if (isVideoCall && isConnected) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        {/* Remote video as background */}
         <VideoPlayer
           stream={remoteStream}
+          muted={!isSpeakerOn}
           isVideoEnabled={isRemoteVideoEnabled}
           participantName={astrologerName}
           className="absolute inset-0"
         />
-      ) : (
-        // Audio Call or Connecting - Gradient Background
-        <div className="absolute inset-0 bg-gradient-to-b from-primary to-primary/80" />
-      )}
 
-      {/* Call Header - Shows for audio calls and when connecting */}
-      {(!isVideoCall || status !== 'connected') && (
-        <CallHeader
-          astrologerName={astrologerName}
-          astrologerImage={astrologerImage}
-          callType={callType}
-          duration={duration}
-          cost={cost}
-          status={status}
-          className="relative z-10"
-        />
-      )}
-
-      {/* Local Video PiP (Video calls only) */}
-      {isVideoCall && status === 'connected' && (
+        {/* Local PiP */}
         <PipVideo
           stream={localStream}
           isVideoEnabled={isLocalVideoEnabled}
         />
-      )}
 
-      {/* Timer and Cost Overlay for Video Calls */}
-      {isVideoCall && status === 'connected' && (
+        {/* Top overlay — timer & cost */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute top-4 left-4 z-10"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-6 left-1/2 -translate-x-1/2 z-20"
         >
-          <div className="flex items-center gap-2 px-3 py-2 bg-black/50 backdrop-blur-sm rounded-lg">
-            <span className="text-white font-mono">{duration}</span>
+          <div className="flex items-center gap-3 px-5 py-2.5 bg-black/40 backdrop-blur-xl rounded-full border border-white/10">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-white font-mono text-sm tracking-wide">{duration}</span>
+            </div>
             {cost && (
               <>
-                <span className="text-white/50">|</span>
-                <span className="text-white">{cost}</span>
+                <span className="w-px h-4 bg-white/20" />
+                <span className="text-white/80 text-sm font-medium">{cost}</span>
               </>
             )}
           </div>
         </motion.div>
-      )}
 
-      {/* Call Controls */}
-      <div className="absolute bottom-8 left-0 right-0 flex justify-center z-10">
-        <CallControls
-          isMuted={isMuted}
-          isVideoEnabled={isLocalVideoEnabled}
-          isSpeakerOn={isSpeakerOn}
-          isVideoCall={isVideoCall}
-          onToggleMute={onToggleMute}
-          onToggleVideo={onToggleVideo}
-          onToggleSpeaker={onToggleSpeaker}
-          onEndCall={handleEndCall}
-          onFlipCamera={onFlipCamera}
-          onToggleFullscreen={handleToggleFullscreen}
-          disabled={status !== 'connected'}
+        {/* Bottom controls */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 pb-10">
+          <CallControls
+            isMuted={isMuted}
+            isVideoEnabled={isLocalVideoEnabled}
+            isSpeakerOn={isSpeakerOn}
+            isVideoCall={isVideoCall}
+            onToggleMute={onToggleMute}
+            onToggleVideo={onToggleVideo}
+            onToggleSpeaker={onToggleSpeaker}
+            onEndCall={handleEndCall}
+            onFlipCamera={onFlipCamera}
+            disabled={isEnded}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Audio call / video pre-connect — full cosmic immersive screen
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden select-none">
+      {/* Hidden audio player for remote stream (audio calls have no <video> element) */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+
+      {/* Deep cosmic gradient background */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(180deg, #070B14 0%, #0D1221 30%, #111B33 60%, #0F1629 100%)' }}
+      />
+
+      {/* Ambient radial glow behind avatar area */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div
+          className="w-[600px] h-[600px] rounded-full"
+          style={{
+            background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.06) 40%, transparent 70%)',
+            animation: 'nt-glow-pulse 4s ease-in-out infinite',
+          }}
         />
       </div>
 
-      {/* Connecting/Ringing Overlay */}
-      {(status === 'connecting' || status === 'ringing') && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute inset-0 bg-black/50 flex items-center justify-center z-5"
-        >
-          <div className="text-center">
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4"
-            >
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }}
-                className="w-16 h-16 bg-white/20 rounded-full"
-              />
-            </motion.div>
-            <p className="text-white text-lg">
-              {status === 'connecting' ? 'Connecting...' : 'Ringing...'}
-            </p>
-          </div>
-        </motion.div>
-      )}
+      {/* Star field */}
+      <StarField />
+
+      {/* Main content - centered vertically */}
+      <div className="relative z-10 flex flex-col items-center justify-between h-full">
+        {/* Spacer top */}
+        <div className="flex-shrink-0 h-16" />
+
+        {/* Center content — avatar, name, status, timer */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <CallHeader
+            astrologerName={astrologerName}
+            astrologerImage={astrologerImage}
+            callType={callType}
+            duration={duration}
+            cost={cost}
+            status={status}
+          />
+        </div>
+
+        {/* Bottom controls */}
+        <div className="flex-shrink-0 pb-10 w-full">
+          <CallControls
+            isMuted={isMuted}
+            isVideoEnabled={isLocalVideoEnabled}
+            isSpeakerOn={isSpeakerOn}
+            isVideoCall={isVideoCall}
+            onToggleMute={onToggleMute}
+            onToggleVideo={onToggleVideo}
+            onToggleSpeaker={onToggleSpeaker}
+            onEndCall={handleEndCall}
+            onFlipCamera={onFlipCamera}
+            disabled={isPreConnect || isEnded}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Star Field Background ──────────────────────────────────────────
+
+function StarField() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 60 }, (_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: Math.random() * 1.8 + 0.4,
+        delay: Math.random() * 5,
+        duration: Math.random() * 3 + 2.5,
+      })),
+    []
+  );
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {stars.map((star) => (
+        <div
+          key={star.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            left: `${star.x}%`,
+            top: `${star.y}%`,
+            width: star.size,
+            height: star.size,
+            animation: `nt-twinkle ${star.duration}s ${star.delay}s infinite ease-in-out`,
+          }}
+        />
+      ))}
     </div>
   );
 }

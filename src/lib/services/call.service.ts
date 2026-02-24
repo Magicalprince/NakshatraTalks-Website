@@ -98,6 +98,21 @@ class CallService {
     return apiClient.post(API_ENDPOINTS.CALL.DECLINE_SESSION(sessionId));
   }
 
+  // ─── Connection Confirmation ────────────────────────────────────
+  // Tells the backend this participant has connected to Twilio.
+  // When BOTH user and astrologer confirm, billing starts (billing_started_at is set).
+  async confirmConnection(
+    sessionId: string,
+    roomSid?: string
+  ): Promise<ApiResponse<{
+    sessionId: string;
+    participantType: 'user' | 'astrologer';
+    connectionConfirmed: boolean;
+    bothConnected: boolean;
+  }>> {
+    return apiClient.post(API_ENDPOINTS.CALL.CONFIRM_CONNECTION(sessionId), { roomSid });
+  }
+
   // ─── Twilio Token ────────────────────────────────────────────────
   async getTwilioToken(sessionId: string): Promise<ApiResponse<{
     token: string;
@@ -133,7 +148,8 @@ class CallService {
   }
 
   calculateCost(durationSeconds: number, pricePerMinute: number): number {
-    return Math.ceil(durationSeconds / 60) * pricePerMinute;
+    // Per-second proportional billing (matches mobile app behavior)
+    return Math.floor((durationSeconds / 60) * pricePerMinute);
   }
 }
 

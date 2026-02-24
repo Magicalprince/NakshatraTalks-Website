@@ -142,6 +142,7 @@ export const API_ENDPOINTS = {
     TOKEN: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/token`,
     END: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
     END_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
+    CONFIRM_CONNECTION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/confirm-connection`,
     DECLINE_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/decline`,
     RATING: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/rating`,
     INITIATE: '/api/v1/call/request',

@@ -204,6 +204,6 @@ export function useCallTimer(
     duration,
     cost,
     formattedDuration: formatDuration(duration),
-    formattedCost: `₹${cost.toFixed(2)}`,
+    formattedCost: `₹${Math.round(cost)}`,
   };
 }

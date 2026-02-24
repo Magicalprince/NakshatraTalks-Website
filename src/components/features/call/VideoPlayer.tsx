@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * VideoPlayer & PipVideo — Video stream rendering with dark-themed fallbacks.
+ */
+
 import { useRef, useEffect } from 'react';
 import { cn } from '@/utils/cn';
 import { motion } from 'framer-motion';
@@ -24,35 +28,35 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Attach stream to video element
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
 
-  // Video disabled placeholder
+  // Video disabled / no stream placeholder
   if (!isVideoEnabled || !stream) {
     return (
       <div
         className={cn(
-          'relative bg-gray-900 flex items-center justify-center',
+          'relative flex items-center justify-center',
           className
         )}
+        style={{ background: 'linear-gradient(180deg, #0a0e1a 0%, #111B33 100%)' }}
       >
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-24 h-24 bg-white/[0.06] rounded-full flex items-center justify-center border border-white/[0.08]">
             {isVideoEnabled ? (
-              <User className="w-10 h-10 text-gray-400" />
+              <User className="w-12 h-12 text-white/20" />
             ) : (
-              <VideoOff className="w-10 h-10 text-gray-400" />
+              <VideoOff className="w-10 h-10 text-white/20" />
             )}
           </div>
           {participantName && (
-            <span className="text-white text-sm">{participantName}</span>
+            <span className="text-white/50 text-sm font-medium">{participantName}</span>
           )}
           {!isVideoEnabled && (
-            <span className="text-gray-400 text-xs">Camera Off</span>
+            <span className="text-white/25 text-xs">Camera Off</span>
           )}
         </div>
       </div>
@@ -63,7 +67,7 @@ export function VideoPlayer({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={cn('relative overflow-hidden bg-gray-900', className)}
+      className={cn('relative overflow-hidden bg-black', className)}
     >
       <video
         ref={videoRef}
@@ -72,13 +76,13 @@ export function VideoPlayer({
         muted={muted}
         className={cn(
           'w-full h-full object-cover',
-          isLocal && 'transform scale-x-[-1]' // Mirror local video
+          isLocal && 'transform scale-x-[-1]'
         )}
       />
 
-      {/* Participant Name Overlay */}
+      {/* Participant name overlay */}
       {participantName && (
-        <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded text-white text-sm">
+        <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black/40 backdrop-blur-sm rounded-lg text-white text-xs font-medium">
           {participantName}
           {isLocal && ' (You)'}
         </div>
@@ -87,7 +91,8 @@ export function VideoPlayer({
   );
 }
 
-// Picture-in-Picture local video
+// ─── Picture-in-Picture Local Video ─────────────────────────────────
+
 interface PipVideoProps {
   stream?: MediaStream | null;
   isVideoEnabled?: boolean;
@@ -111,13 +116,14 @@ export function PipVideo({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, scale: 0.8, y: -20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
       whileHover={{ scale: 1.05 }}
       onClick={onClick}
       className={cn(
-        'absolute top-4 right-4 w-32 h-48 rounded-xl overflow-hidden shadow-lg cursor-pointer',
-        'border-2 border-white/30',
+        'absolute top-6 right-6 w-32 h-44 rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)] cursor-pointer z-20',
+        'border-2 border-white/15',
         className
       )}
     >
@@ -130,9 +136,12 @@ export function PipVideo({
           className="w-full h-full object-cover transform scale-x-[-1]"
         />
       ) : (
-        <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-          <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center">
-            <User className="w-6 h-6 text-gray-400" />
+        <div
+          className="w-full h-full flex items-center justify-center"
+          style={{ background: 'linear-gradient(180deg, #111B33 0%, #0D1221 100%)' }}
+        >
+          <div className="w-12 h-12 bg-white/[0.06] rounded-full flex items-center justify-center border border-white/[0.08]">
+            <User className="w-6 h-6 text-white/25" />
           </div>
         </div>
       )}

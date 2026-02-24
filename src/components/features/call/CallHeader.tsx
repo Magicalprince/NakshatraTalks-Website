@@ -1,10 +1,17 @@
 'use client';
 
+/**
+ * CallHeader — Avatar with animated rings, name, status, and live metrics.
+ *
+ * Connecting/Ringing: Concentric expanding ring pulses radiating outward.
+ * Connected: Static glowing ring + green status dot, live timer & cost.
+ * Ended: Dimmed state.
+ */
+
 import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
-import { Clock, IndianRupee } from 'lucide-react';
+import { Clock, IndianRupee, Phone, Video } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CallHeaderProps {
   astrologerName: string;
@@ -25,83 +32,160 @@ export function CallHeader({
   status,
   className,
 }: CallHeaderProps) {
-  // Status text
-  const getStatusText = () => {
+  const isPreConnect = status === 'connecting' || status === 'ringing';
+  const isConnected = status === 'connected';
+  const isEnded = status === 'ended';
+
+  // Status text & icon
+  const getStatusInfo = () => {
     switch (status) {
       case 'connecting':
-        return 'Connecting...';
+        return { text: 'Connecting', color: 'text-indigo-300' };
       case 'ringing':
-        return 'Ringing...';
+        return { text: 'Ringing', color: 'text-amber-300' };
       case 'connected':
-        return callType === 'video' ? 'Video Call' : 'Audio Call';
+        return {
+          text: callType === 'video' ? 'Video Call' : 'Audio Call',
+          color: 'text-emerald-400',
+        };
       case 'ended':
-        return 'Call Ended';
+        return { text: 'Call Ended', color: 'text-white/40' };
       default:
-        return '';
+        return { text: '', color: 'text-white/60' };
     }
   };
 
+  const statusInfo = getStatusInfo();
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        'flex flex-col items-center py-8 px-4',
-        className
-      )}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      className={cn('flex flex-col items-center', className)}
     >
-      {/* Avatar */}
-      <motion.div
-        animate={status === 'ringing' ? { scale: [1, 1.05, 1] } : {}}
-        transition={{ repeat: Infinity, duration: 1.5 }}
-        className="relative mb-4"
-      >
-        <Avatar
-          src={astrologerImage}
-          alt={astrologerName}
-          size="xl"
-          className="w-24 h-24 border-4 border-white/30"
-        />
-        {status === 'connected' && (
-          <span className="absolute bottom-1 right-1 w-4 h-4 bg-status-success rounded-full border-2 border-white" />
+      {/* ── Avatar with animated rings ───────────────────────────── */}
+      <div className="relative mb-6">
+        {/* Expanding ring pulses (connecting / ringing) */}
+        {isPreConnect && (
+          <>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="absolute inset-0 rounded-full border border-indigo-400/30"
+                style={{
+                  animation: `nt-ring-expand 2.8s ${i * 0.9}s infinite ease-out`,
+                }}
+              />
+            ))}
+          </>
         )}
-      </motion.div>
 
-      {/* Name */}
-      <h2 className="text-xl font-bold text-white mb-1">{astrologerName}</h2>
+        {/* Connected glow ring */}
+        {isConnected && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute -inset-3 rounded-full border-2 border-emerald-500/25"
+          />
+        )}
 
-      {/* Status */}
-      <p className="text-white/70 text-sm mb-4">{getStatusText()}</p>
+        {/* Avatar container — ringing gets subtle pulse */}
+        <motion.div
+          animate={
+            status === 'ringing'
+              ? { scale: [1, 1.04, 1] }
+              : {}
+          }
+          transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+        >
+          <Avatar
+            src={astrologerImage}
+            alt={astrologerName}
+            size="xl"
+            className={cn(
+              'w-28 h-28 border-[3px]',
+              isConnected
+                ? 'border-emerald-500/40'
+                : isPreConnect
+                  ? 'border-indigo-400/30'
+                  : 'border-white/10'
+            )}
+          />
+        </motion.div>
 
-      {/* Duration & Cost */}
-      {status === 'connected' && (
-        <div className="flex items-center gap-4">
-          <Badge variant="secondary" className="gap-1 bg-white/20 text-white border-0">
-            <Clock className="w-4 h-4" />
-            {duration}
-          </Badge>
-          {cost && (
-            <Badge variant="secondary" className="gap-1 bg-white/20 text-white border-0">
-              <IndianRupee className="w-4 h-4" />
-              {cost}
-            </Badge>
-          )}
-        </div>
-      )}
+        {/* Online indicator dot */}
+        {isConnected && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute bottom-1 right-1 w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-[#111B33] shadow-[0_0_12px_rgba(16,185,129,0.5)]"
+          />
+        )}
+      </div>
 
-      {/* Ringing Animation */}
-      {status === 'ringing' && (
-        <div className="flex gap-1 mt-2">
-          {[0, 1, 2].map((i) => (
-            <motion.span
-              key={i}
-              animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-              className="w-2 h-2 bg-white rounded-full"
-            />
-          ))}
-        </div>
-      )}
+      {/* ── Name ─────────────────────────────────────────────────── */}
+      <h2
+        className={cn(
+          'text-2xl font-bold font-lexend tracking-tight mb-1',
+          isEnded ? 'text-white/40' : 'text-white'
+        )}
+      >
+        {astrologerName}
+      </h2>
+
+      {/* ── Status line ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-5">
+        {isConnected && (
+          callType === 'video'
+            ? <Video className="w-3.5 h-3.5 text-emerald-400" />
+            : <Phone className="w-3.5 h-3.5 text-emerald-400" />
+        )}
+        <span className={cn('text-sm font-medium tracking-wide', statusInfo.color)}>
+          {statusInfo.text}
+        </span>
+
+        {/* Ringing dots */}
+        {isPreConnect && (
+          <span className="flex gap-0.5 ml-0.5">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                animate={{ opacity: [0.2, 1, 0.2] }}
+                transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
+                className="w-1 h-1 rounded-full bg-current"
+              />
+            ))}
+          </span>
+        )}
+      </div>
+
+      {/* ── Live timer & cost (connected only) ───────────────────── */}
+      <AnimatePresence>
+        {isConnected && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center gap-3"
+          >
+            {/* Duration pill */}
+            <div className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] backdrop-blur-sm rounded-full border border-white/[0.08]">
+              <Clock className="w-3.5 h-3.5 text-white/50" />
+              <span className="text-white font-mono text-sm tracking-wider">{duration}</span>
+            </div>
+
+            {/* Cost pill */}
+            {cost && (
+              <div className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] backdrop-blur-sm rounded-full border border-white/[0.08]">
+                <IndianRupee className="w-3.5 h-3.5 text-white/50" />
+                <span className="text-white text-sm font-medium">{cost}</span>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

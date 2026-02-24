@@ -9,6 +9,7 @@ import {
   useCallTimer,
 } from '@/hooks/useCallSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
+import { callService } from '@/lib/services/call.service';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQueueStore } from '@/stores/queue-store';
@@ -43,6 +44,9 @@ export default function CallSessionPage() {
     totalCost: number;
   } | null>(null);
 
+  // Local connected-at timestamp (fallback for timer when API startTime is delayed)
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
+
   // Twilio room reference
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomRef = useRef<any>(null);
@@ -74,11 +78,20 @@ export default function CallSessionPage() {
   const callTypeRef = useRef(callType);
   callTypeRef.current = callType;
 
-  // Call timer
-  const { formattedDuration, formattedCost } = useCallTimer(
-    callStatus === 'connected' ? session?.startTime : undefined,
+  // Timer: use API startTime if available, fallback to local connectedAt
+  const startTime = session?.startTime || connectedAt;
+
+  // Call timer — also get raw duration/cost for local fallback in summary
+  const { duration: timerDuration, cost: timerCost, formattedDuration, formattedCost } = useCallTimer(
+    callStatus === 'connected' ? startTime || undefined : undefined,
     session?.pricePerMinute
   );
+
+  // Refs to capture latest timer values for handleEndCall callback
+  const timerDurationRef = useRef(timerDuration);
+  const timerCostRef = useRef(timerCost);
+  timerDurationRef.current = timerDuration;
+  timerCostRef.current = timerCost;
 
   // Attach remote participant tracks to a MediaStream
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -149,6 +162,17 @@ export default function CallSessionPage() {
 
         roomRef.current = room;
         setCallStatus('connected');
+        setConnectedAt(new Date().toISOString());
+
+        // Confirm connection with backend — triggers billing when both parties confirm
+        try {
+          const confirmRes = await callService.confirmConnection(sessionId, room.sid);
+          if (confirmRes.data?.bothConnected) {
+            console.log('[UserCall] Both parties connected — billing started');
+          }
+        } catch (err) {
+          console.warn('[UserCall] Failed to confirm connection (non-critical):', err);
+        }
 
         // Handle existing participants
         room.participants.forEach(attachParticipantTracks);
@@ -357,9 +381,13 @@ export default function CallSessionPage() {
     setIsSpeakerOn(prev => !prev);
   }, []);
 
-  // Handle end call
+  // Handle end call — uses local timer values as fallback when API returns 0
   const handleEndCall = useCallback(() => {
     setCallStatus('ended');
+
+    // Capture local timer values at end time for fallback
+    const localDuration = timerDurationRef.current;
+    const localCost = timerCostRef.current;
 
     // Disconnect from Twilio room
     if (roomRef.current) {
@@ -372,14 +400,18 @@ export default function CallSessionPage() {
 
     endSession(undefined, {
       onSuccess: (response) => {
-        if (response.data) {
-          setSessionSummary({
-            duration: response.data.durationSeconds || response.data.duration,
-            totalCost: response.data.totalCost,
-          });
-        }
+        const data = response.data;
+        setSessionSummary({
+          duration: data?.durationSeconds ?? data?.duration ?? localDuration,
+          totalCost: data?.totalCost ?? localCost,
+        });
       },
       onError: (error) => {
+        // On error, show summary with locally calculated values
+        setSessionSummary({
+          duration: localDuration,
+          totalCost: localCost,
+        });
         addToast({
           type: 'error',
           title: 'Error',

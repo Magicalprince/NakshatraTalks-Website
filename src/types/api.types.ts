@@ -623,6 +623,7 @@ export interface ActiveSession {
   sessionId: string;
   user: UserInfo;
   startTime: string;
+  billingStartedAt?: string;
   duration: number;
   pricePerMinute: number;
   currentCost: number;

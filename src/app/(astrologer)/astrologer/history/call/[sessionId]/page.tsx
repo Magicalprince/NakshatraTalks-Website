@@ -8,6 +8,7 @@ import {
   useEndCallSessionAstrologer,
 } from '@/hooks/useAstrologerDashboard';
 import { useCallTimer } from '@/hooks/useCallSession';
+import { callService } from '@/lib/services/call.service';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQueueStore } from '@/stores/queue-store';
@@ -30,7 +31,6 @@ export default function AstrologerCallSessionPage() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [sessionSummary, setSessionSummary] = useState<{
     duration: number;
@@ -38,16 +38,27 @@ export default function AstrologerCallSessionPage() {
     totalCost: number;
   } | null>(null);
 
+  // Persisted user info — stored once on first load, survives activeSession becoming null after call ends
+  const [storedUserName, setStoredUserName] = useState<string>('User');
+  const [storedUserImage, setStoredUserImage] = useState<string | undefined>(undefined);
+  const [storedPricePerMinute, setStoredPricePerMinute] = useState<number>(0);
+
+  // Local connected-at timestamp (fallback for timer when API startTime is delayed)
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
+
   // Twilio room reference
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomRef = useRef<any>(null);
   const callStatusRef = useRef<CallStatus>(callStatus);
   callStatusRef.current = callStatus;
 
-  // Track whether Twilio connection has been initiated (prevent re-connection on re-renders)
+  // Track whether Twilio connection has been initiated
   const twilioConnectedRef = useRef(false);
 
-  // Fetch active session via astrologer endpoint
+  // Track whether endSession API has been called (prevent duplicate calls)
+  const endSessionCalledRef = useRef(false);
+
+  // Fetch active session via astrologer endpoint (now properly unwrapped)
   const {
     data: activeSession,
     isLoading: isSessionLoading,
@@ -64,18 +75,76 @@ export default function AstrologerCallSessionPage() {
   // End session via astrologer endpoint
   const { mutate: endSession } = useEndCallSessionAstrologer();
 
-  // Extract session info from ActiveSession
-  const sessionUser = activeSession?.user;
-  // Default to audio — callType only used at connection time, so stable ref is fine
-  const callType = (activeSession?.twilioRoomName ? 'video' : 'audio') as 'audio' | 'video';
+  // Persist user info & price from activeSession (survives activeSession becoming null after call ends)
+  useEffect(() => {
+    if (activeSession?.user?.name) {
+      setStoredUserName(activeSession.user.name);
+      setStoredUserImage(activeSession.user.image || undefined);
+    }
+    if (activeSession?.pricePerMinute) {
+      setStoredPricePerMinute(activeSession.pricePerMinute);
+    }
+  }, [activeSession]);
+
+  // Call type — platform only supports audio calls (all calls have twilioRoomName)
+  const callType = 'audio' as const;
   const callTypeRef = useRef(callType);
   callTypeRef.current = callType;
 
-  // Call timer
-  const { formattedDuration, formattedCost } = useCallTimer(
-    callStatus === 'connected' ? activeSession?.startTime : undefined,
-    activeSession?.pricePerMinute
+  // Timer: use API startTime if available, fallback to local connectedAt
+  const startTime = activeSession?.startTime || connectedAt;
+  const pricePerMinute = activeSession?.pricePerMinute ?? storedPricePerMinute;
+
+  // Call timer — also get raw duration/cost for local fallback in summary
+  const { duration: timerDuration, cost: timerCost, formattedDuration, formattedCost } = useCallTimer(
+    callStatus === 'connected' ? startTime || undefined : undefined,
+    pricePerMinute
   );
+
+  // Refs to capture latest timer values for doEndSession callback
+  const timerDurationRef = useRef(timerDuration);
+  const timerCostRef = useRef(timerCost);
+  timerDurationRef.current = timerDuration;
+  timerCostRef.current = timerCost;
+
+  // End session helper — calls API and sets summary (prevents duplicate calls)
+  // Uses local timer values as fallback when backend returns 0 (e.g. billing_started_at was null)
+  const doEndSession = useCallback(() => {
+    if (endSessionCalledRef.current) return;
+    endSessionCalledRef.current = true;
+
+    // Capture local timer values at end time for fallback
+    const localDuration = timerDurationRef.current;
+    const localCost = timerCostRef.current;
+
+    endSession(sessionId, {
+      onSuccess: (response) => {
+        const data = response.data;
+        // Prefer API totalEarnings (astrologer's earnings after commission),
+        // fallback to API totalCost, then to locally calculated cost.
+        // Use ?? to avoid skipping legitimate 0 values.
+        const earnings = data?.totalEarnings ?? data?.totalCost ?? localCost;
+        setSessionSummary({
+          duration: data?.durationSeconds ?? data?.duration ?? localDuration,
+          durationFormatted: data?.durationFormatted,
+          totalCost: earnings,
+        });
+      },
+      onError: (error) => {
+        // On error, show summary with locally calculated values
+        endSessionCalledRef.current = false;
+        setSessionSummary({
+          duration: localDuration,
+          totalCost: localCost,
+        });
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: error instanceof Error ? error.message : 'Failed to end call',
+        });
+      },
+    });
+  }, [endSession, sessionId, addToast]);
 
   // Attach remote participant tracks to a MediaStream
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,7 +197,7 @@ export default function AstrologerCallSessionPage() {
 
         const localTracks = await Video.createLocalTracks({
           audio: true,
-          video: callTypeRef.current === 'video',
+          video: false, // Audio-only calls
         });
 
         const localMediaStream = new MediaStream();
@@ -146,6 +215,17 @@ export default function AstrologerCallSessionPage() {
 
         roomRef.current = room;
         setCallStatus('connected');
+        setConnectedAt(new Date().toISOString());
+
+        // Confirm connection with backend — triggers billing when both parties confirm
+        try {
+          const confirmRes = await callService.confirmConnection(sessionId, room.sid);
+          if (confirmRes.data?.bothConnected) {
+            console.log('[AstrologerCall] Both parties connected — billing started');
+          }
+        } catch (err) {
+          console.warn('[AstrologerCall] Failed to confirm connection (non-critical):', err);
+        }
 
         // Handle existing participants
         room.participants.forEach(attachParticipantTracks);
@@ -153,14 +233,14 @@ export default function AstrologerCallSessionPage() {
         // Handle new participants joining
         room.on('participantConnected', attachParticipantTracks);
 
-        // Handle participants leaving — remote party hung up, end the call
+        // Handle participants leaving — remote party hung up
         room.on('participantDisconnected', () => {
           setRemoteStream(null);
-          // Remote participant left → disconnect our side too
+          // Remote participant left → disconnect and auto-end session
           room.disconnect();
         });
 
-        // Handle room disconnection (fires after room.disconnect() or remote disconnect)
+        // Handle room disconnection (fires after room.disconnect())
         room.on('disconnected', (_room, error) => {
           setCallStatus('ended');
           roomRef.current = null;
@@ -171,6 +251,8 @@ export default function AstrologerCallSessionPage() {
           if (error) {
             console.warn('Twilio room disconnected with error:', error.message);
           }
+          // Auto-end session on backend when room disconnects
+          doEndSession();
         });
       } catch (error) {
         twilioConnectedRef.current = false; // Allow retry on error
@@ -188,7 +270,7 @@ export default function AstrologerCallSessionPage() {
     }
 
     connectToRoom();
-  }, [twilioToken, twilioRoomName, attachParticipantTracks, addToast]);
+  }, [twilioToken, twilioRoomName, attachParticipantTracks, addToast, doEndSession]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -302,29 +384,17 @@ export default function AstrologerCallSessionPage() {
     setIsMuted(prev => !prev);
   }, [isMuted]);
 
-  // Handle video toggle
+  // Handle video toggle (no-op for audio-only calls)
   const handleToggleVideo = useCallback(() => {
-    if (roomRef.current && callType === 'video') {
-      roomRef.current.localParticipant.videoTracks.forEach(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (publication: any) => {
-          if (isVideoEnabled) {
-            publication.track.disable();
-          } else {
-            publication.track.enable();
-          }
-        }
-      );
-    }
-    setIsVideoEnabled(prev => !prev);
-  }, [isVideoEnabled, callType]);
+    // Audio-only platform — no video tracks to toggle
+  }, []);
 
   // Handle speaker toggle
   const handleToggleSpeaker = useCallback(() => {
     setIsSpeakerOn(prev => !prev);
   }, []);
 
-  // Handle end call
+  // Handle end call (user clicks End button)
   const handleEndCall = useCallback(() => {
     setCallStatus('ended');
 
@@ -337,27 +407,12 @@ export default function AstrologerCallSessionPage() {
     // Stop local media
     localStream?.getTracks().forEach(track => track.stop());
 
-    endSession(sessionId, {
-      onSuccess: (response) => {
-        if (response.data) {
-          setSessionSummary({
-            duration: response.data.durationSeconds || response.data.duration,
-            totalCost: response.data.totalCost,
-          });
-        }
-      },
-      onError: (error) => {
-        addToast({
-          type: 'error',
-          title: 'Error',
-          message: error instanceof Error ? error.message : 'Failed to end call',
-        });
-      },
-    });
-  }, [localStream, endSession, sessionId, addToast]);
+    // End session on backend
+    doEndSession();
+  }, [localStream, doEndSession]);
 
-  // Handle back to dashboard
-  const handleBackToDashboard = useCallback(() => {
+  // Handle close summary / navigate to dashboard
+  const handleCloseSummary = useCallback(() => {
     router.push('/astrologer/dashboard');
   }, [router]);
 
@@ -404,24 +459,25 @@ export default function AstrologerCallSessionPage() {
     <CallInterface
       sessionId={sessionId}
       astrologerId=""
-      astrologerName={sessionUser?.name || 'User'}
-      astrologerImage={sessionUser?.image || undefined}
+      astrologerName={storedUserName}
+      astrologerImage={storedUserImage}
       callType={callType}
       status={callStatus}
       duration={formattedDuration}
       cost={formattedCost}
       localStream={localStream}
       remoteStream={remoteStream}
-      isLocalVideoEnabled={isVideoEnabled}
-      isRemoteVideoEnabled={true}
+      isLocalVideoEnabled={false}
+      isRemoteVideoEnabled={false}
       isMuted={isMuted}
       isSpeakerOn={isSpeakerOn}
       sessionSummary={sessionSummary || undefined}
+      costLabel="Amount Received"
       onToggleMute={handleToggleMute}
       onToggleVideo={handleToggleVideo}
       onToggleSpeaker={handleToggleSpeaker}
       onEndCall={handleEndCall}
-      onStartNewCall={handleBackToDashboard}
+      onClose={handleCloseSummary}
       isLoading={isSessionLoading}
     />
   );
