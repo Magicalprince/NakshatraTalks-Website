@@ -1,20 +1,19 @@
 'use client';
 
 /**
- * MessageBubble Component
- * Design matches mobile app with:
- * - Blue (#0084FF) background for user messages
- * - Yellow (#FEF3C7) background for astrologer messages
- * - WhatsApp-style tick marks for read status
- * - Rounded corners with tail effect
+ * MessageBubble Component — Professional Web Chat Bubble
+ * - Primary color for user messages (right-aligned)
+ * - White card for received messages (left-aligned)
+ * - Subtle entrance animation, modern rounded corners
+ * - WhatsApp-style tick marks with failed state
  */
 
 import { ChatMessage } from '@/types/api.types';
 import { cn } from '@/utils/cn';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read';
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -34,26 +33,20 @@ export function MessageBubble({
   isConsecutive = false,
   status,
 }: MessageBubbleProps) {
-  // Get message content (handle both content and message fields)
   const content = message.content || message.message || '';
 
-  // Format time like mobile app (12:30 pm)
   const formatTime = (timestamp: string | undefined | null) => {
-    if (!timestamp) return '--:--';
-
+    if (!timestamp) return '';
     const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return '--:--';
-
+    if (isNaN(date.getTime())) return '';
     let hours = date.getHours();
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? 'pm' : 'am';
     hours = hours % 12;
     hours = hours ? hours : 12;
-    const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
-    return `${hours}:${minutesStr} ${ampm}`;
+    return `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // Determine message status based on isRead field or passed status
   const getMessageStatus = (): MessageStatus => {
     if (status) return status;
     if (message.status) return message.status as MessageStatus;
@@ -62,22 +55,26 @@ export function MessageBubble({
     return 'sent';
   };
 
-  // Render tick marks for user messages (WhatsApp style)
   const renderTickMarks = () => {
     if (!isCurrentUser) return null;
 
     const currentStatus = getMessageStatus();
-    const tickColor = currentStatus === 'read' ? '#34B7F1' : 'rgba(255, 255, 255, 0.7)';
+
+    if (currentStatus === 'failed') {
+      return <AlertCircle className="w-3 h-3 text-red-400" strokeWidth={2.5} />;
+    }
+
+    const tickColor = currentStatus === 'read' ? '#34B7F1' : 'rgba(255,255,255,0.6)';
 
     switch (currentStatus) {
       case 'sending':
-        return <Check className="w-3.5 h-3.5 opacity-50" style={{ color: tickColor }} strokeWidth={2.5} />;
+        return <Check className="w-3 h-3 opacity-40" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'sent':
-        return <Check className="w-3.5 h-3.5" style={{ color: tickColor }} strokeWidth={2.5} />;
+        return <Check className="w-3 h-3" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'delivered':
-        return <CheckCheck className="w-3.5 h-3.5" style={{ color: tickColor }} strokeWidth={2.5} />;
+        return <CheckCheck className="w-3 h-3" style={{ color: tickColor }} strokeWidth={2.5} />;
       case 'read':
-        return <CheckCheck className="w-3.5 h-3.5" style={{ color: '#34B7F1' }} strokeWidth={2.5} />;
+        return <CheckCheck className="w-3 h-3" style={{ color: '#34B7F1' }} strokeWidth={2.5} />;
       default:
         return null;
     }
@@ -85,43 +82,43 @@ export function MessageBubble({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.15 }}
       className={cn(
-        'w-full px-2',
+        'w-full',
         isCurrentUser ? 'flex justify-end' : 'flex justify-start',
-        isConsecutive ? 'mb-0.5' : 'mb-2'
+        isConsecutive ? 'mb-0.5' : 'mb-3'
       )}
     >
       <div
         className={cn(
-          'max-w-[80%] px-3 py-2 shadow-sm',
+          'max-w-[75%] lg:max-w-[60%] px-4 py-2.5',
           isCurrentUser
             ? cn(
-                'bg-[#0084FF] text-white',
-                'rounded-tl-[20px] rounded-bl-[20px] rounded-br-[20px]',
-                isConsecutive ? 'rounded-tr-[8px]' : 'rounded-tr-[20px]'
+                'bg-primary text-white',
+                'rounded-2xl',
+                isConsecutive ? 'rounded-tr-lg' : 'rounded-tr-sm'
               )
             : cn(
-                'bg-[#FEF3C7] text-black border border-black/5',
-                'rounded-tr-[20px] rounded-br-[20px] rounded-bl-[20px]',
-                isConsecutive ? 'rounded-tl-[8px]' : 'rounded-tl-[20px]'
+                'bg-white text-gray-800 shadow-sm border border-gray-100',
+                'rounded-2xl',
+                isConsecutive ? 'rounded-tl-lg' : 'rounded-tl-sm'
               )
         )}
       >
         {/* Message Text */}
-        <p className="text-[15px] leading-5 font-lexend whitespace-pre-wrap break-words">
+        <p className="text-[15px] leading-relaxed font-lexend whitespace-pre-wrap break-words">
           {content}
         </p>
 
-        {/* Timestamp and Tick Marks */}
+        {/* Timestamp and Status */}
         {showTimestamp && (
-          <div className="flex items-center justify-end gap-1 mt-1">
+          <div className="flex items-center justify-end gap-1.5 mt-1 -mb-0.5">
             <span
               className={cn(
-                'text-[11px] font-lexend',
-                isCurrentUser ? 'text-white/70' : 'text-black/50'
+                'text-[10px] font-lexend',
+                isCurrentUser ? 'text-white/50' : 'text-gray-400'
               )}
             >
               {formatTime(message.createdAt)}

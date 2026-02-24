@@ -2,9 +2,11 @@
  * Browse Data Hooks - React Query hooks for browse screens
  */
 
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { astrologerService, GetAstrologersParams } from '@/lib/services/astrologer.service';
-import { AstrologerFilters } from '@/types/api.types';
+import { AstrologerFilters, Astrologer } from '@/types/api.types';
+import { supabaseRealtime, AstrologerStatusPayload } from '@/lib/services/supabase-realtime.service';
 
 // Query keys
 export const BROWSE_QUERY_KEYS = {
@@ -165,4 +167,83 @@ export function useAstrologerAvailability(id: string, date?: string) {
     enabled: !!id,
     refetchInterval: 30000, // Refetch every 30 seconds
   });
+}
+
+// ─── Real-Time Availability via Supabase Broadcast ───────────────────
+
+/**
+ * Helper to update an astrologer's availability status in React Query cache.
+ * Used by the real-time hooks below.
+ */
+function updateAstrologerInCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKeyPrefix: readonly string[],
+  payload: AstrologerStatusPayload,
+) {
+  // Update all infinite query caches that match the prefix
+  queryClient.setQueriesData<{
+    pages: Array<{ data: Astrologer[] }>;
+    pageParams: unknown[];
+  }>(
+    { queryKey: queryKeyPrefix },
+    (old) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: page.data.map((astrologer) => {
+            if (astrologer.id === payload.astrologerId) {
+              return {
+                ...astrologer,
+                isAvailable: payload.chatAvailable || payload.callAvailable,
+                isOnline: payload.chatAvailable || payload.callAvailable,
+                chatAvailable: payload.chatAvailable,
+                callAvailable: payload.callAvailable,
+              };
+            }
+            return astrologer;
+          }),
+        })),
+      };
+    }
+  );
+}
+
+/**
+ * Hook that subscribes to real-time chat astrologer availability changes.
+ * When an astrologer toggles on/off on mobile → the browse-chat page updates instantly.
+ */
+export function useRealtimeChatAvailability() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const unsub = supabaseRealtime.subscribeToChatAvailability((payload) => {
+      updateAstrologerInCache(
+        queryClient,
+        BROWSE_QUERY_KEYS.chatAstrologers,
+        payload,
+      );
+    });
+    return unsub;
+  }, [queryClient]);
+}
+
+/**
+ * Hook that subscribes to real-time call astrologer availability changes.
+ * When an astrologer toggles on/off on mobile → the browse-call page updates instantly.
+ */
+export function useRealtimeCallAvailability() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const unsub = supabaseRealtime.subscribeToCallAvailability((payload) => {
+      updateAstrologerInCache(
+        queryClient,
+        BROWSE_QUERY_KEYS.callAstrologers,
+        payload,
+      );
+    });
+    return unsub;
+  }, [queryClient]);
 }

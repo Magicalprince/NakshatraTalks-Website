@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * ChatInterface Component
- * Design matches mobile app with:
- * - WhatsApp-like chat background (#ECE5DD)
- * - Session header with timer ribbon
- * - Message bubbles (blue user, yellow astrologer)
- * - Clean input area
+ * ChatInterface Component — Professional Web Chat UI
+ * - Clean white/gray palette with subtle gradient background
+ * - Centered max-width container for desktop readability
+ * - Polished header with session info
+ * - Modern message bubbles with proper spacing
+ * - Sticky input bar always visible at bottom
  */
 
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
@@ -16,7 +16,6 @@ import { MessageInput } from './MessageInput';
 import { TypingIndicator } from './TypingIndicator';
 import { SessionHeader } from './SessionHeader';
 import { SessionEndedActions } from './SessionEndedActions';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { ArrowDown, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -36,6 +35,7 @@ interface ChatInterfaceProps {
   hasMoreMessages?: boolean;
   sessionStatus: 'active' | 'completed' | 'cancelled';
   sessionStartTime?: string;
+  initialDuration?: number;
   pricePerMinute?: number;
   remainingBalance?: number;
   sessionSummary?: {
@@ -67,6 +67,8 @@ export function ChatInterface({
   isFetchingMore,
   hasMoreMessages,
   sessionStatus,
+  sessionStartTime,
+  initialDuration,
   pricePerMinute = 0,
   remainingBalance = 0,
   sessionSummary,
@@ -82,10 +84,11 @@ export function ChatInterface({
   const { user } = useAuthStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const prevMessagesLengthRef = useRef(0);
   const isSessionActive = sessionStatus === 'active';
   const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'cancelled';
 
-  // Calculate running cost based on duration (would need to track in real implementation)
   const runningCost = sessionSummary?.totalCost || 0;
 
   // Scroll to bottom
@@ -93,10 +96,33 @@ export function ChatInterface({
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
-  // Auto-scroll on new messages
+  // Track whether user is near bottom of the chat
   useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom();
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScrollTrack = () => {
+      const { scrollHeight, scrollTop, clientHeight } = container;
+      isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
+    };
+
+    container.addEventListener('scroll', handleScrollTrack);
+    return () => container.removeEventListener('scroll', handleScrollTrack);
+  }, []);
+
+  // Auto-scroll: only when near bottom or on initial load
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    const isInitialLoad = prevMessagesLengthRef.current === 0;
+    prevMessagesLengthRef.current = messages.length;
+
+    if (isInitialLoad) {
+      // Instant scroll on first load
+      scrollToBottom('instant');
+    } else if (isNearBottomRef.current) {
+      // Smooth scroll only when user was already near bottom
+      scrollToBottom('smooth');
     }
   }, [messages.length, scrollToBottom]);
 
@@ -141,28 +167,14 @@ export function ChatInterface({
     return groups;
   }, [messages]);
 
-  // Render loading skeleton
-  const renderLoadingSkeleton = () => (
-    <div className="flex-1 flex items-center justify-center">
-      <Loader2 className="w-8 h-8 text-primary animate-spin" />
-    </div>
-  );
-
-  // Render date separator
-  const renderDateSeparator = (date: string) => (
-    <div className="flex items-center justify-center my-4">
-      <span className="px-4 py-1.5 bg-white/80 rounded-lg text-xs text-[#595959] font-lexend shadow-sm">
-        {date}
-      </span>
-    </div>
-  );
-
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Header with Timer Ribbon */}
+    <div className="flex flex-col h-full bg-[#F0F2F5]">
+      {/* Header */}
       <SessionHeader
         astrologerName={isAstrologer ? userName : astrologerName}
-        pricePerMinute={isAstrologer ? undefined : pricePerMinute}
+        sessionStartTime={sessionStartTime}
+        initialDuration={initialDuration}
+        pricePerMinute={pricePerMinute}
         onEndSession={isSessionActive ? onEndSession : undefined}
         isEnding={isEnding}
         sessionEnded={isSessionEnded}
@@ -172,73 +184,95 @@ export function ChatInterface({
         onBackPress={onBackPress}
       />
 
-      {/* Messages Area - WhatsApp-like background */}
+      {/* Messages Area */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto py-3"
-        style={{ backgroundColor: '#ECE5DD' }}
+        className="flex-1 overflow-y-auto min-h-0"
         onScroll={handleScroll}
       >
-        {/* Loading More Indicator */}
-        {isFetchingMore && (
-          <div className="flex justify-center py-2">
-            <Loader2 className="w-5 h-5 text-primary animate-spin" />
-          </div>
-        )}
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          {/* Loading More Indicator */}
+          {isFetchingMore && (
+            <div className="flex justify-center py-3">
+              <Loader2 className="w-5 h-5 text-primary/60 animate-spin" />
+            </div>
+          )}
 
-        {/* Load More Button */}
-        {hasMoreMessages && !isFetchingMore && (
-          <div className="flex justify-center py-2">
-            <button
-              onClick={onLoadMore}
-              className="px-4 py-1.5 bg-white/80 rounded-lg text-xs text-primary font-medium font-lexend shadow-sm"
-            >
-              Load earlier messages
-            </button>
-          </div>
-        )}
+          {/* Load More Button */}
+          {hasMoreMessages && !isFetchingMore && (
+            <div className="flex justify-center py-3">
+              <button
+                onClick={onLoadMore}
+                className="px-5 py-2 bg-white rounded-full text-xs text-primary font-medium font-lexend shadow-sm border border-primary/10 hover:bg-primary/5 transition-colors"
+              >
+                Load earlier messages
+              </button>
+            </div>
+          )}
 
-        {/* Loading State */}
-        {isLoading ? (
-          renderLoadingSkeleton()
-        ) : (
-          <>
-            {/* Messages */}
-            {groupedMessages.map((group) => (
-              <div key={group.date}>
-                {renderDateSeparator(group.date)}
-                {group.messages.map((message, index) => {
-                  // For astrologer view: astrologer's messages are on the right
-                  // For user view: user's messages are on the right
-                  const isCurrentUser = isAstrologer
-                    ? message.senderType === 'astrologer'
-                    : message.senderType === 'user' || message.senderId === user?.id;
+          {/* Loading State */}
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-primary/40 animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Empty state */}
+              {messages.length === 0 && !isLoading && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-400 font-lexend">
+                    Start the conversation...
+                  </p>
+                </div>
+              )}
 
-                  // Check if consecutive message from same sender
-                  const prevMessage = index > 0 ? group.messages[index - 1] : null;
-                  const isConsecutive = prevMessage?.senderType === message.senderType;
+              {/* Messages */}
+              {groupedMessages.map((group) => (
+                <div key={group.date}>
+                  {/* Date separator */}
+                  <div className="flex items-center justify-center my-5">
+                    <div className="h-px bg-gray-200 flex-1" />
+                    <span className="px-4 py-1 text-[11px] text-gray-400 font-lexend font-medium uppercase tracking-wide">
+                      {group.date}
+                    </span>
+                    <div className="h-px bg-gray-200 flex-1" />
+                  </div>
 
-                  return (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      isCurrentUser={isCurrentUser}
-                      isConsecutive={isConsecutive}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+                  {group.messages.map((message, index) => {
+                    const isCurrentUser = isAstrologer
+                      ? message.senderType === 'astrologer'
+                      : message.senderType === 'user' || message.senderId === user?.id;
 
-            {/* Typing Indicator */}
-            <AnimatePresence>
-              {isTyping && <TypingIndicator />}
-            </AnimatePresence>
-          </>
-        )}
+                    const prevMessage = index > 0 ? group.messages[index - 1] : null;
+                    const isConsecutive = prevMessage?.senderType === message.senderType;
 
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} />
+                    return (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        isCurrentUser={isCurrentUser}
+                        isConsecutive={isConsecutive}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* Typing Indicator */}
+              <AnimatePresence>
+                {isTyping && <TypingIndicator />}
+              </AnimatePresence>
+            </>
+          )}
+
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Session Ended Actions */}
@@ -252,14 +286,18 @@ export function ChatInterface({
         />
       )}
 
-      {/* Message Input */}
+      {/* Message Input — always at bottom */}
       {isSessionActive && (
-        <MessageInput
-          onSendMessage={onSendMessage}
-          onTyping={onTyping}
-          placeholder="Message"
-          disabled={isEnding}
-        />
+        <div className="border-t border-gray-200 bg-white">
+          <div className="max-w-3xl mx-auto">
+            <MessageInput
+              onSendMessage={onSendMessage}
+              onTyping={onTyping}
+              placeholder="Type a message..."
+              disabled={isEnding}
+            />
+          </div>
+        </div>
       )}
 
       {/* Scroll to Bottom Button */}
@@ -299,17 +337,18 @@ function ScrollToBottomButton({
     <AnimatePresence>
       {showButton && (
         <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
           onClick={onClick}
           className={cn(
-            'fixed bottom-24 right-4 w-10 h-10 rounded-full',
-            'bg-white shadow-lg flex items-center justify-center',
-            'border border-gray-200'
+            'absolute bottom-20 left-1/2 -translate-x-1/2',
+            'w-9 h-9 rounded-full',
+            'bg-white shadow-md flex items-center justify-center',
+            'border border-gray-100 hover:shadow-lg transition-shadow'
           )}
         >
-          <ArrowDown className="w-5 h-5 text-[#595959]" />
+          <ArrowDown className="w-4 h-4 text-gray-500" />
         </motion.button>
       )}
     </AnimatePresence>

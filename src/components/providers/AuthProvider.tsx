@@ -9,7 +9,10 @@
  *    by refreshing the access token via httpOnly cookie
  * 3. If refresh fails, logs the user out cleanly
  *
- * Also connects/disconnects Socket.io based on auth state.
+ * Also:
+ * - Connects/disconnects Socket.io based on auth state
+ * - Registers user/astrologer in Socket.IO rooms for call notifications
+ * - Manages Supabase Realtime subscriptions for wallet + billing events
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -17,6 +20,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { apiClient } from '@/lib/api/client';
 import { authService } from '@/lib/services/auth.service';
 import { socketService } from '@/lib/services/socket.service';
+import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -25,8 +29,11 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  const astrologer = useAuthStore((s) => s.astrologer);
   const updateUser = useAuthStore((s) => s.updateUser);
   const updateAstrologer = useAuthStore((s) => s.updateAstrologer);
+  const updateWalletBalance = useAuthStore((s) => s.updateWalletBalance);
   const logout = useAuthStore((s) => s.logout);
   const [isReady, setIsReady] = useState(false);
   const hasRestored = useRef(false);
@@ -75,20 +82,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     restoreSession();
   }, [isHydrated, isAuthenticated, updateUser, updateAstrologer, logout]);
 
-  // Connect/disconnect Socket.io based on auth
+  // Connect/disconnect Socket.io + Supabase Realtime based on auth state
   useEffect(() => {
     if (!isReady) return;
 
-    if (isAuthenticated) {
+    if (isAuthenticated && user) {
+      // Socket.IO: connect and register in user/astrologer rooms
+      socketService.setIdentity(user.id, astrologer?.id);
       socketService.connect();
+
+      // Supabase Realtime: subscribe to wallet balance updates
+      const unsubWallet = supabaseRealtime.subscribeToWalletUpdates(
+        user.id,
+        (payload) => {
+          if (typeof payload.balance === 'number') {
+            updateWalletBalance(payload.balance);
+          }
+        }
+      );
+
+      return () => {
+        unsubWallet();
+      };
     } else {
       socketService.disconnect();
+      supabaseRealtime.removeAllChannels();
     }
+  }, [isReady, isAuthenticated, user, astrologer, updateWalletBalance]);
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       socketService.disconnect();
+      supabaseRealtime.removeAllChannels();
     };
-  }, [isReady, isAuthenticated]);
+  }, []);
 
   // Don't render until hydrated and session restored
   if (!isHydrated || !isReady) {

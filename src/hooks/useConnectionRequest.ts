@@ -5,7 +5,8 @@
  * 1. Validates balance with backend
  * 2. Creates a chat/call request via API
  * 3. Polls request status until accepted/rejected/timeout
- * 4. Updates queue store and navigates to session on success
+ * 4. Listens to Supabase Broadcast for instant acceptance (cross-platform)
+ * 5. Updates queue store and navigates to session on success
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,6 +15,7 @@ import { useQueueStore } from '@/stores/queue-store';
 import { useUIStore } from '@/stores/ui-store';
 import { chatService } from '@/lib/services/chat.service';
 import { callService } from '@/lib/services/call.service';
+import { supabaseRealtime, RequestStatusPayload } from '@/lib/services/supabase-realtime.service';
 import { Astrologer, SessionType } from '@/types/api.types';
 
 export function useConnectionRequest() {
@@ -29,25 +31,65 @@ export function useConnectionRequest() {
     cancelRequest,
     clearRequest,
     setActiveSession,
+    setTwilioCredentials,
   } = useQueueStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestIdRef = useRef<string | null>(null);
+  const supabaseUnsubRef = useRef<(() => void) | null>(null);
 
-  // Stop any active polling
+  // Stop any active polling and Supabase subscription
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
+    if (supabaseUnsubRef.current) {
+      supabaseUnsubRef.current();
+      supabaseUnsubRef.current = null;
+    }
   }, []);
 
-  // Start polling request status
+  // Start polling request status + Supabase Broadcast for instant updates
   const startPolling = useCallback((requestId: string, type: SessionType) => {
     stopPolling();
     requestIdRef.current = requestId;
 
+    // ── Supabase Broadcast: instant request status updates (primary) ──
+    const subscribeFn = type === 'chat'
+      ? supabaseRealtime.subscribeToChatRequestUpdate
+      : supabaseRealtime.subscribeToCallRequestUpdate;
+
+    supabaseUnsubRef.current = subscribeFn(requestId, (payload: RequestStatusPayload) => {
+      if (payload.status === 'accepted' && payload.sessionId) {
+        stopPolling();
+        setRequestStatus('connected');
+        setActiveRequest({
+          ...activeRequest!,
+          status: 'accepted',
+          sessionId: payload.sessionId,
+        });
+        // Store Twilio credentials for the call page
+        if (payload.twilioToken && payload.twilioRoomName) {
+          setTwilioCredentials(payload.twilioToken, payload.twilioRoomName);
+        }
+        setActiveSession(payload.sessionId, type);
+      } else if (payload.status === 'rejected') {
+        stopPolling();
+        setRequestStatus('rejected');
+        addToast({
+          type: 'warning',
+          title: 'Request Declined',
+          message: payload.rejectReason || 'Astrologer is unavailable right now.',
+        });
+      } else if (payload.status === 'timeout' || payload.status === 'cancelled') {
+        stopPolling();
+        setRequestStatus('timeout');
+      }
+    });
+
+    // ── HTTP Polling: fallback every 3s in case Supabase Broadcast is delayed ──
     const pollFn = type === 'chat'
       ? () => chatService.getRequestStatus(requestId)
       : () => callService.getRequestStatus(requestId);
@@ -67,6 +109,11 @@ export function useConnectionRequest() {
             status: 'accepted',
             sessionId: session.sessionId,
           });
+          // Store Twilio credentials for the call page (only present in call responses)
+          const sessionAny = session as { twilioToken?: string; twilioRoomName?: string };
+          if (sessionAny.twilioToken && sessionAny.twilioRoomName) {
+            setTwilioCredentials(sessionAny.twilioToken, sessionAny.twilioRoomName);
+          }
           setActiveSession(session.sessionId, type);
         } else if (status === 'rejected') {
           stopPolling();
@@ -85,8 +132,8 @@ export function useConnectionRequest() {
       } catch {
         // Network error — keep polling, don't break flow
       }
-    }, 2000);
-  }, [stopPolling, activeRequest, setRequestStatus, setActiveRequest, setActiveSession, addToast]);
+    }, 3000);
+  }, [stopPolling, activeRequest, setRequestStatus, setActiveRequest, setActiveSession, setTwilioCredentials, addToast]);
 
   // Initiate a connection request
   const initiateRequest = useCallback(async (astrologer: Astrologer, type: SessionType) => {

@@ -18,9 +18,38 @@ class SocketService {
   private eventHandlers: Map<string, Set<SocketEventHandler>> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private userId: string | null = null;
+  private astrologerId: string | null = null;
 
   get isConnected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  /**
+   * Set the user/astrologer IDs so the socket can register in
+   * the correct rooms on connect (and re-register on reconnect).
+   */
+  setIdentity(userId: string | null, astrologerId?: string | null) {
+    this.userId = userId;
+    this.astrologerId = astrologerId ?? null;
+    // If already connected, register immediately
+    if (this.socket?.connected) {
+      this.registerRooms();
+    }
+  }
+
+  /**
+   * Register this socket in the backend's user/astrologer rooms
+   * so Socket.IO events (call:accepted, call:ended, low_balance_warning, etc.)
+   * are delivered to this client.
+   */
+  private registerRooms() {
+    if (this.userId) {
+      this.emit('call:register-user', { userId: this.userId });
+    }
+    if (this.astrologerId) {
+      this.emit('call:register-astrologer', { astrologerId: this.astrologerId });
+    }
   }
 
   /**
@@ -47,6 +76,8 @@ class SocketService {
 
     this.socket.on('connect', () => {
       this.reconnectAttempts = 0;
+      // Register in user/astrologer rooms on every (re)connect
+      this.registerRooms();
     });
 
     this.socket.on('disconnect', () => {
@@ -78,6 +109,8 @@ class SocketService {
       this.socket = null;
     }
     this.reconnectAttempts = 0;
+    this.userId = null;
+    this.astrologerId = null;
   }
 
   /**

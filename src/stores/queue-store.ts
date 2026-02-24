@@ -40,6 +40,10 @@ interface QueueState {
   activeSessionId: string | null;
   activeSessionType: SessionType | null;
 
+  // Twilio credentials (received from accept/status response, consumed by call page)
+  twilioToken: string | null;
+  twilioRoomName: string | null;
+
   // Actions
   setQueues: (queues: QueueEntry[]) => void;
   addToQueue: (queue: QueueEntry) => void;
@@ -58,6 +62,7 @@ interface QueueState {
   cancelRequest: () => void;
   clearRequest: () => void;
 
+  setTwilioCredentials: (token: string, roomName: string) => void;
   setActiveSession: (sessionId: string, type: SessionType) => void;
   clearActiveSession: () => void;
 
@@ -74,6 +79,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
   estimatedWaitTime: null,
   activeSessionId: null,
   activeSessionType: null,
+  twilioToken: null,
+  twilioRoomName: null,
 
   // Queue actions
   setQueues: (queues) => set({ queues }),
@@ -170,8 +177,16 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       activeRequest: null,
       queuePosition: null,
       estimatedWaitTime: null,
+      twilioToken: null,
+      twilioRoomName: null,
     });
   },
+
+  // Twilio credential actions
+  setTwilioCredentials: (token, roomName) => set({
+    twilioToken: token,
+    twilioRoomName: roomName,
+  }),
 
   // Session actions
   setActiveSession: (sessionId, type) => {
@@ -186,6 +201,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
     set({
       activeSessionId: null,
       activeSessionType: null,
+      twilioToken: null,
+      twilioRoomName: null,
     });
   },
 
@@ -200,6 +217,8 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       estimatedWaitTime: null,
       activeSessionId: null,
       activeSessionType: null,
+      twilioToken: null,
+      twilioRoomName: null,
     });
   },
 }));

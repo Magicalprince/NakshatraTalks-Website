@@ -155,27 +155,51 @@ export const useAstrologerAvailability = useAvailabilityStatus;
 
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
+  const updateAstrologer = useAuthStore((s) => s.updateAstrologer);
 
   return useMutation({
-    mutationFn: (type?: 'chat' | 'call' | 'all') =>
-      astrologerDashboardService.toggleAvailability(type),
-    onSuccess: () => {
+    mutationFn: (isAvailable: boolean) =>
+      astrologerDashboardService.toggleAvailability(isAvailable),
+    onMutate: async (isAvailable) => {
+      // Cancel outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
+
+      // Snapshot previous value
+      const previous = queryClient.getQueryData(ASTROLOGER_QUERY_KEYS.availability);
+
+      // Optimistic update
+      queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.availability, (old: Record<string, unknown> | undefined) => ({
+        ...old,
+        isAvailable,
+        chatAvailable: isAvailable,
+        callAvailable: isAvailable,
+      }));
+
+      // Sync auth store immediately
+      updateAstrologer({ isAvailable, chatAvailable: isAvailable, callAvailable: isAvailable });
+
+      return { previous };
+    },
+    onError: (_err, _isAvailable, context) => {
+      // Rollback on error
+      if (context?.previous) {
+        queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.availability, context.previous);
+        const prev = context.previous as { isAvailable: boolean; chatAvailable: boolean; callAvailable: boolean };
+        updateAstrologer({
+          isAvailable: prev.isAvailable,
+          chatAvailable: prev.chatAvailable,
+          callAvailable: prev.callAvailable,
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
     },
   });
 }
 
-export function useUpdateAvailability() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (availability: { chat?: boolean; call?: boolean; video?: boolean }) =>
-      astrologerDashboardService.updateAvailability(availability),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
-    },
-  });
-}
+/** @deprecated Use useToggleAvailability instead — backend only supports a single toggle */
+export const useUpdateAvailability = useToggleAvailability;
 
 export function useHeartbeat(enabled = true) {
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
@@ -256,7 +280,7 @@ export function useChatRequestActions() {
   };
 }
 
-export function useAcceptRequest() {
+export function useAcceptChatRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -270,12 +294,31 @@ export function useAcceptRequest() {
   });
 }
 
-export function useRejectRequest() {
+export function useAcceptCallRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (requestId: string) =>
-      astrologerDashboardService.rejectChatRequest(requestId),
+      astrologerDashboardService.acceptCallRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
+    },
+  });
+}
+
+/** @deprecated Use useAcceptChatRequest or useAcceptCallRequest instead */
+export const useAcceptRequest = useAcceptChatRequest;
+
+export function useRejectRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ requestId, type }: { requestId: string; type: 'chat' | 'call' }) =>
+      type === 'chat'
+        ? astrologerDashboardService.rejectChatRequest(requestId)
+        : astrologerDashboardService.rejectCallRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
@@ -385,14 +428,11 @@ export function useEndCallSessionAstrologer() {
 }
 
 export function useSendMessageAstrologer(sessionId: string) {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: ({ content, type = 'text' }: { content: string; type?: 'text' | 'image' }) =>
       astrologerDashboardService.sendMessage(sessionId, content, type),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.chatMessages(sessionId) });
-    },
+    // NOTE: Do NOT invalidateQueries here. Messages arrive via Supabase broadcast
+    // and are managed in local state. Invalidating would wipe the message cache.
   });
 }
 

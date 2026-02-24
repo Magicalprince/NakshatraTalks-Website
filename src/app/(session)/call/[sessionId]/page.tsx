@@ -5,12 +5,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { CallInterface } from '@/components/features/call';
 import {
   useCallSession,
-  useTwilioToken,
   useEndCallSession,
   useCallTimer,
 } from '@/hooks/useCallSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { useQueueStore } from '@/stores/queue-store';
+import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
+import { socketService } from '@/lib/services/socket.service';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -22,6 +25,7 @@ export default function CallSessionPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+  const user = useAuthStore((s) => s.user);
 
   // Auth check
   const { isReady } = useRequireAuth();
@@ -42,6 +46,11 @@ export default function CallSessionPage() {
   // Twilio room reference
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roomRef = useRef<any>(null);
+  const callStatusRef = useRef<CallStatus>(callStatus);
+  callStatusRef.current = callStatus;
+
+  // Track whether Twilio connection has been initiated (prevent re-connection on re-renders)
+  const twilioConnectedRef = useRef(false);
 
   // Fetch session data
   const {
@@ -51,8 +60,9 @@ export default function CallSessionPage() {
     refetch: refetchSession,
   } = useCallSession(sessionId);
 
-  // Fetch Twilio token
-  const { data: twilioTokenData } = useTwilioToken(sessionId);
+  // Twilio credentials from queue-store (set during acceptance flow)
+  const twilioToken = useQueueStore((s) => s.twilioToken);
+  const twilioRoomName = useQueueStore((s) => s.twilioRoomName);
 
   // End session mutation
   const { mutate: endSession } = useEndCallSession(sessionId);
@@ -61,6 +71,8 @@ export default function CallSessionPage() {
   const session = sessionData?.session;
   const astrologer = sessionData?.astrologer;
   const callType = (session?.sessionType === 'video' ? 'video' : 'audio') as 'audio' | 'video';
+  const callTypeRef = useRef(callType);
+  callTypeRef.current = callType;
 
   // Call timer
   const { formattedDuration, formattedCost } = useCallTimer(
@@ -100,48 +112,40 @@ export default function CallSessionPage() {
     });
   }, []);
 
-  // Connect to Twilio room
+  // Connect to Twilio room — runs once when credentials are available
   useEffect(() => {
-    if (!twilioTokenData?.token || !twilioTokenData?.roomName || roomRef.current) return;
+    // Guard: skip if no credentials, already connected, or already initiated
+    if (!twilioToken || !twilioRoomName || roomRef.current || twilioConnectedRef.current) return;
 
-    // Capture as non-null for closure
-    const twilioToken: string = twilioTokenData.token;
-    const twilioRoomName: string = twilioTokenData.roomName;
-    let cancelled = false;
+    // Mark as initiated immediately to prevent duplicate connections from re-renders
+    twilioConnectedRef.current = true;
+
+    const token: string = twilioToken;
+    const roomName: string = twilioRoomName;
 
     async function connectToRoom() {
       try {
-        // Dynamically import twilio-video (browser-only)
         const Video = await import('twilio-video');
 
         setCallStatus('ringing');
 
         const localTracks = await Video.createLocalTracks({
           audio: true,
-          video: callType === 'video',
+          video: callTypeRef.current === 'video',
         });
 
-        // Set local stream from local tracks
         const localMediaStream = new MediaStream();
         localTracks.forEach((track) => {
           if ('mediaStreamTrack' in track) {
             localMediaStream.addTrack(track.mediaStreamTrack);
           }
         });
-        if (!cancelled) {
-          setLocalStream(localMediaStream);
-        }
+        setLocalStream(localMediaStream);
 
-        // Connect to the Twilio room
-        const room = await Video.connect(twilioToken, {
-          name: twilioRoomName,
+        const room = await Video.connect(token, {
+          name: roomName,
           tracks: localTracks,
         });
-
-        if (cancelled) {
-          room.disconnect();
-          return;
-        }
 
         roomRef.current = room;
         setCallStatus('connected');
@@ -152,20 +156,27 @@ export default function CallSessionPage() {
         // Handle new participants joining
         room.on('participantConnected', attachParticipantTracks);
 
-        // Handle participants leaving
+        // Handle participants leaving — remote party hung up, end the call
         room.on('participantDisconnected', () => {
           setRemoteStream(null);
+          // Remote participant left → disconnect our side too
+          room.disconnect();
         });
 
-        // Handle room disconnection
-        room.on('disconnected', () => {
+        // Handle room disconnection (fires after room.disconnect() or remote disconnect)
+        room.on('disconnected', (_room, error) => {
           setCallStatus('ended');
+          roomRef.current = null;
+          // Stop ALL local tracks to release microphone/camera
           localTracks.forEach((track) => {
             if ('stop' in track) track.stop();
           });
+          if (error) {
+            console.warn('Twilio room disconnected with error:', error.message);
+          }
         });
       } catch (error) {
-        if (cancelled) return;
+        twilioConnectedRef.current = false; // Allow retry on error
         if (process.env.NODE_ENV === 'development') console.error('Twilio connect error:', error);
 
         const isDenied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError');
@@ -180,11 +191,7 @@ export default function CallSessionPage() {
     }
 
     connectToRoom();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [twilioTokenData, callType, attachParticipantTracks, addToast]);
+  }, [twilioToken, twilioRoomName, attachParticipantTracks, addToast]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -197,6 +204,119 @@ export default function CallSessionPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Real-time billing events via Supabase Broadcast + Socket.IO
+  useEffect(() => {
+    if (!user?.id || !sessionId) return;
+
+    // Supabase Broadcast: billing events (low balance, call ended by system/balance)
+    const unsubBilling = supabaseRealtime.subscribeToBillingEvents(user.id, {
+      onLowBalance: (payload) => {
+        if (payload.sessionId === sessionId) {
+          addToast({
+            type: 'warning',
+            title: 'Low Balance',
+            message: `Only ${payload.remainingMinutes ?? 0} minute(s) remaining. Please recharge to continue.`,
+          });
+        }
+      },
+      onCallEndedBalance: (payload) => {
+        if (payload.sessionId === sessionId) {
+          setCallStatus('ended');
+          if (roomRef.current) {
+            roomRef.current.disconnect();
+            roomRef.current = null;
+          }
+          addToast({
+            type: 'error',
+            title: 'Call Ended',
+            message: 'Call ended due to insufficient balance.',
+          });
+          refetchSession();
+        }
+      },
+      onCallEnded: (payload) => {
+        if (payload.sessionId === sessionId && callStatusRef.current !== 'ended') {
+          setCallStatus('ended');
+          if (roomRef.current) {
+            roomRef.current.disconnect();
+            roomRef.current = null;
+          }
+          if (payload.duration != null && payload.totalCost != null) {
+            setSessionSummary({
+              duration: payload.duration,
+              durationFormatted: payload.durationFormatted,
+              totalCost: payload.totalCost,
+            });
+          }
+          refetchSession();
+        }
+      },
+      onBothConnected: (payload) => {
+        if (payload.sessionId === sessionId) {
+          setCallStatus('connected');
+        }
+      },
+    });
+
+    // Socket.IO: call events emitted by backend to user_{userId} room
+    const unsubAccepted = socketService.on('call:accepted', () => {
+      // Already handled via Twilio connection, but good to have
+    });
+    const unsubEnded = socketService.on('call:ended', (data: unknown) => {
+      const payload = data as { sessionId: string; duration: number; totalCost: number; durationFormatted?: string };
+      if (payload?.sessionId === sessionId && callStatusRef.current !== 'ended') {
+        setCallStatus('ended');
+        if (roomRef.current) {
+          roomRef.current.disconnect();
+          roomRef.current = null;
+        }
+        setSessionSummary({
+          duration: payload.duration,
+          durationFormatted: payload.durationFormatted,
+          totalCost: payload.totalCost,
+        });
+        refetchSession();
+      }
+    });
+    const unsubLowBalance = socketService.on('low_balance_warning', (data: unknown) => {
+      const payload = data as { sessionId: string; remainingMinutes: number };
+      if (payload?.sessionId === sessionId) {
+        addToast({
+          type: 'warning',
+          title: 'Low Balance',
+          message: `Only ${payload.remainingMinutes} minute(s) remaining.`,
+        });
+      }
+    });
+
+    // Supabase Broadcast: session-level updates (astrologer ends call on mobile)
+    const unsubSession = supabaseRealtime.subscribeToSessionUpdate(sessionId, (payload) => {
+      if ((payload.status === 'completed' || payload.status === 'cancelled') && callStatusRef.current !== 'ended') {
+        setCallStatus('ended');
+        if (roomRef.current) {
+          roomRef.current.disconnect();
+          roomRef.current = null;
+        }
+        if (payload.duration != null && payload.totalCost != null) {
+          setSessionSummary({
+            duration: payload.duration,
+            totalCost: payload.totalCost,
+          });
+        }
+        refetchSession();
+      }
+    });
+
+    return () => {
+      unsubBilling();
+      unsubAccepted();
+      unsubEnded();
+      unsubLowBalance();
+      unsubSession();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, sessionId]);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {

@@ -1,24 +1,22 @@
 'use client';
 
 /**
- * SessionHeader Component
- * Design matches mobile app with:
- * - Back button and astrologer name centered
- * - Red End button on right
- * - Timer ribbon with active indicator, duration, cost, and mins remaining
+ * SessionHeader Component — Professional Web Chat Header
+ * - Clean header with back, name, and end button
+ * - Compact info ribbon with timer, cost, and balance
  */
 
 import { useState, useEffect } from 'react';
 import { ChevronLeft, IndianRupee, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 
 interface SessionHeaderProps {
   astrologerName: string;
   astrologerImage?: string;
   isOnline?: boolean;
   sessionStartTime?: string;
+  initialDuration?: number;
   pricePerMinute?: number;
   onEndSession?: () => void;
   onCallClick?: () => void;
@@ -35,6 +33,8 @@ interface SessionHeaderProps {
 
 export function SessionHeader({
   astrologerName,
+  sessionStartTime,
+  initialDuration,
   pricePerMinute = 0,
   onEndSession,
   className,
@@ -46,27 +46,60 @@ export function SessionHeader({
   onBackPress,
 }: SessionHeaderProps) {
   const router = useRouter();
-  const [duration, setDuration] = useState(0);
 
-  // Timer effect - count up from 0
+  const [duration, setDuration] = useState(() => {
+    if (initialDuration != null && initialDuration > 0) {
+      return initialDuration;
+    }
+    if (sessionStartTime) {
+      const elapsed = Math.floor((Date.now() - new Date(sessionStartTime).getTime()) / 1000);
+      return Math.max(0, elapsed);
+    }
+    return 0;
+  });
+
+  const [timerBase] = useState(() => Date.now());
+
+  const [hasInitialized, setHasInitialized] = useState(
+    () => (initialDuration != null && initialDuration > 0) || !!sessionStartTime
+  );
+
+  useEffect(() => {
+    if (hasInitialized) return;
+    if (initialDuration != null && initialDuration > 0) {
+      setDuration(initialDuration);
+      setHasInitialized(true);
+    } else if (sessionStartTime) {
+      const elapsed = Math.floor((Date.now() - new Date(sessionStartTime).getTime()) / 1000);
+      setDuration(Math.max(0, elapsed));
+      setHasInitialized(true);
+    }
+  }, [initialDuration, sessionStartTime, hasInitialized]);
+
   useEffect(() => {
     if (sessionEnded) return;
 
     const interval = setInterval(() => {
-      setDuration((prev) => prev + 1);
+      if (sessionStartTime) {
+        const elapsed = Math.floor((Date.now() - new Date(sessionStartTime).getTime()) / 1000);
+        setDuration(Math.max(0, elapsed));
+      } else if (initialDuration != null) {
+        const localElapsed = Math.floor((Date.now() - timerBase) / 1000);
+        setDuration(initialDuration + localElapsed);
+      } else {
+        setDuration((prev) => prev + 1);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [sessionEnded]);
+  }, [sessionEnded, sessionStartTime, initialDuration, timerBase]);
 
-  // Format duration (mm:ss)
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Calculate minutes remaining based on remaining balance and price
   const calculateMinsRemaining = () => {
     if (pricePerMinute <= 0) return 0;
     const effectiveBalance = Math.max(0, remainingBalance - runningCost);
@@ -75,8 +108,6 @@ export function SessionHeader({
 
   const minsRemaining = calculateMinsRemaining();
   const isLowBalance = minsRemaining <= 3 && !sessionEnded;
-
-  // Calculate current session cost
   const currentCost = (duration / 60) * pricePerMinute;
 
   const handleBackPress = () => {
@@ -94,37 +125,35 @@ export function SessionHeader({
   };
 
   return (
-    <div className={cn('bg-white border-b border-black/5', className)}>
+    <div className={cn('bg-white border-b border-gray-200', className)}>
       {/* Header Row */}
-      <div className="flex items-center justify-between px-4 py-3 min-h-[56px]">
+      <div className="max-w-3xl mx-auto flex items-center justify-between px-4 py-3">
         {/* Back Button */}
-        <div className="w-10">
-          <motion.button
-            whileTap={{ scale: 0.85 }}
-            onClick={handleBackPress}
-            className="w-10 h-10 flex items-center justify-center"
-          >
-            <ChevronLeft className="w-6 h-6 text-[#595959]" strokeWidth={2.5} />
-          </motion.button>
-        </div>
+        <button
+          onClick={handleBackPress}
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors -ml-1"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600" strokeWidth={2} />
+        </button>
 
-        {/* Astrologer Name (centered) */}
-        <div className="flex-1 text-center px-2">
-          <h2 className="text-lg font-semibold text-[#595959] font-lexend truncate">
+        {/* Name + Timer info */}
+        <div className="flex-1 text-center px-3">
+          <h2 className="text-base font-semibold text-gray-800 font-lexend truncate">
             {astrologerName}
           </h2>
         </div>
 
-        {/* End Button - Only show when session is active */}
-        <div className="w-16 flex justify-end">
-          {!sessionEnded && (
-            <motion.button
-              whileTap={{ scale: 0.95 }}
+        {/* End Button */}
+        <div className="flex items-center">
+          {!sessionEnded ? (
+            <button
               onClick={handleEndPress}
               disabled={isEnding}
               className={cn(
-                'px-4 py-2 bg-[#EF4444] rounded-lg text-sm font-semibold text-white font-lexend',
-                'min-w-[60px] flex items-center justify-center'
+                'px-4 py-1.5 rounded-lg text-sm font-medium font-lexend transition-all',
+                'bg-red-500 text-white hover:bg-red-600 active:scale-95',
+                'min-w-[56px] flex items-center justify-center',
+                isEnding && 'opacity-70'
               )}
             >
               {isEnding ? (
@@ -132,73 +161,76 @@ export function SessionHeader({
               ) : (
                 'End'
               )}
-            </motion.button>
+            </button>
+          ) : (
+            <div className="w-[56px]" />
           )}
         </div>
       </div>
 
-      {/* Timer & Price Ribbon */}
-      <div
-        className={cn(
-          'mx-4 mb-2 px-4 py-2.5 rounded-xl border',
-          sessionEnded
-            ? 'bg-[#FEF3C7] border-[#D97706]/20'
-            : 'bg-[#F8F9FA] border-primary/10'
-        )}
-      >
-        <div className="flex items-center justify-center gap-2">
+      {/* Info Ribbon */}
+      <div className="max-w-3xl mx-auto px-4 pb-2.5">
+        <div
+          className={cn(
+            'px-4 py-2 rounded-lg flex items-center justify-center gap-3 text-sm',
+            sessionEnded
+              ? 'bg-amber-50 border border-amber-200/60'
+              : 'bg-gray-50 border border-gray-100'
+          )}
+        >
           {sessionEnded ? (
-            /* Session Ended View */
             <>
-              <span className="text-sm font-semibold text-[#D97706] font-lexend">
+              <span className="font-medium text-amber-600 font-lexend">
                 Session Ended
               </span>
-              <div className="w-px h-4 bg-black/10 mx-2" />
-              <span className="text-sm font-medium text-[#595959] font-lexend">
+              <span className="text-gray-300">|</span>
+              <span className="font-medium text-gray-500 font-lexend tabular-nums">
                 {formatDuration(duration)}
               </span>
-              <div className="w-px h-4 bg-black/10 mx-2" />
+              <span className="text-gray-300">|</span>
               <div className="flex items-center gap-0.5">
                 <IndianRupee className="w-3.5 h-3.5 text-primary" strokeWidth={2} />
-                <span className="text-sm font-semibold text-primary font-lexend">
+                <span className="font-semibold text-primary font-lexend tabular-nums">
                   {totalCost.toFixed(2)}
                 </span>
               </div>
             </>
           ) : (
-            /* Active Session View */
             <>
-              {/* Duration with active indicator */}
+              {/* Live indicator + Duration */}
               <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[#28A745]" />
-                <span className="text-sm font-medium text-[#595959] font-lexend">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <span className="font-medium text-gray-600 font-lexend tabular-nums">
                   {formatDuration(duration)}
                 </span>
               </div>
 
-              <div className="w-px h-4 bg-black/10 mx-2" />
+              <span className="text-gray-300">|</span>
 
               {/* Running Cost */}
               <div className="flex items-center gap-0.5">
                 <IndianRupee className="w-3 h-3 text-primary" strokeWidth={2} />
-                <span className="text-sm font-semibold text-primary font-lexend">
+                <span className="font-semibold text-primary font-lexend tabular-nums">
                   {currentCost.toFixed(2)}
                 </span>
               </div>
 
-              <div className="w-px h-4 bg-black/10 mx-2" />
+              <span className="text-gray-300">|</span>
 
               {/* Minutes Remaining */}
               <div className="flex items-center gap-1">
                 {isLowBalance ? (
-                  <AlertTriangle className="w-3 h-3 text-[#DC3545]" strokeWidth={2} />
+                  <AlertTriangle className="w-3 h-3 text-red-500" strokeWidth={2} />
                 ) : (
-                  <Clock className="w-3 h-3 text-[#595959]" strokeWidth={2} />
+                  <Clock className="w-3 h-3 text-gray-400" strokeWidth={2} />
                 )}
                 <span
                   className={cn(
                     'text-[13px] font-lexend',
-                    isLowBalance ? 'text-[#DC3545] font-semibold' : 'text-[#595959] font-medium'
+                    isLowBalance ? 'text-red-500 font-semibold' : 'text-gray-500 font-medium'
                   )}
                 >
                   {minsRemaining} min left

@@ -77,14 +77,8 @@ class AstrologerDashboardService {
     return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.AVAILABILITY_STATUS);
   }
 
-  async toggleAvailability(type?: 'chat' | 'call' | 'all'): Promise<ApiResponse<ToggleAvailabilityResponse>> {
-    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { type });
-  }
-
-  async updateAvailability(
-    availability: { chat?: boolean; call?: boolean; video?: boolean }
-  ): Promise<ApiResponse<ToggleAvailabilityResponse>> {
-    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, availability);
+  async toggleAvailability(isAvailable: boolean): Promise<ApiResponse<ToggleAvailabilityResponse>> {
+    return apiClient.patch(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { isAvailable });
   }
 
   async sendHeartbeat(): Promise<ApiResponse<{ success: boolean }>> {
@@ -146,19 +140,18 @@ class AstrologerDashboardService {
   }
 
   // ─── Chat Messages (Astrologer Side) ────────────────────────────
-  async getChatMessages(sessionId: string, page?: number, limit?: number): Promise<ApiResponse<{
+  async getChatMessages(sessionId: string, limit: number = 100): Promise<ApiResponse<{
     messages: ChatMessage[];
     hasMore: boolean;
-    nextCursor?: string;
   }>> {
     return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.CHAT_MESSAGES(sessionId), {
-      params: { page, limit },
+      params: { limit },
     });
   }
 
   async sendMessage(sessionId: string, content: string, type: 'text' | 'image' = 'text'): Promise<ApiResponse<ChatMessage>> {
     return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.CHAT_MESSAGES(sessionId), {
-      content,
+      message: content,
       type,
     });
   }

@@ -8,7 +8,7 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FilterSidebar } from '@/components/layout/FilterSidebar';
 import { ConnectionRequestModal } from '@/components/features/queue';
-import { useChatAstrologers, useFilterOptions, useSearchAstrologers } from '@/hooks/useBrowseData';
+import { useChatAstrologers, useFilterOptions, useSearchAstrologers, useRealtimeChatAvailability } from '@/hooks/useBrowseData';
 import { useConnectionRequest } from '@/hooks/useConnectionRequest';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -31,6 +31,9 @@ export default function BrowseChatPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { addToast } = useUIStore();
+
+  // Real-time: update astrologer online status when toggled on mobile app
+  useRealtimeChatAvailability();
   const {
     isModalOpen,
     requestStatus,

@@ -1,153 +1,388 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CallInterface } from '@/components/features/call';
-import { useCallSession, useCallTimer } from '@/hooks/useCallSession';
+import {
+  useActiveCall,
+  useEndCallSessionAstrologer,
+} from '@/hooks/useAstrologerDashboard';
+import { useCallTimer } from '@/hooks/useCallSession';
 import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { useQueueStore } from '@/stores/queue-store';
+import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+
+type CallStatus = 'connecting' | 'ringing' | 'connected' | 'ended';
 
 export default function AstrologerCallSessionPage() {
   const params = useParams();
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+  const user = useAuthStore((s) => s.user);
 
-  // Call controls state
+  // Local state
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [callStatus, setCallStatus] = useState<CallStatus>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream] = useState<MediaStream | null>(null);
+  const [sessionSummary, setSessionSummary] = useState<{
+    duration: number;
+    durationFormatted?: string;
+    totalCost: number;
+  } | null>(null);
 
-  // Fetch session data
+  // Twilio room reference
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomRef = useRef<any>(null);
+  const callStatusRef = useRef<CallStatus>(callStatus);
+  callStatusRef.current = callStatus;
+
+  // Track whether Twilio connection has been initiated (prevent re-connection on re-renders)
+  const twilioConnectedRef = useRef(false);
+
+  // Fetch active session via astrologer endpoint
   const {
-    data: sessionData,
+    data: activeSession,
     isLoading: isSessionLoading,
     error: sessionError,
     refetch: refetchSession,
-  } = useCallSession(sessionId);
+  } = useActiveCall();
 
-  // Extract session info
-  const session = sessionData?.session;
-  const user = sessionData?.user;
-  // Map ChatSession status to CallInterface status
-  const callStatusMap: Record<string, 'connecting' | 'ringing' | 'connected' | 'ended'> = {
-    active: 'connected',
-    completed: 'ended',
-    cancelled: 'ended',
-  };
-  const callStatus = session?.status ? callStatusMap[session.status] || 'connecting' : 'connecting';
-  // Use sessionType from ChatSession, mapping 'call' to 'audio' and 'video' to 'video'
-  const callType = (session?.sessionType === 'video' ? 'video' : 'audio') as 'audio' | 'video';
+  // Twilio credentials: queue-store (set during accept) → activeSession fallback
+  const storeTwilioToken = useQueueStore((s) => s.twilioToken);
+  const storeTwilioRoomName = useQueueStore((s) => s.twilioRoomName);
+  const twilioToken = storeTwilioToken || activeSession?.twilioToken || null;
+  const twilioRoomName = storeTwilioRoomName || activeSession?.twilioRoomName || null;
 
-  // Timer for duration tracking (only when connected)
-  const startTimeForTimer = callStatus === 'connected' ? session?.startTime : undefined;
-  const { formattedDuration, cost, formattedCost } = useCallTimer(
-    startTimeForTimer,
-    session?.pricePerMinute || 0
+  // End session via astrologer endpoint
+  const { mutate: endSession } = useEndCallSessionAstrologer();
+
+  // Extract session info from ActiveSession
+  const sessionUser = activeSession?.user;
+  // Default to audio — callType only used at connection time, so stable ref is fine
+  const callType = (activeSession?.twilioRoomName ? 'video' : 'audio') as 'audio' | 'video';
+  const callTypeRef = useRef(callType);
+  callTypeRef.current = callType;
+
+  // Call timer
+  const { formattedDuration, formattedCost } = useCallTimer(
+    callStatus === 'connected' ? activeSession?.startTime : undefined,
+    activeSession?.pricePerMinute
   );
 
-  // Initialize media streams
-  useEffect(() => {
-    const initMedia = async () => {
-      if (callStatus !== 'connected') return;
+  // Attach remote participant tracks to a MediaStream
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const attachParticipantTracks = useCallback((participant: any) => {
+    const stream = new MediaStream();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const addTrack = (track: any) => {
+      if (track.kind === 'audio' || track.kind === 'video') {
+        stream.addTrack(track.mediaStreamTrack);
+        setRemoteStream(new MediaStream(stream.getTracks()));
+      }
+    };
+
+    // Attach existing tracks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    participant.tracks.forEach((publication: any) => {
+      if (publication.isSubscribed && publication.track) {
+        addTrack(publication.track);
+      }
+    });
+
+    // Listen for new tracks
+    participant.on('trackSubscribed', addTrack);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    participant.on('trackUnsubscribed', (track: any) => {
+      if (track.mediaStreamTrack) {
+        stream.removeTrack(track.mediaStreamTrack);
+        setRemoteStream(new MediaStream(stream.getTracks()));
+      }
+    });
+  }, []);
+
+  // Connect to Twilio room — runs once when credentials are available
+  useEffect(() => {
+    // Guard: skip if no credentials, already connected, or already initiated
+    if (!twilioToken || !twilioRoomName || roomRef.current || twilioConnectedRef.current) return;
+
+    // Mark as initiated immediately to prevent duplicate connections from re-renders
+    twilioConnectedRef.current = true;
+
+    const token: string = twilioToken;
+    const roomName: string = twilioRoomName;
+
+    async function connectToRoom() {
       try {
-        const constraints = {
+        const Video = await import('twilio-video');
+
+        setCallStatus('ringing');
+
+        const localTracks = await Video.createLocalTracks({
           audio: true,
-          video: callType === 'video',
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        setLocalStream(stream);
-      } catch {
+          video: callTypeRef.current === 'video',
+        });
+
+        const localMediaStream = new MediaStream();
+        localTracks.forEach((track) => {
+          if ('mediaStreamTrack' in track) {
+            localMediaStream.addTrack(track.mediaStreamTrack);
+          }
+        });
+        setLocalStream(localMediaStream);
+
+        const room = await Video.connect(token, {
+          name: roomName,
+          tracks: localTracks,
+        });
+
+        roomRef.current = room;
+        setCallStatus('connected');
+
+        // Handle existing participants
+        room.participants.forEach(attachParticipantTracks);
+
+        // Handle new participants joining
+        room.on('participantConnected', attachParticipantTracks);
+
+        // Handle participants leaving — remote party hung up, end the call
+        room.on('participantDisconnected', () => {
+          setRemoteStream(null);
+          // Remote participant left → disconnect our side too
+          room.disconnect();
+        });
+
+        // Handle room disconnection (fires after room.disconnect() or remote disconnect)
+        room.on('disconnected', (_room, error) => {
+          setCallStatus('ended');
+          roomRef.current = null;
+          // Stop ALL local tracks to release microphone/camera
+          localTracks.forEach((track) => {
+            if ('stop' in track) track.stop();
+          });
+          if (error) {
+            console.warn('Twilio room disconnected with error:', error.message);
+          }
+        });
+      } catch (error) {
+        twilioConnectedRef.current = false; // Allow retry on error
+        if (process.env.NODE_ENV === 'development') console.error('Twilio connect error:', error);
+
+        const isDenied = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError');
         addToast({
           type: 'error',
-          title: 'Media Access Error',
-          message: 'Could not access your camera or microphone.',
+          title: isDenied ? 'Permission Denied' : 'Connection Error',
+          message: isDenied
+            ? 'Camera/microphone access was denied. Please allow access in your browser settings and reload.'
+            : 'Failed to connect to call. Please try again.',
         });
       }
-    };
+    }
 
-    initMedia();
+    connectToRoom();
+  }, [twilioToken, twilioRoomName, attachParticipantTracks, addToast]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+      localStream?.getTracks().forEach(track => track.stop());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Real-time events via Supabase Broadcast
+  useEffect(() => {
+    if (!user?.id || !sessionId) return;
+
+    // Supabase: billing events
+    const unsubBilling = supabaseRealtime.subscribeToBillingEvents(user.id, {
+      onLowBalance: (payload) => {
+        if (payload.sessionId === sessionId) {
+          addToast({
+            type: 'warning',
+            title: 'Low Balance',
+            message: `Only ${payload.remainingMinutes ?? 0} minute(s) remaining.`,
+          });
+        }
+      },
+      onCallEndedBalance: (payload) => {
+        if (payload.sessionId === sessionId) {
+          setCallStatus('ended');
+          if (roomRef.current) {
+            roomRef.current.disconnect();
+            roomRef.current = null;
+          }
+          addToast({
+            type: 'error',
+            title: 'Call Ended',
+            message: 'Call ended due to insufficient balance.',
+          });
+          refetchSession();
+        }
+      },
+      onCallEnded: (payload) => {
+        if (payload.sessionId === sessionId && callStatusRef.current !== 'ended') {
+          setCallStatus('ended');
+          if (roomRef.current) {
+            roomRef.current.disconnect();
+            roomRef.current = null;
+          }
+          if (payload.duration != null && payload.totalCost != null) {
+            setSessionSummary({
+              duration: payload.duration,
+              durationFormatted: payload.durationFormatted,
+              totalCost: payload.totalCost,
+            });
+          }
+          refetchSession();
+        }
+      },
+      onBothConnected: (payload) => {
+        if (payload.sessionId === sessionId) {
+          setCallStatus('connected');
+        }
+      },
+    });
+
+    // Supabase: session updates (user ends call)
+    const unsubSession = supabaseRealtime.subscribeToSessionUpdate(sessionId, (payload) => {
+      if ((payload.status === 'completed' || payload.status === 'cancelled') && callStatusRef.current !== 'ended') {
+        setCallStatus('ended');
+        if (roomRef.current) {
+          roomRef.current.disconnect();
+          roomRef.current = null;
+        }
+        if (payload.duration != null && payload.totalCost != null) {
+          setSessionSummary({
+            duration: payload.duration,
+            totalCost: payload.totalCost,
+          });
+        }
+        addToast({
+          type: 'info',
+          title: 'Call Ended',
+          message: 'The user has ended the call session.',
+        });
+      }
+    });
 
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
+      unsubBilling();
+      unsubSession();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callStatus, callType, addToast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, sessionId]);
 
   // Handle mute toggle
   const handleToggleMute = useCallback(() => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
+    if (roomRef.current) {
+      roomRef.current.localParticipant.audioTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (publication: any) => {
+          if (isMuted) {
+            publication.track.enable();
+          } else {
+            publication.track.disable();
+          }
+        }
+      );
     }
-    setIsMuted(!isMuted);
-  }, [localStream, isMuted]);
+    setIsMuted(prev => !prev);
+  }, [isMuted]);
 
   // Handle video toggle
   const handleToggleVideo = useCallback(() => {
-    if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
+    if (roomRef.current && callType === 'video') {
+      roomRef.current.localParticipant.videoTracks.forEach(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (publication: any) => {
+          if (isVideoEnabled) {
+            publication.track.disable();
+          } else {
+            publication.track.enable();
+          }
+        }
+      );
     }
-    setIsVideoEnabled(!isVideoEnabled);
-  }, [localStream, isVideoEnabled]);
+    setIsVideoEnabled(prev => !prev);
+  }, [isVideoEnabled, callType]);
 
   // Handle speaker toggle
   const handleToggleSpeaker = useCallback(() => {
-    setIsSpeakerOn(!isSpeakerOn);
-    // In real implementation, this would route audio to speaker
-  }, [isSpeakerOn]);
+    setIsSpeakerOn(prev => !prev);
+  }, []);
 
   // Handle end call
   const handleEndCall = useCallback(() => {
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
-    // In real implementation, call API to end session
-    addToast({
-      type: 'success',
-      title: 'Call Ended',
-      message: 'The call session has been ended.',
-    });
-    router.push('/astrologer/history');
-  }, [localStream, addToast, router]);
+    setCallStatus('ended');
 
-  // Handle session end
-  const handleSessionEnd = useCallback(() => {
-    router.push('/astrologer/history');
+    // Disconnect from Twilio room
+    if (roomRef.current) {
+      roomRef.current.disconnect();
+      roomRef.current = null;
+    }
+
+    // Stop local media
+    localStream?.getTracks().forEach(track => track.stop());
+
+    endSession(sessionId, {
+      onSuccess: (response) => {
+        if (response.data) {
+          setSessionSummary({
+            duration: response.data.durationSeconds || response.data.duration,
+            totalCost: response.data.totalCost,
+          });
+        }
+      },
+      onError: (error) => {
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: error instanceof Error ? error.message : 'Failed to end call',
+        });
+      },
+    });
+  }, [localStream, endSession, sessionId, addToast]);
+
+  // Handle back to dashboard
+  const handleBackToDashboard = useCallback(() => {
+    router.push('/astrologer/dashboard');
   }, [router]);
 
   // Loading state
   if (isSessionLoading) {
     return (
-      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center">
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-4">
         <Skeleton className="w-24 h-24 rounded-full mb-4" />
-        <Skeleton className="w-32 h-5 mb-2" />
-        <Skeleton className="w-24 h-4" />
+        <Skeleton className="w-32 h-6 mb-2" />
+        <Skeleton className="w-20 h-4" />
       </div>
     );
   }
 
   // Error state
-  if (sessionError || !session) {
+  if (sessionError && !activeSession) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-background-offWhite p-4">
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center p-4">
         <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8 text-status-error" />
         </div>
-        <h2 className="text-lg font-semibold text-text-primary mb-2">
+        <h2 className="text-lg font-semibold text-white mb-2">
           Session Not Found
         </h2>
-        <p className="text-text-secondary text-center mb-4">
+        <p className="text-white/70 text-center mb-4">
           {sessionError instanceof Error
             ? sessionError.message
             : 'Unable to load call session.'}
@@ -157,30 +392,20 @@ export default function AstrologerCallSessionPage() {
             <RefreshCw className="w-4 h-4 mr-2" />
             Retry
           </Button>
-          <Button variant="primary" onClick={() => router.push('/astrologer/history')}>
-            Back to Sessions
+          <Button variant="primary" onClick={() => router.push('/astrologer/dashboard')}>
+            Back to Dashboard
           </Button>
         </div>
       </div>
     );
   }
 
-  // Build session summary for ended sessions
-  const sessionSummary =
-    session.status === 'completed' && session.duration
-      ? {
-          duration: session.duration,
-          durationFormatted: formattedDuration,
-          totalCost: cost,
-        }
-      : undefined;
-
   return (
     <CallInterface
       sessionId={sessionId}
       astrologerId=""
-      astrologerName={user?.name || 'User'}
-      astrologerImage={user?.image}
+      astrologerName={sessionUser?.name || 'User'}
+      astrologerImage={sessionUser?.image || undefined}
       callType={callType}
       status={callStatus}
       duration={formattedDuration}
@@ -191,12 +416,13 @@ export default function AstrologerCallSessionPage() {
       isRemoteVideoEnabled={true}
       isMuted={isMuted}
       isSpeakerOn={isSpeakerOn}
-      sessionSummary={sessionSummary}
+      sessionSummary={sessionSummary || undefined}
       onToggleMute={handleToggleMute}
       onToggleVideo={handleToggleVideo}
       onToggleSpeaker={handleToggleSpeaker}
       onEndCall={handleEndCall}
-      onStartNewCall={handleSessionEnd}
+      onStartNewCall={handleBackToDashboard}
+      isLoading={isSessionLoading}
     />
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -8,11 +9,14 @@ import {
   useAstrologerStats,
   useAstrologerDashboardData,
   useAstrologerAvailability,
-  useUpdateAvailability,
+  useToggleAvailability,
   useIncomingRequests,
-  useAcceptRequest,
+  useAcceptChatRequest,
+  useAcceptCallRequest,
   useRejectRequest,
 } from '@/hooks/useAstrologerDashboard';
+import { useUIStore } from '@/stores/ui-store';
+import { useQueueStore } from '@/stores/queue-store';
 import {
   SectionHeader,
   AnimatedTabs,
@@ -57,40 +61,67 @@ const SIDEBAR_LINKS: QuickLinkItem[] = [
 ];
 
 export default function AstrologerDashboardPage() {
+  const router = useRouter();
+  const { addToast } = useUIStore();
+  const { setTwilioCredentials } = useQueueStore();
   const { data: stats, isLoading: statsLoading } = useAstrologerStats();
   const { data: dashboard } = useAstrologerDashboardData();
   const { data: availability } = useAstrologerAvailability();
-  const { mutate: updateAvailability, isPending: isUpdating } = useUpdateAvailability();
+  const { mutate: toggleAvailability, isPending: isUpdating } = useToggleAvailability();
   const { data: requestsData, isLoading: requestsLoading } = useIncomingRequests();
-  const { mutate: acceptRequest } = useAcceptRequest();
+  const { mutate: acceptChatRequest, isPending: isAcceptingChat } = useAcceptChatRequest();
+  const { mutate: acceptCallRequest, isPending: isAcceptingCall } = useAcceptCallRequest();
   const { mutate: rejectRequest } = useRejectRequest();
 
   const [selectedTab, setSelectedTab] = useState<string>('all');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  const isOnline = availability?.isAvailable ?? false;
+  const isAccepting = isAcceptingChat || isAcceptingCall;
 
   const requests = requestsData?.requests || [];
   const filteredRequests = selectedTab === 'all'
     ? requests
     : requests.filter(r => r.type === selectedTab);
 
-  const toggleAvailability = (type: 'chat' | 'call') => {
-    if (!availability) return;
+  const handleAccept = useCallback((requestId: string, type: 'chat' | 'call') => {
+    setAcceptingId(requestId);
+    const onSuccess = (response: { data?: { sessionId?: string; twilioToken?: string; twilioRoomName?: string } }) => {
+      const sessionId = response?.data?.sessionId;
+      // Store Twilio credentials for the call page
+      if (type === 'call' && response?.data?.twilioToken && response?.data?.twilioRoomName) {
+        setTwilioCredentials(response.data.twilioToken, response.data.twilioRoomName);
+      }
+      if (sessionId) {
+        router.push(`/astrologer/history/${type}/${sessionId}`);
+      }
+      setAcceptingId(null);
+    };
+    const onError = (error: Error) => {
+      addToast({
+        type: 'error',
+        title: 'Failed to accept',
+        message: error.message || 'Could not accept the request. Please try again.',
+      });
+      setAcceptingId(null);
+    };
 
-    updateAvailability({
-      chat: type === 'chat' ? !availability.chatAvailable : availability.chatAvailable,
-      call: type === 'call' ? !availability.callAvailable : availability.callAvailable,
-    });
-  };
+    if (type === 'chat') {
+      acceptChatRequest(requestId, { onSuccess, onError });
+    } else {
+      acceptCallRequest(requestId, { onSuccess, onError });
+    }
+  }, [acceptChatRequest, acceptCallRequest, router, addToast, setTwilioCredentials]);
+
+  const handleReject = useCallback((requestId: string, type: 'chat' | 'call') => {
+    rejectRequest({ requestId, type });
+  }, [rejectRequest]);
 
   const statCards = [
     { icon: IndianRupee, value: formatCurrency(dashboard?.profile?.totalEarningsToday || 0), label: "Today's Earnings", color: 'text-primary', bg: 'bg-primary/10', accent: 'bg-primary' },
     { icon: Users, value: dashboard?.profile?.totalSessionsToday || 0, label: "Today's Sessions", color: 'text-status-success', bg: 'bg-status-success/10', accent: 'bg-status-success' },
     { icon: Clock, value: `${stats?.avgSessionDuration ? Math.round(stats.avgSessionDuration / 60) : 0}m`, label: 'Avg Duration', color: 'text-status-warning', bg: 'bg-status-warning/10', accent: 'bg-status-warning' },
     { icon: TrendingUp, value: stats?.rating?.toFixed(1) || '0.0', label: 'Average Rating', color: 'text-status-info', bg: 'bg-status-info/10', accent: 'bg-status-info' },
-  ];
-
-  const availabilityItems = [
-    { type: 'chat' as const, icon: MessageSquare, label: 'Chat', active: availability?.chatAvailable },
-    { type: 'call' as const, icon: Phone, label: 'Call', active: availability?.callAvailable },
   ];
 
   return (
@@ -145,29 +176,33 @@ export default function AstrologerDashboardPage() {
               transition={{ delay: 0.3 }}
             >
               <SectionHeader icon={Sliders} title="Availability" />
-              <Card className="p-0 overflow-hidden shadow-web-sm border border-status-success/20" padding="none">
-                <div className="grid grid-cols-2 divide-x divide-gray-100">
-                  {availabilityItems.map((item) => (
-                    <button
-                      key={item.type}
-                      onClick={() => toggleAvailability(item.type)}
-                      disabled={isUpdating}
-                      className={`flex flex-col items-center p-6 transition-all duration-200 hover:bg-status-success/5 ${item.active ? 'bg-status-success/[0.03]' : ''} ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
-                    >
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all duration-200 ${item.active ? 'bg-status-success/15 shadow-sm' : 'bg-gray-100'}`}>
-                        <item.icon className={`w-5 h-5 transition-colors ${item.active ? 'text-status-success' : 'text-text-muted'}`} />
-                      </div>
-                      <span className="text-sm font-medium font-lexend mb-3">{item.label}</span>
-                      <AnimatedToggle
-                        checked={!!item.active}
-                        onChange={() => toggleAvailability(item.type)}
-                        label={`Toggle ${item.label} availability`}
-                        colorScheme="success"
-                        disabled={isUpdating}
-                      />
-                    </button>
-                  ))}
-                </div>
+              <Card className={`p-0 overflow-hidden shadow-web-sm border transition-colors duration-200 ${isOnline ? 'border-status-success/30' : 'border-gray-200'}`} padding="none">
+                <button
+                  onClick={() => toggleAvailability(!isOnline)}
+                  disabled={isUpdating}
+                  className={`w-full flex items-center justify-between px-6 py-5 transition-all duration-200 ${isOnline ? 'bg-status-success/[0.03] hover:bg-status-success/[0.06]' : 'hover:bg-gray-50'} ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${isOnline ? 'bg-status-success/15 shadow-sm' : 'bg-gray-100'}`}>
+                      <div className={`w-3 h-3 rounded-full transition-colors ${isOnline ? 'bg-status-success animate-pulse' : 'bg-gray-400'}`} />
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-semibold font-lexend transition-colors ${isOnline ? 'text-status-success' : 'text-text-primary'}`}>
+                        {isOnline ? 'Online' : 'Offline'}
+                      </p>
+                      <p className="text-xs text-text-muted mt-0.5">
+                        {isOnline ? 'You are visible for chat & call requests' : 'Toggle to start receiving requests'}
+                      </p>
+                    </div>
+                  </div>
+                  <AnimatedToggle
+                    checked={isOnline}
+                    onChange={(val) => toggleAvailability(val)}
+                    label="Toggle online availability"
+                    colorScheme="success"
+                    disabled={isUpdating}
+                  />
+                </button>
               </Card>
             </motion.div>
 
@@ -253,7 +288,8 @@ export default function AstrologerDashboardPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => rejectRequest(request.requestId)}
+                                onClick={() => handleReject(request.requestId, request.type)}
+                                disabled={acceptingId === request.requestId}
                                 className="text-status-error hover:bg-status-error/10"
                                 aria-label={`Reject request from ${request.user?.name || 'User'}`}
                               >
@@ -261,11 +297,16 @@ export default function AstrologerDashboardPage() {
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={() => acceptRequest(request.requestId)}
+                                onClick={() => handleAccept(request.requestId, request.type)}
+                                disabled={isAccepting}
                                 className="bg-status-success hover:bg-status-success/90"
-                                aria-label={`Accept request from ${request.user?.name || 'User'}`}
+                                aria-label={`Accept ${request.type} request from ${request.user?.name || 'User'}`}
                               >
-                                <CheckCircle className="w-4 h-4 mr-1" />
+                                {acceptingId === request.requestId ? (
+                                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1" />
+                                ) : (
+                                  <CheckCircle className="w-4 h-4 mr-1" />
+                                )}
                                 Accept
                               </Button>
                             </div>

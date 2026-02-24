@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChatInterface } from '@/components/features/chat';
 import {
   useChatSession,
-  useChatMessages,
-  useSendMessage,
+  useChatMessaging,
   useEndChatSession,
-  useChatState,
 } from '@/hooks/useChatSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
-import { socketService } from '@/lib/services/socket.service';
-import { ChatMessage } from '@/types/api.types';
+import { useAuthStore } from '@/stores/auth-store';
+import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
+import { useEffect } from 'react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -24,12 +23,13 @@ export default function ChatSessionPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
+  const user = useAuthStore((s) => s.user);
   const [showEndModal, setShowEndModal] = useState(false);
 
   // Auth check
   const { isReady } = useRequireAuth();
 
-  // Fetch session data
+  // Fetch session data (React Query — fine for session metadata)
   const {
     data: sessionData,
     isLoading: isSessionLoading,
@@ -37,37 +37,19 @@ export default function ChatSessionPage() {
     refetch: refetchSession,
   } = useChatSession(sessionId);
 
-  // Fetch messages with infinite scroll
+  // Unified chat messaging — local state + Supabase broadcast (matches mobile app)
   const {
-    data: messagesData,
+    messages,
     isLoading: isMessagesLoading,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-  } = useChatMessages(sessionId);
-
-  // Send message mutation
-  const { mutate: sendMessage } = useSendMessage(sessionId);
-
-  // End session mutation
-  const { mutate: endSession } = useEndChatSession(sessionId);
-
-  // Chat state (typing indicators, real-time updates)
-  const {
+    sending,
+    sendMessage,
     astrologerTyping,
     setAstrologerTyping,
     handleTyping,
-    addMessage,
-    updateMessageStatus,
-  } = useChatState(sessionId);
+  } = useChatMessaging(sessionId, user?.id);
 
-  // Flatten messages from infinite query
-  const messages = useMemo(() => {
-    if (!messagesData?.pages) return [];
-    return messagesData.pages
-      .flatMap((page) => page?.messages || [])
-      .reverse(); // Reverse to show oldest first
-  }, [messagesData]);
+  // End session mutation
+  const { mutate: endSession } = useEndChatSession(sessionId);
 
   // Extract session info
   const session = sessionData?.session;
@@ -75,19 +57,16 @@ export default function ChatSessionPage() {
 
   // Handle send message
   const handleSendMessage = useCallback(
-    (content: string, type: 'text' | 'image' | 'audio' = 'text') => {
-      sendMessage(
-        { content, type },
-        {
-          onError: (error) => {
-            addToast({
-              type: 'error',
-              title: 'Failed to send message',
-              message: error instanceof Error ? error.message : 'Please try again',
-            });
-          },
-        }
-      );
+    async (content: string, type: 'text' | 'image' | 'audio' = 'text') => {
+      try {
+        await sendMessage(content, type);
+      } catch {
+        addToast({
+          type: 'error',
+          title: 'Failed to send message',
+          message: 'Please try again',
+        });
+      }
     },
     [sendMessage, addToast]
   );
@@ -95,8 +74,6 @@ export default function ChatSessionPage() {
   // Handle image upload
   const handleImageUpload = useCallback(
     async (file: File) => {
-      // For now, we'll convert to base64 and send as a message
-      // In production, this would upload to a server first
       const reader = new FileReader();
       reader.onload = (e) => {
         const base64 = e.target?.result as string;
@@ -136,73 +113,37 @@ export default function ChatSessionPage() {
   // Handle start new chat
   const handleStartNewChat = useCallback(() => {
     if (astrologer?.id) {
-      // Navigate to astrologer page to initiate new chat
       router.push(`/astrologer/${astrologer.id}`);
     }
   }, [astrologer?.id, router]);
 
-  // Handle load more messages
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Set up real-time subscriptions via Socket.io
+  // Subscribe to session status updates via Supabase Broadcast
   useEffect(() => {
     if (!sessionId) return;
 
-    // Join the chat session room
-    socketService.joinChatSession(sessionId);
-
-    // Listen for new messages
-    const unsubMessage = socketService.on('chat_message', (data: unknown) => {
-      const payload = data as { message: ChatMessage };
-      if (payload?.message) {
-        addMessage(payload.message);
+    const unsubSession = supabaseRealtime.subscribeToSessionUpdate(
+      sessionId,
+      (payload) => {
+        if (payload.status === 'completed' || payload.status === 'cancelled') {
+          addToast({
+            type: 'info',
+            title: 'Session Ended',
+            message: 'The astrologer has ended the chat session.',
+          });
+          refetchSession();
+        }
       }
-    });
-
-    // Listen for typing indicators
-    const unsubTyping = socketService.on('chat_typing', (data: unknown) => {
-      const payload = data as { sessionId: string; isTyping: boolean };
-      if (payload?.sessionId === sessionId) {
-        setAstrologerTyping(payload.isTyping);
-      }
-    });
-
-    // Listen for message status updates (delivered, read)
-    const unsubStatus = socketService.on('message_status', (data: unknown) => {
-      const payload = data as { messageId: string; status: string };
-      if (payload?.messageId) {
-        updateMessageStatus(payload.messageId, payload.status);
-      }
-    });
-
-    // Listen for session ended by astrologer
-    const unsubEnd = socketService.on('chat_ended', () => {
-      addToast({
-        type: 'info',
-        title: 'Session Ended',
-        message: 'The astrologer has ended the chat session.',
-      });
-      refetchSession();
-    });
+    );
 
     return () => {
-      socketService.leaveChatSession(sessionId);
-      unsubMessage();
-      unsubTyping();
-      unsubStatus();
-      unsubEnd();
+      unsubSession();
     };
-  }, [sessionId, addMessage, updateMessageStatus, setAstrologerTyping, addToast, refetchSession]);
+  }, [sessionId, addToast, refetchSession]);
 
   // Auth loading state
   if (!isReady) {
     return (
       <div className="flex flex-col h-full bg-background-chat">
-        {/* Header Skeleton */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-full" />
           <div>
@@ -210,8 +151,6 @@ export default function ChatSessionPage() {
             <Skeleton className="w-16 h-3" />
           </div>
         </div>
-
-        {/* Messages Skeleton */}
         <div className="flex-1 p-4 space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
@@ -224,8 +163,6 @@ export default function ChatSessionPage() {
             </div>
           ))}
         </div>
-
-        {/* Input Skeleton */}
         <div className="bg-white border-t p-3">
           <Skeleton className="w-full h-10 rounded-full" />
         </div>
@@ -237,7 +174,6 @@ export default function ChatSessionPage() {
   if (isSessionLoading) {
     return (
       <div className="flex flex-col h-full bg-background-chat">
-        {/* Header Skeleton */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-full" />
           <div>
@@ -245,8 +181,6 @@ export default function ChatSessionPage() {
             <Skeleton className="w-16 h-3" />
           </div>
         </div>
-
-        {/* Messages Skeleton */}
         <div className="flex-1 p-4 space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
@@ -259,8 +193,6 @@ export default function ChatSessionPage() {
             </div>
           ))}
         </div>
-
-        {/* Input Skeleton */}
         <div className="bg-white border-t p-3">
           <Skeleton className="w-full h-10 rounded-full" />
         </div>
@@ -315,18 +247,16 @@ export default function ChatSessionPage() {
         isOnline={astrologer?.isOnline}
         messages={messages}
         isLoading={isMessagesLoading}
-        isFetchingMore={isFetchingNextPage}
-        hasMoreMessages={hasNextPage}
         sessionStatus={session.status}
         sessionStartTime={session.startTime}
         pricePerMinute={session.pricePerMinute}
         sessionSummary={sessionSummary}
         isTyping={astrologerTyping}
+        isEnding={sending}
         onSendMessage={handleSendMessage}
         onTyping={handleTyping}
         onImageUpload={handleImageUpload}
         onEndSession={handleEndSession}
-        onLoadMore={handleLoadMore}
         onStartNewChat={handleStartNewChat}
       />
 

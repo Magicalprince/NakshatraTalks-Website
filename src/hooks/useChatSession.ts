@@ -1,13 +1,22 @@
 /**
- * Chat Session Hook - React Query hooks for chat sessions
+ * Chat Session Hooks
+ *
+ * Architecture matches the mobile app (useChatSession.ts):
+ * - Messages stored in local useState (NOT React Query cache)
+ * - Initial fetch from REST API
+ * - Real-time updates via Supabase Broadcast (channel: chat-messages-{sessionId})
+ * - No optimistic updates — message added only after broadcast arrives
+ * - Send via API → backend saves → backend broadcasts → frontend receives & appends
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { chatService, SendMessageParams } from '@/lib/services/chat.service';
+import { chatService } from '@/lib/services/chat.service';
 import { ChatMessage } from '@/types/api.types';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { supabaseRealtime, ChatMessagePayload } from '@/lib/services/supabase-realtime.service';
+import { socketService } from '@/lib/services/socket.service';
 
-// Query keys
+// Query keys (session & history still use React Query)
 export const CHAT_QUERY_KEYS = {
   session: (sessionId: string) => ['chat', 'session', sessionId] as const,
   messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
@@ -26,95 +35,196 @@ export function useChatSession(sessionId: string) {
       return response.data;
     },
     enabled: !!sessionId,
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
   });
 }
 
 /**
- * Hook for fetching chat messages with infinite scroll
+ * Unified chat messaging hook — matches mobile app architecture.
+ *
+ * Manages messages via local state + Supabase Broadcast.
+ * No React Query cache manipulation for messages.
  */
-export function useChatMessages(sessionId: string) {
-  return useInfiniteQuery({
-    queryKey: CHAT_QUERY_KEYS.messages(sessionId),
-    queryFn: async ({ pageParam }) => {
+export function useChatMessaging(sessionId: string, userId?: string) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Typing state
+  const [isTyping, setIsTyping] = useState(false);
+  const [astrologerTyping, setAstrologerTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Fetch initial messages from API (like mobile app) ──────────────
+  const fetchMessages = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      setIsLoading(true);
       const response = await chatService.getMessages({
         sessionId,
-        before: pageParam as string | undefined,
-        limit: 50,
+        limit: 100,
       });
-      return response.data;
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage?.hasMore) return undefined;
-      return lastPage.nextCursor;
-    },
-    initialPageParam: undefined as string | undefined,
-    enabled: !!sessionId,
-  });
-}
+      const fetched = response.data?.messages || [];
+      // API returns newest-first; reverse to oldest-first for display
+      setMessages(fetched.reverse());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load messages');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sessionId]);
 
-/**
- * Hook for sending messages
- */
-export function useSendMessage(sessionId: string) {
-  const queryClient = useQueryClient();
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
-  return useMutation({
-    mutationFn: (params: Omit<SendMessageParams, 'sessionId'>) =>
-      chatService.sendMessage({ sessionId, ...params }),
-    onMutate: async (newMessage) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: CHAT_QUERY_KEYS.messages(sessionId) });
-
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData(CHAT_QUERY_KEYS.messages(sessionId));
-
-      // Optimistically update
-      queryClient.setQueryData(CHAT_QUERY_KEYS.messages(sessionId), (old: unknown) => {
-        if (!old) return old;
-        const data = old as { pages: Array<{ messages: ChatMessage[] }> };
-        const optimisticMessage: ChatMessage = {
-          id: `temp-${Date.now()}`,
-          sessionId,
-          senderId: 'user',
-          senderType: 'user',
-          content: newMessage.content,
-          type: newMessage.type || 'text',
-          status: 'sending',
-          createdAt: new Date().toISOString(),
-        };
-
-        return {
-          ...data,
-          pages: data.pages.map((page, index) => {
-            if (index === 0) {
-              return {
-                ...page,
-                messages: [optimisticMessage, ...page.messages],
-              };
-            }
-            return page;
-          }),
-        };
-      });
-
-      return { previousMessages };
-    },
-    onError: (_err, _newMessage, context) => {
-      // Rollback on error
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          CHAT_QUERY_KEYS.messages(sessionId),
-          context.previousMessages
-        );
+  // ── Send message via API (like mobile app — no optimistic update) ──
+  const sendMessage = useCallback(
+    async (content: string, type: 'text' | 'image' | 'audio' = 'text') => {
+      if (!sessionId || !content.trim() || sending) return;
+      try {
+        setSending(true);
+        await chatService.sendMessage({ sessionId, content: content.trim(), type });
+        // Message will arrive via Supabase broadcast — don't add locally
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to send message');
+        throw err; // Re-throw so caller can show toast
+      } finally {
+        setSending(false);
       }
     },
-    onSettled: () => {
-      // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: CHAT_QUERY_KEYS.messages(sessionId) });
+    [sessionId, sending]
+  );
+
+  // ── Supabase Broadcast subscription (PRIMARY real-time channel) ────
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubMessages = supabaseRealtime.subscribeToChatMessages(
+      sessionId,
+      (payload: ChatMessagePayload) => {
+        const newMessage: ChatMessage = {
+          id: payload.id,
+          sessionId: payload.sessionId,
+          senderId: payload.senderId,
+          senderType: payload.senderType,
+          content: payload.message,
+          type: payload.type as 'text' | 'image' | 'audio',
+          status: payload.isRead ? 'read' : 'delivered',
+          createdAt: payload.createdAt,
+        };
+
+        setMessages((prev) => {
+          // Deduplicate by ID (same as mobile app)
+          if (prev.find((m) => m.id === newMessage.id)) {
+            return prev;
+          }
+          return [...prev, newMessage];
+        });
+      }
+    );
+
+    return () => {
+      unsubMessages();
+    };
+  }, [sessionId]);
+
+  // ── Socket.IO fallback (for any backend Socket.IO events) ──────────
+  useEffect(() => {
+    if (!sessionId) return;
+
+    socketService.joinChatSession(sessionId);
+
+    const unsubMessage = socketService.on('chat_message', (data: unknown) => {
+      const payload = data as { message: ChatMessage };
+      if (payload?.message) {
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === payload.message.id)) return prev;
+          return [...prev, payload.message];
+        });
+      }
+    });
+
+    const unsubTyping = socketService.on('chat_typing', (data: unknown) => {
+      const payload = data as { sessionId: string; isTyping: boolean };
+      if (payload?.sessionId === sessionId) {
+        setAstrologerTyping(payload.isTyping);
+      }
+    });
+
+    const unsubStatus = socketService.on('message_status', (data: unknown) => {
+      const payload = data as { messageId: string; status: string };
+      if (payload?.messageId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, status: payload.status as ChatMessage['status'] }
+              : m
+          )
+        );
+      }
+    });
+
+    return () => {
+      socketService.leaveChatSession(sessionId);
+      unsubMessage();
+      unsubTyping();
+      unsubStatus();
+    };
+  }, [sessionId]);
+
+  // ── Typing indicator ───────────────────────────────────────────────
+  const sendTypingIndicator = useCallback(
+    async (typing: boolean) => {
+      try {
+        await chatService.sendTypingIndicator(sessionId, typing);
+      } catch {
+        // Ignore typing errors
+      }
     },
-  });
+    [sessionId]
+  );
+
+  const handleTyping = useCallback(() => {
+    if (!isTyping) {
+      setIsTyping(true);
+      sendTypingIndicator(true);
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      sendTypingIndicator(false);
+    }, 2000);
+  }, [isTyping, sendTypingIndicator]);
+
+  // Cleanup typing timeout
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    messages,
+    isLoading,
+    sending,
+    error,
+    sendMessage,
+    refetchMessages: fetchMessages,
+    astrologerTyping,
+    setAstrologerTyping,
+    handleTyping,
+  };
 }
+
+// ─── Remaining hooks (unchanged — these work fine) ─────────────────────
 
 /**
  * Hook for initiating a chat request
@@ -146,16 +256,13 @@ export function useChatRequestStatus(requestId: string | null, options?: {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 2000;
-
-      // Stop polling if status is terminal
       if (['accepted', 'rejected', 'timeout', 'cancelled'].includes(data.status)) {
         return false;
       }
-      return 2000; // Poll every 2 seconds
+      return 2000;
     },
   });
 
-  // Handle status changes
   useEffect(() => {
     if (!query.data) return;
 
@@ -222,105 +329,4 @@ export function useChatHistory() {
     },
     initialPageParam: 1,
   });
-}
-
-/**
- * Hook for managing chat state with real-time updates
- */
-export function useChatState(sessionId: string) {
-  const queryClient = useQueryClient();
-  const [isTyping, setIsTyping] = useState(false);
-  const [astrologerTyping, setAstrologerTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Send typing indicator
-  const sendTyping = useCallback(async (typing: boolean) => {
-    try {
-      await chatService.sendTypingIndicator(sessionId, typing);
-    } catch {
-      // Ignore typing indicator errors
-    }
-  }, [sessionId]);
-
-  // Handle user typing
-  const handleTyping = useCallback(() => {
-    if (!isTyping) {
-      setIsTyping(true);
-      sendTyping(true);
-    }
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Set new timeout to stop typing
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      sendTyping(false);
-    }, 2000);
-  }, [isTyping, sendTyping]);
-
-  // Add message to cache (for real-time updates)
-  const addMessage = useCallback((message: ChatMessage) => {
-    queryClient.setQueryData(CHAT_QUERY_KEYS.messages(sessionId), (old: unknown) => {
-      if (!old) return old;
-      const data = old as { pages: Array<{ messages: ChatMessage[] }> };
-
-      // Check if message already exists
-      const exists = data.pages.some(page =>
-        page.messages.some(m => m.id === message.id)
-      );
-      if (exists) return data;
-
-      return {
-        ...data,
-        pages: data.pages.map((page, index) => {
-          if (index === 0) {
-            return {
-              ...page,
-              messages: [message, ...page.messages],
-            };
-          }
-          return page;
-        }),
-      };
-    });
-  }, [queryClient, sessionId]);
-
-  // Update message status
-  const updateMessageStatus = useCallback((messageId: string, status: string) => {
-    queryClient.setQueryData(CHAT_QUERY_KEYS.messages(sessionId), (old: unknown) => {
-      if (!old) return old;
-      const data = old as { pages: Array<{ messages: ChatMessage[] }> };
-
-      return {
-        ...data,
-        pages: data.pages.map(page => ({
-          ...page,
-          messages: page.messages.map(m =>
-            m.id === messageId ? { ...m, status } : m
-          ),
-        })),
-      };
-    });
-  }, [queryClient, sessionId]);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  return {
-    isTyping,
-    astrologerTyping,
-    setAstrologerTyping,
-    handleTyping,
-    addMessage,
-    updateMessageStatus,
-  };
 }
