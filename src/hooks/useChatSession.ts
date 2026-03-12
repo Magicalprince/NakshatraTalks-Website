@@ -83,14 +83,31 @@ export function useChatMessaging(sessionId: string, userId?: string) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // ── Send message via API (like mobile app — no optimistic update) ──
+  // ── Send message via API — add to local state from response ─────────
   const sendMessage = useCallback(
     async (content: string, type: 'text' | 'image' | 'audio' = 'text') => {
       if (!sessionId || !content.trim() || sending) return;
       try {
         setSending(true);
-        await chatService.sendMessage({ sessionId, content: content.trim(), type });
-        // Message will arrive via Supabase broadcast — don't add locally
+        const response = await chatService.sendMessage({ sessionId, content: content.trim(), type });
+        // Add sent message to local state from API response
+        if (response.data) {
+          const saved = response.data;
+          const sentMessage: ChatMessage = {
+            id: saved.id,
+            sessionId: saved.sessionId,
+            senderId: saved.senderId,
+            senderType: saved.senderType,
+            content: saved.message || saved.content,
+            type: saved.type as 'text' | 'image' | 'audio',
+            status: 'sent',
+            createdAt: saved.createdAt,
+          };
+          setMessages((prev) => {
+            if (prev.find((m) => m.id === sentMessage.id)) return prev;
+            return [...prev, sentMessage];
+          });
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to send message');
         throw err; // Re-throw so caller can show toast
