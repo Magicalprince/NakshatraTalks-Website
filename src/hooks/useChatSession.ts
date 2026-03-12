@@ -65,7 +65,9 @@ export function useChatMessaging(sessionId: string, userId?: string) {
         sessionId,
         limit: 100,
       });
-      const fetched = response.data?.messages || [];
+      // Backend sends raw array in data, not wrapped as { messages: [...] }
+      const raw = response.data;
+      const fetched = Array.isArray(raw) ? raw : (raw?.messages || []);
       // API returns newest-first; reverse to oldest-first for display
       setMessages(fetched.reverse());
       setError(null);
