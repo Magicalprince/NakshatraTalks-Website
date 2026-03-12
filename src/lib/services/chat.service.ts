@@ -107,7 +107,7 @@ class ChatService {
 
   async sendMessage(params: SendMessageParams): Promise<ApiResponse<ChatMessage>> {
     const { sessionId, content, type = 'text' } = params;
-    return apiClient.post(API_ENDPOINTS.CHAT.SEND(sessionId), { content, type });
+    return apiClient.post(API_ENDPOINTS.CHAT.SEND(sessionId), { message: content, type });
   }
 
   async markAsRead(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
