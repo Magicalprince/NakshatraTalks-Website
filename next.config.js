@@ -9,12 +9,11 @@ const nextConfig = {
         hostname: 'api.nakshatratalks.com',
       },
       {
+        // Keep wildcard for any legacy Supabase-hosted images in DB.
+        // The old hardcoded project (vckkbwvjczptjwixxvwi.supabase.co) is removed
+        // as it is already covered by this wildcard pattern.
         protocol: 'https',
         hostname: '*.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: 'vckkbwvjczptjwixxvwi.supabase.co',
       },
       {
         protocol: 'https',
