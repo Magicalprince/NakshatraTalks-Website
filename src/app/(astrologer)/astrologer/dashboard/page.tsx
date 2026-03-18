@@ -14,9 +14,15 @@ import {
   useAcceptChatRequest,
   useAcceptCallRequest,
   useRejectRequest,
+  useWaitlist,
+  useQueueConnect,
+  useEarningsSummary,
 } from '@/hooks/useAstrologerDashboard';
+import { AstrologerWaitlist } from '@/components/features/queue/AstrologerWaitlist';
+import { astrologerDashboardService } from '@/lib/services/astrologer-dashboard.service';
 import { useUIStore } from '@/stores/ui-store';
 import { useQueueStore } from '@/stores/queue-store';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   SectionHeader,
   AnimatedTabs,
@@ -64,14 +70,31 @@ export default function AstrologerDashboardPage() {
   const router = useRouter();
   const { addToast } = useUIStore();
   const { setTwilioCredentials } = useQueueStore();
-  const { data: stats, isLoading: statsLoading } = useAstrologerStats();
+  const astrologerProfile = useAuthStore((s) => s.astrologer);
+  const { data: statsData, isLoading: statsLoading } = useAstrologerStats();
   const { data: dashboard } = useAstrologerDashboardData();
+  const { data: earningsSummary } = useEarningsSummary();
+
+  // Merge stats from API with fallback from astrologer profile (auth store) + earnings summary
+  // The /stats endpoint may 404 — use profile data and earnings summary as fallbacks
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const earnData = earningsSummary as any;
+  const stats = {
+    ...statsData,
+    rating: statsData?.rating ?? statsData?.averageRating ?? astrologerProfile?.rating ?? 0,
+    totalReviews: statsData?.totalReviews ?? astrologerProfile?.totalReviews ?? 0,
+    totalSessions: statsData?.totalSessions ?? statsData?.totalConsultations ?? astrologerProfile?.totalCalls ?? 0,
+    totalEarnings: statsData?.totalEarnings ?? earnData?.totalEarnings ?? earnData?.allTime ?? 0,
+    avgSessionDuration: statsData?.avgSessionDuration ?? statsData?.averageSessionDuration ?? 0,
+  };
   const { data: availability } = useAstrologerAvailability();
   const { mutate: toggleAvailability, isPending: isUpdating } = useToggleAvailability();
   const { data: requestsData, isLoading: requestsLoading } = useIncomingRequests();
   const { mutate: acceptChatRequest, isPending: isAcceptingChat } = useAcceptChatRequest();
   const { mutate: acceptCallRequest, isPending: isAcceptingCall } = useAcceptCallRequest();
   const { mutate: rejectRequest } = useRejectRequest();
+  const { data: waitlistData, isLoading: isWaitlistLoading } = useWaitlist();
+  const { connectChat, connectCall, isConnectingChat, isConnectingCall } = useQueueConnect();
 
   const [selectedTab, setSelectedTab] = useState<string>('all');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -86,11 +109,24 @@ export default function AstrologerDashboardPage() {
 
   const handleAccept = useCallback((requestId: string, type: 'chat' | 'call') => {
     setAcceptingId(requestId);
-    const onSuccess = (response: { data?: { sessionId?: string; twilioToken?: string; twilioRoomName?: string } }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onSuccess = (response: { data?: any }) => {
       const sessionId = response?.data?.sessionId;
       // Store Twilio credentials for the call page
       if (type === 'call' && response?.data?.twilioToken && response?.data?.twilioRoomName) {
         setTwilioCredentials(response.data.twilioToken, response.data.twilioRoomName);
+      }
+      // Store intake profile from accept response for the chat page to read
+      // (active session endpoint doesn't include intake profile, so we persist it here)
+      if (type === 'chat' && sessionId && response?.data?.intakeProfile) {
+        try {
+          sessionStorage.setItem(
+            `intake-profile-${sessionId}`,
+            JSON.stringify(response.data.intakeProfile)
+          );
+        } catch {
+          // sessionStorage may not be available
+        }
       }
       if (sessionId) {
         router.push(`/astrologer/history/${type}/${sessionId}`);
@@ -116,6 +152,39 @@ export default function AstrologerDashboardPage() {
   const handleReject = useCallback((requestId: string, type: 'chat' | 'call') => {
     rejectRequest({ requestId, type });
   }, [rejectRequest]);
+
+  const handleWaitlistConnect = useCallback((queueId: string, type: 'call' | 'chat') => {
+    const onSuccess = (response: { data?: { sessionId?: string; twilioToken?: string; twilioRoomName?: string } }) => {
+      if (type === 'call' && response?.data?.twilioToken && response?.data?.twilioRoomName) {
+        setTwilioCredentials(response.data.twilioToken, response.data.twilioRoomName);
+      }
+      if (response?.data?.sessionId) {
+        router.push(`/astrologer/history/${type}/${response.data.sessionId}`);
+      }
+    };
+    const onError = () => {
+      addToast({ type: 'error', title: 'Error', message: 'Failed to connect to user' });
+    };
+
+    if (type === 'call') {
+      connectCall(queueId, { onSuccess, onError });
+    } else {
+      connectChat(queueId, { onSuccess, onError });
+    }
+  }, [connectCall, connectChat, router, addToast, setTwilioCredentials]);
+
+  const handleWaitlistSkip = useCallback(async (queueId: string, type: 'call' | 'chat') => {
+    try {
+      if (type === 'call') {
+        await astrologerDashboardService.cancelCallQueue(queueId);
+      } else {
+        await astrologerDashboardService.cancelChatQueue(queueId);
+      }
+      addToast({ type: 'info', title: 'Skipped', message: 'User removed from queue' });
+    } catch {
+      addToast({ type: 'error', title: 'Error', message: 'Failed to skip user' });
+    }
+  }, [addToast]);
 
   const statCards = [
     { icon: IndianRupee, value: formatCurrency(dashboard?.profile?.totalEarningsToday || 0), label: "Today's Earnings", color: 'text-primary', bg: 'bg-primary/10', accent: 'bg-primary' },
@@ -317,6 +386,21 @@ export default function AstrologerDashboardPage() {
                   )}
                 </div>
               </Card>
+            </motion.div>
+
+            {/* Waitlist Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <AstrologerWaitlist
+                waitlist={waitlistData?.waitlist || []}
+                isLoading={isWaitlistLoading}
+                onConnect={handleWaitlistConnect}
+                onSkip={handleWaitlistSkip}
+                isConnecting={isConnectingChat || isConnectingCall}
+              />
             </motion.div>
           </div>
 

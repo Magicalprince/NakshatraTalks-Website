@@ -11,7 +11,7 @@
  * - Send via API → backend saves + broadcasts → broadcast arrives & deduplicates
  */
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChatInterface } from '@/components/features/chat';
@@ -40,12 +40,28 @@ export default function AstrologerChatSessionPage() {
     totalCost: number;
   } | null>(null);
 
+  // ── Intake profile: read from sessionStorage (stored during accept) or active session ──
+  const [intakeProfile, setIntakeProfile] = useState<import('@/types/api.types').IntakeProfileInfo | null>(null);
+  useEffect(() => {
+    // Try sessionStorage first (set by dashboard handleAccept)
+    try {
+      const stored = sessionStorage.getItem(`intake-profile-${sessionId}`);
+      if (stored) {
+        setIntakeProfile(JSON.parse(stored));
+      }
+    } catch {
+      // Ignore
+    }
+  }, [sessionId]);
+
   // ── Local state for messages (matches mobile app architecture) ──────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isMessagesLoading, setIsMessagesLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
   // Fetch active session data via astrologer endpoint
+  // The service already handles unwrapping { hasActiveChat, session } — no double-unwrap needed.
+  const hadActiveSessionRef = useRef(false);
   const {
     data: activeSession,
     isLoading: isSessionLoading,
@@ -55,20 +71,19 @@ export default function AstrologerChatSessionPage() {
     queryKey: ASTROLOGER_QUERY_KEYS.activeChat,
     queryFn: async () => {
       const response = await astrologerDashboardService.getActiveChatSession();
-      // Backend returns { hasActiveChat, session } — extract the session object
-      const payload = response.data as unknown as { hasActiveChat?: boolean; session?: unknown } | null;
-      if (payload && typeof payload === 'object' && 'session' in payload) {
-        return payload.session as import('@/types/api.types').ActiveSession | null;
-      }
       return response.data;
     },
     enabled: !!sessionId,
     refetchInterval: sessionEnded ? false : 10000,
   });
 
-  // Detect session ended from server (activeSession becomes null after refetch)
+  // Detect session ended from server: only trigger when we HAD an active session
+  // and then it became null (not on initial load when data hasn't arrived yet).
   useEffect(() => {
-    if (!isSessionLoading && !activeSession && !sessionError) {
+    if (activeSession) {
+      hadActiveSessionRef.current = true;
+    }
+    if (hadActiveSessionRef.current && !isSessionLoading && !activeSession && !sessionError) {
       setSessionEnded(true);
     }
   }, [activeSession, isSessionLoading, sessionError]);
@@ -328,6 +343,7 @@ export default function AstrologerChatSessionPage() {
         pricePerMinute={activeSession?.pricePerMinute}
         sessionSummary={sessionSummary || undefined}
         isAstrologer={true}
+        intakeProfile={intakeProfile || activeSession?.intakeProfile}
         onSendMessage={handleSendMessage}
         onImageUpload={handleImageUpload}
         onEndSession={handleEndSession}

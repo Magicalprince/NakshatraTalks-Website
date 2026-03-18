@@ -473,6 +473,7 @@ export default function AstrologerCallSessionPage() {
       isSpeakerOn={isSpeakerOn}
       sessionSummary={sessionSummary || undefined}
       costLabel="Amount Received"
+      isAstrologer={true}
       onToggleMute={handleToggleMute}
       onToggleVideo={handleToggleVideo}
       onToggleSpeaker={handleToggleSpeaker}

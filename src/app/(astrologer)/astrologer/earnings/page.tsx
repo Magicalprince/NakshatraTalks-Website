@@ -355,8 +355,12 @@ export default function AstrologerEarningsPage() {
                 <InfoCard variant="warning" icon={IndianRupee}>
                   <p className="font-semibold text-text-primary text-sm">Payout Info</p>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    You earn {((summary?.commissionRate ?? 0.7) * 100).toFixed(0)}% of every session. Platform fee: {((1 - (summary?.commissionRate ?? 0.7)) * 100).toFixed(0)}%.
-                    Earnings transferred on the 1st and 15th of every month.
+                    {summary?.commissionRate != null ? (
+                      <>You earn {(summary.commissionRate * 100).toFixed(0)}% of every session. Platform fee: {((1 - summary.commissionRate) * 100).toFixed(0)}%.</>
+                    ) : (
+                      <>Commission rate not available. Contact support for details.</>
+                    )}
+                    {' '}Earnings transferred on the 1st and 15th of every month.
                   </p>
                 </InfoCard>
               </motion.div>

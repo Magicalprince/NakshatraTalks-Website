@@ -9,6 +9,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuthStore } from '@/stores/auth-store';
+import { useToast } from '@/stores/ui-store';
+import { apiClient } from '@/lib/api/client';
+import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import {
@@ -45,8 +48,10 @@ const SIDEBAR_LINKS: QuickLinkItem[] = [
 ];
 
 export default function AstrologerProfilePage() {
-  const { astrologer, isHydrated } = useAuthStore();
+  const { astrologer, isHydrated, setAstrologer } = useAuthStore();
+  const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editData, setEditData] = useState({
     bio: astrologer?.bio || '',
     experience: astrologer?.experience?.toString() || '',
@@ -68,12 +73,41 @@ export default function AstrologerProfilePage() {
     return errors;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const errors = validateEditData();
     setEditErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    // Would call API to update profile
-    setIsEditing(false);
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        bio: editData.bio.trim(),
+        experience: Number(editData.experience),
+        chatPricePerMinute: Number(editData.chatRate),
+        callPricePerMinute: Number(editData.callRate),
+      };
+
+      const response = await apiClient.put<{ success?: boolean; data?: Record<string, unknown> }>(
+        API_ENDPOINTS.ASTROLOGERS.ME.UPDATE_PROFILE,
+        payload,
+      );
+
+      // Update local astrologer state with new values
+      if (astrologer) {
+        setAstrologer({
+          ...astrologer,
+          ...payload,
+        });
+      }
+
+      toast.success('Profile updated', 'Your profile has been saved successfully.');
+      setIsEditing(false);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update profile. Please try again.';
+      toast.error('Update failed', message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isHydrated) {
@@ -355,8 +389,8 @@ export default function AstrologerProfilePage() {
               <Button variant="outline" className="flex-1" onClick={() => { setIsEditing(false); setEditErrors({}); }}>
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleSave}>
-                Save Changes
+              <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </div>
