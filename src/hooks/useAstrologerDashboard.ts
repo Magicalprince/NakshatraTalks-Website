@@ -43,11 +43,17 @@ export function useAstrologerStats() {
     queryKey: ASTROLOGER_QUERY_KEYS.stats,
     queryFn: async () => {
       if (!user?.id) return null;
-      const response = await astrologerDashboardService.getStats(user.id);
-      return response.data;
+      try {
+        const response = await astrologerDashboardService.getStats(user.id);
+        return response.data;
+      } catch {
+        // Stats endpoint may 404 — return null, dashboard uses profile data as fallback
+        return null;
+      }
     },
     enabled: isAstrologer && !!user?.id,
     refetchInterval: 60000,
+    retry: false, // Don't retry on 404
   });
 }
 
