@@ -21,6 +21,9 @@
  *   wallet-{userId}               → balance-update
  *   user-queue-{userId}           → queue-update
  *   session-ready-{userId}        → session-ready
+ *   astrologer-waitlist-{astrologerId} → waitlist-update (astrologer side)
+ *   astrologer-incoming-{astrologerId} → new-request / request-expired (astrologer side)
+ *   chat-session-{sessionId}      → user-connected (astrologer side, billing start)
  */
 
 import { getSupabaseClient } from '@/lib/supabase/client';
@@ -108,25 +111,72 @@ export interface SessionReadyPayload {
   pricePerMinute: number;
 }
 
+export interface WaitlistUpdatePayload {
+  action: 'joined' | 'left' | 'updated' | 'connected';
+  queueEntry: {
+    id: string;
+    userId: string;
+    userName?: string;
+    userImage?: string;
+    type: 'chat' | 'call';
+    position: number;
+    status: string;
+    createdAt?: string;
+  };
+}
+
+export interface IncomingRequestPayload {
+  requestId: string;
+  userId: string;
+  userName?: string;
+  userImage?: string;
+  type: 'chat' | 'call';
+  status: string;
+  pricePerMinute?: number;
+  createdAt?: string;
+}
+
 // ─── Callback types ──────────────────────────────────────────────────
 
 type Unsubscribe = () => void;
 type EventCallback<T> = (payload: T) => void;
 
+/** Retry delay for failed channel subscriptions (matches mobile app) */
+const RETRY_DELAY_MS = 2000;
+/** Max retry attempts before giving up */
+const MAX_RETRIES = 5;
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 class SupabaseRealtimeService {
   private channels: Map<string, RealtimeChannel> = new Map();
+  private retryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private retryCounts: Map<string, number> = new Map();
 
   /**
    * Clean up a specific channel subscription
    */
   private removeChannel(name: string) {
-    const client = getSupabaseClient();
+    // Clear any pending retry timer
+    const timer = this.retryTimers.get(name);
+    if (timer) {
+      clearTimeout(timer);
+      this.retryTimers.delete(name);
+    }
+    this.retryCounts.delete(name);
+
     const channel = this.channels.get(name);
-    if (channel && client) {
-      client.removeChannel(channel);
-      this.channels.delete(name);
+    if (!channel) return;
+
+    this.channels.delete(name);
+
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        client.removeChannel(channel);
+      }
+    } catch {
+      // Supabase client may be unavailable after logout — safe to ignore
     }
   }
 
@@ -134,177 +184,177 @@ class SupabaseRealtimeService {
    * Clean up all subscriptions (call on logout / unmount)
    */
   removeAllChannels() {
-    const client = getSupabaseClient();
-    if (!client) return;
-    this.channels.forEach((channel) => {
-      client.removeChannel(channel);
-    });
+    // Clear all retry timers
+    this.retryTimers.forEach((timer) => clearTimeout(timer));
+    this.retryTimers.clear();
+    this.retryCounts.clear();
+
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        this.channels.forEach((channel) => {
+          try {
+            client.removeChannel(channel);
+          } catch {
+            // Safe to ignore
+          }
+        });
+      }
+    } catch {
+      // Supabase client may be unavailable after logout
+    }
     this.channels.clear();
+  }
+
+  /**
+   * Subscribe to a channel with auto-retry on CHANNEL_ERROR / TIMED_OUT.
+   * Matches mobile app's retry pattern (2s delay, max 5 retries).
+   */
+  private subscribeWithRetry(
+    channelName: string,
+    setup: (client: ReturnType<typeof getSupabaseClient> & object) => RealtimeChannel,
+    retryFn: () => Unsubscribe
+  ): Unsubscribe {
+    this.removeChannel(channelName);
+
+    const client = getSupabaseClient();
+    if (!client) return () => {};
+
+    const channel = setup(client);
+
+    channel.subscribe((status: string) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        const count = (this.retryCounts.get(channelName) || 0) + 1;
+        if (count <= MAX_RETRIES) {
+          this.retryCounts.set(channelName, count);
+          console.warn(`[Realtime] ${channelName} ${status} — retrying (${count}/${MAX_RETRIES})...`);
+          const timer = setTimeout(() => {
+            this.retryTimers.delete(channelName);
+            // Only retry if the channel is still tracked (hasn't been unsubscribed)
+            if (this.channels.has(channelName)) {
+              retryFn();
+            }
+          }, RETRY_DELAY_MS);
+          this.retryTimers.set(channelName, timer);
+        } else {
+          console.error(`[Realtime] ${channelName} failed after ${MAX_RETRIES} retries`);
+        }
+      } else if (status === 'SUBSCRIBED') {
+        // Reset retry count on successful subscription
+        this.retryCounts.delete(channelName);
+      }
+    });
+
+    this.channels.set(channelName, channel);
+    return () => this.removeChannel(channelName);
   }
 
   // ─── Astrologer Availability ─────────────────────────────────────
 
-  /**
-   * Subscribe to chat astrologer availability changes.
-   * Mobile astrologer toggles on/off → browse-chat page updates instantly.
-   */
   subscribeToChatAvailability(
     callback: EventCallback<AstrologerStatusPayload>
   ): Unsubscribe {
     const channelName = 'astrologer-availability';
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'astrologer-status' }, ({ payload }) => {
-        callback(payload as AstrologerStatusPayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'astrologer-status' }, ({ payload }) => {
+          callback(payload as AstrologerStatusPayload);
+        }),
+      () => this.subscribeToChatAvailability(callback)
+    );
   }
 
-  /**
-   * Subscribe to call astrologer availability changes.
-   */
   subscribeToCallAvailability(
     callback: EventCallback<AstrologerStatusPayload>
   ): Unsubscribe {
     const channelName = 'astrologer-availability-call';
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'astrologer-status' }, ({ payload }) => {
-        callback(payload as AstrologerStatusPayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'astrologer-status' }, ({ payload }) => {
+          callback(payload as AstrologerStatusPayload);
+        }),
+      () => this.subscribeToCallAvailability(callback)
+    );
   }
 
   // ─── Chat Messages ───────────────────────────────────────────────
 
-  /**
-   * Subscribe to real-time chat messages for a session.
-   * Astrologer sends message on mobile → user sees it instantly on website.
-   */
   subscribeToChatMessages(
     sessionId: string,
     callback: EventCallback<ChatMessagePayload>
   ): Unsubscribe {
     const channelName = `chat-messages-${sessionId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'new-message' }, ({ payload }) => {
-        callback(payload as ChatMessagePayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'new-message' }, ({ payload }) => {
+          callback(payload as ChatMessagePayload);
+        }),
+      () => this.subscribeToChatMessages(sessionId, callback)
+    );
   }
 
   // ─── Chat Request Status ─────────────────────────────────────────
 
-  /**
-   * Subscribe to chat request acceptance/rejection.
-   * Astrologer accepts on mobile → user on website navigates to session instantly.
-   */
   subscribeToChatRequestUpdate(
     requestId: string,
     callback: EventCallback<RequestStatusPayload>
   ): Unsubscribe {
     const channelName = `chat-request-${requestId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'request-update' }, ({ payload }) => {
-        callback(payload as RequestStatusPayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'request-update' }, ({ payload }) => {
+          callback(payload as RequestStatusPayload);
+        }),
+      () => this.subscribeToChatRequestUpdate(requestId, callback)
+    );
   }
 
   // ─── Call Request Status ──────────────────────────────────────────
 
-  /**
-   * Subscribe to call request acceptance with Twilio tokens.
-   * Astrologer accepts call on mobile → user gets tokens + session instantly.
-   */
   subscribeToCallRequestUpdate(
     requestId: string,
     callback: EventCallback<RequestStatusPayload>
   ): Unsubscribe {
     const channelName = `call-request-${requestId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'request-update' }, ({ payload }) => {
-        callback(payload as RequestStatusPayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'request-update' }, ({ payload }) => {
+          callback(payload as RequestStatusPayload);
+        }),
+      () => this.subscribeToCallRequestUpdate(requestId, callback)
+    );
   }
 
   // ─── Session Updates ──────────────────────────────────────────────
 
-  /**
-   * Subscribe to session status changes (end, cancel, etc).
-   * Astrologer ends chat on mobile → user on website sees it instantly.
-   */
   subscribeToSessionUpdate(
     sessionId: string,
     callback: EventCallback<SessionUpdatePayload>
   ): Unsubscribe {
     const channelName = `session-${sessionId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'session-update' }, ({ payload }) => {
-        callback(payload as SessionUpdatePayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'session-update' }, ({ payload }) => {
+          callback(payload as SessionUpdatePayload);
+        }),
+      () => this.subscribeToSessionUpdate(sessionId, callback)
+    );
   }
 
   // ─── Billing Events ───────────────────────────────────────────────
 
-  /**
-   * Subscribe to billing events for the current user.
-   * Handles: both_connected, low_balance_warning, call_ended_balance, call_ended
-   */
   subscribeToBillingEvents(
     userId: string,
     callbacks: {
@@ -315,115 +365,145 @@ class SupabaseRealtimeService {
     }
   ): Unsubscribe {
     const channelName = `billing-${userId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    let channel = client.channel(channelName);
-
-    if (callbacks.onBothConnected) {
-      channel = channel.on('broadcast', { event: 'both_connected' }, ({ payload }) => {
-        callbacks.onBothConnected!(payload as BillingPayload);
-      });
-    }
-    if (callbacks.onLowBalance) {
-      channel = channel.on('broadcast', { event: 'low_balance_warning' }, ({ payload }) => {
-        callbacks.onLowBalance!(payload as BillingPayload);
-      });
-    }
-    if (callbacks.onCallEndedBalance) {
-      channel = channel.on('broadcast', { event: 'call_ended_balance' }, ({ payload }) => {
-        callbacks.onCallEndedBalance!(payload as BillingPayload);
-      });
-    }
-    if (callbacks.onCallEnded) {
-      channel = channel.on('broadcast', { event: 'call_ended' }, ({ payload }) => {
-        callbacks.onCallEnded!(payload as BillingPayload);
-      });
-    }
-
-    channel.subscribe();
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => {
+        let channel = client.channel(channelName);
+        if (callbacks.onBothConnected) {
+          channel = channel.on('broadcast', { event: 'both_connected' }, ({ payload }) => {
+            callbacks.onBothConnected!(payload as BillingPayload);
+          });
+        }
+        if (callbacks.onLowBalance) {
+          channel = channel.on('broadcast', { event: 'low_balance_warning' }, ({ payload }) => {
+            callbacks.onLowBalance!(payload as BillingPayload);
+          });
+        }
+        if (callbacks.onCallEndedBalance) {
+          channel = channel.on('broadcast', { event: 'call_ended_balance' }, ({ payload }) => {
+            callbacks.onCallEndedBalance!(payload as BillingPayload);
+          });
+        }
+        if (callbacks.onCallEnded) {
+          channel = channel.on('broadcast', { event: 'call_ended' }, ({ payload }) => {
+            callbacks.onCallEnded!(payload as BillingPayload);
+          });
+        }
+        return channel;
+      },
+      () => this.subscribeToBillingEvents(userId, callbacks)
+    );
   }
 
   // ─── Wallet Updates ───────────────────────────────────────────────
 
-  /**
-   * Subscribe to wallet balance changes.
-   */
   subscribeToWalletUpdates(
     userId: string,
     callback: EventCallback<WalletBalancePayload>
   ): Unsubscribe {
     const channelName = `wallet-${userId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'balance-update' }, ({ payload }) => {
-        callback(payload as WalletBalancePayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'balance-update' }, ({ payload }) => {
+          callback(payload as WalletBalancePayload);
+        }),
+      () => this.subscribeToWalletUpdates(userId, callback)
+    );
   }
 
   // ─── Queue Updates ────────────────────────────────────────────────
 
-  /**
-   * Subscribe to queue position updates.
-   */
   subscribeToQueueUpdates(
     userId: string,
     callback: EventCallback<QueueUpdatePayload>
   ): Unsubscribe {
     const channelName = `user-queue-${userId}`;
-    this.removeChannel(channelName);
-
-    const client = getSupabaseClient();
-    if (!client) return () => {};
-
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'queue-update' }, ({ payload }) => {
-        callback(payload as QueueUpdatePayload);
-      })
-      .subscribe();
-
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'queue-update' }, ({ payload }) => {
+          callback(payload as QueueUpdatePayload);
+        }),
+      () => this.subscribeToQueueUpdates(userId, callback)
+    );
   }
 
   // ─── Session Ready (from waitlist) ────────────────────────────────
 
-  /**
-   * Subscribe to session-ready events (astrologer connects from waitlist).
-   */
   subscribeToSessionReady(
     userId: string,
     callback: EventCallback<SessionReadyPayload>
   ): Unsubscribe {
     const channelName = `session-ready-${userId}`;
-    this.removeChannel(channelName);
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'session-ready' }, ({ payload }) => {
+          callback(payload as SessionReadyPayload);
+        }),
+      () => this.subscribeToSessionReady(userId, callback)
+    );
+  }
 
-    const client = getSupabaseClient();
-    if (!client) return () => {};
+  // ─── Waitlist Updates (Astrologer Side) ─────────────────────────
 
-    const channel = client
-      .channel(channelName)
-      .on('broadcast', { event: 'session-ready' }, ({ payload }) => {
-        callback(payload as SessionReadyPayload);
-      })
-      .subscribe();
+  subscribeToWaitlistUpdates(
+    astrologerId: string,
+    callback: EventCallback<WaitlistUpdatePayload>
+  ): Unsubscribe {
+    const channelName = `astrologer-waitlist-${astrologerId}`;
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'waitlist-update' }, ({ payload }) => {
+          if (payload) callback(payload as WaitlistUpdatePayload);
+        }),
+      () => this.subscribeToWaitlistUpdates(astrologerId, callback)
+    );
+  }
 
-    this.channels.set(channelName, channel);
-    return () => this.removeChannel(channelName);
+  // ─── Incoming Requests (Astrologer Side) ────────────────────────
+
+  subscribeToIncomingRequests(
+    astrologerId: string,
+    callback: EventCallback<IncomingRequestPayload>
+  ): Unsubscribe {
+    const channelName = `astrologer-incoming-${astrologerId}`;
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'new-request' }, ({ payload }) => {
+          if (payload) callback(payload as IncomingRequestPayload);
+        })
+        .on('broadcast', { event: 'request-expired' }, ({ payload }) => {
+          if (payload) callback({ ...payload, status: 'expired' } as IncomingRequestPayload);
+        }),
+      () => this.subscribeToIncomingRequests(astrologerId, callback)
+    );
+  }
+
+  // ─── Chat Session User Connected (Astrologer Side) ──────────────
+
+  subscribeToUserConnected(
+    sessionId: string,
+    callback: EventCallback<{ sessionId: string; userId: string; connectedAt: string }>
+  ): Unsubscribe {
+    const channelName = `chat-session-${sessionId}`;
+    return this.subscribeWithRetry(
+      channelName,
+      (client) => client
+        .channel(channelName)
+        .on('broadcast', { event: 'user-connected' }, ({ payload }) => {
+          if (payload) callback(payload as { sessionId: string; userId: string; connectedAt: string });
+        }),
+      () => this.subscribeToUserConnected(sessionId, callback)
+    );
   }
 }
 

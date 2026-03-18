@@ -25,7 +25,37 @@ export interface VerifyOtpParams {
   countryCode?: string;
 }
 
+const REFRESH_TOKEN_KEY = 'nakshatratalks-refresh-token';
+
 class AuthService {
+  /**
+   * Store refresh token in localStorage
+   */
+  private setRefreshToken(token: string): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    }
+  }
+
+  /**
+   * Get stored refresh token
+   */
+  private getRefreshToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(REFRESH_TOKEN_KEY);
+    }
+    return null;
+  }
+
+  /**
+   * Clear refresh token
+   */
+  private clearRefreshToken(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
+  }
+
   /**
    * Send OTP to phone number (via MSG91 on backend)
    */
@@ -59,6 +89,10 @@ class AuthService {
 
     if (isSuccess && raw.access_token) {
       apiClient.setAccessToken(raw.access_token);
+      // Store refresh token for session persistence
+      if (raw.refresh_token) {
+        this.setRefreshToken(raw.refresh_token);
+      }
     }
 
     return {
@@ -83,14 +117,25 @@ class AuthService {
   }
 
   /**
-   * Refresh access token using refresh token (httpOnly cookie)
-   *
-   * NOTE: Backend returns flat: { success, access_token }
+   * Refresh access token using stored refresh token.
+   * Backend expects { refresh_token } in body, returns new token pair.
    */
   async refresh(): Promise<ApiResponse<{ access_token: string; refresh_token?: string }>> {
+    const storedRefreshToken = this.getRefreshToken();
+    if (!storedRefreshToken) {
+      return { success: false, message: 'No refresh token available' };
+    }
+
     const raw = await apiClient.post<{ success?: boolean; access_token?: string; refresh_token?: string }>(
-      API_ENDPOINTS.AUTH.REFRESH
+      API_ENDPOINTS.AUTH.REFRESH,
+      { refresh_token: storedRefreshToken }
     );
+
+    // Store new refresh token if returned
+    if (raw.refresh_token) {
+      this.setRefreshToken(raw.refresh_token);
+    }
+
     // Normalize: if backend returns flat, wrap in data
     if ('access_token' in raw && !('data' in raw)) {
       return { success: raw.success ?? !!raw.access_token, data: raw as { access_token: string; refresh_token?: string } };
@@ -99,10 +144,11 @@ class AuthService {
   }
 
   /**
-   * Logout — clear tokens client-side
+   * Logout — clear all tokens client-side
    */
   logout(): void {
     apiClient.clearAccessToken();
+    this.clearRefreshToken();
   }
 
   /**

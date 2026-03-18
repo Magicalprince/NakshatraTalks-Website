@@ -72,6 +72,7 @@ export const API_ENDPOINTS = {
       CHAT_QUEUE_CANCEL: (queueId: string) => `/api/v1/astrologer/chat/queue/${queueId}/cancel`,
       WAITLIST: '/api/v1/astrologer/waitlist',
       DASHBOARD: '/api/v1/astrologer/dashboard',
+      UPDATE_PROFILE: '/api/v1/astrologers/me/profile',
     },
   },
 
@@ -143,6 +144,7 @@ export const API_ENDPOINTS = {
     END: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
     END_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/end`,
     CONFIRM_CONNECTION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/confirm-connection`,
+    REFRESH_TOKEN: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/refresh-token`,
     DECLINE_SESSION: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/decline`,
     RATING: (sessionId: string) => `/api/v1/call/sessions/${sessionId}/rating`,
     INITIATE: '/api/v1/call/request',
@@ -157,6 +159,15 @@ export const API_ENDPOINTS = {
     QUEUE_INFO: (astrologerId: string) => `/api/v1/call/queue/${astrologerId}/info`,
     QUEUE_LEAVE: (queueId: string) => `/api/v1/call/queue/${queueId}/leave`,
     QUEUE_CALL_NOW: (queueId: string) => `/api/v1/call/queue/${queueId}/call-now`,
+  },
+
+  // Intake Profiles
+  INTAKE_PROFILES: {
+    LIST: '/api/v1/intake-profiles',
+    CREATE: '/api/v1/intake-profiles',
+    UPDATE: (id: string) => `/api/v1/intake-profiles/${id}`,
+    DELETE: (id: string) => `/api/v1/intake-profiles/${id}`,
+    SET_DEFAULT: (id: string) => `/api/v1/intake-profiles/${id}/default`,
   },
 
   // Notifications

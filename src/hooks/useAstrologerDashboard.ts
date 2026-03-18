@@ -8,6 +8,8 @@ import type { EarningEntry } from '@/lib/services/astrologer-dashboard.service';
 import { liveSessionService } from '@/lib/services/live-session.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useEffect, useRef, useCallback } from 'react';
+import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
+import type { WaitlistUpdatePayload, IncomingRequestPayload } from '@/lib/services/supabase-realtime.service';
 import type {
   Pagination,
   CreateLiveSessionData,
@@ -178,6 +180,15 @@ export function useToggleAvailability() {
       // Sync auth store immediately
       updateAstrologer({ isAvailable, chatAvailable: isAvailable, callAvailable: isAvailable });
 
+      // Ghost-online prevention: clear stale data when going offline
+      // so users don't see this astrologer as available with pending requests
+      if (!isAvailable) {
+        queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.incomingRequests, null);
+        queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.waitlist, null);
+        queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.activeChat, null);
+        queryClient.setQueryData(ASTROLOGER_QUERY_KEYS.activeCall, null);
+      }
+
       return { previous };
     },
     onError: (_err, _isAvailable, context) => {
@@ -192,8 +203,13 @@ export function useToggleAvailability() {
         });
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, isAvailable) => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
+      // Refetch fresh data when going back online
+      if (isAvailable) {
+        queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
+        queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
+      }
     },
   });
 }
@@ -201,8 +217,14 @@ export function useToggleAvailability() {
 /** @deprecated Use useToggleAvailability instead — backend only supports a single toggle */
 export const useUpdateAvailability = useToggleAvailability;
 
+/**
+ * Heartbeat hook — sends periodic heartbeat to keep astrologer "online".
+ * 10s interval when tab visible, 25s when hidden (stays under backend's 30s timeout).
+ * This prevents the toggle from turning off when astrologer switches tabs.
+ */
 export function useHeartbeat(enabled = true) {
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+  const isVisibleRef = useRef(true);
 
   const sendHeartbeat = useCallback(async () => {
     try {
@@ -212,19 +234,73 @@ export function useHeartbeat(enabled = true) {
     }
   }, []);
 
+  const startHeartbeat = useCallback((intervalMs = 10000) => {
+    if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+    sendHeartbeat();
+    heartbeatInterval.current = setInterval(sendHeartbeat, intervalMs);
+  }, [sendHeartbeat]);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
-    sendHeartbeat();
-    heartbeatInterval.current = setInterval(sendHeartbeat, 30000);
-    return () => {
-      if (heartbeatInterval.current) clearInterval(heartbeatInterval.current);
+
+    startHeartbeat(10000);
+
+    // Slow heartbeat when tab hidden (25s stays under backend's 30s timeout),
+    // resume fast (10s) when tab visible again
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = document.visibilityState === 'visible';
+      if (isVisibleRef.current) {
+        startHeartbeat(10000); // Fast heartbeat when visible
+      } else {
+        startHeartbeat(25000); // Slow heartbeat when hidden (keeps astrologer online)
+      }
     };
-  }, [enabled, sendHeartbeat]);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopHeartbeat();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [enabled, startHeartbeat, stopHeartbeat]);
 }
 
 export function useIncomingRequests() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
+  const queryClient = useQueryClient();
+  const incomingUnsubRef = useRef<(() => void) | null>(null);
+
+  // Subscribe to Supabase realtime for instant incoming request notifications
+  useEffect(() => {
+    const astrologerId = user?.id;
+    if (!isAstrologer || !astrologerId) return;
+
+    if (incomingUnsubRef.current) {
+      incomingUnsubRef.current();
+    }
+
+    incomingUnsubRef.current = supabaseRealtime.subscribeToIncomingRequests(
+      astrologerId,
+      (_update: IncomingRequestPayload) => {
+        queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
+      },
+    );
+
+    return () => {
+      if (incomingUnsubRef.current) {
+        incomingUnsubRef.current();
+        incomingUnsubRef.current = null;
+      }
+    };
+  }, [isAstrologer, user?.id, queryClient]);
 
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests,
@@ -240,6 +316,35 @@ export function useIncomingRequests() {
 export function useWaitlist() {
   const { user } = useAuthStore();
   const isAstrologer = user?.role === 'astrologer';
+  const queryClient = useQueryClient();
+  const unsubRef = useRef<(() => void) | null>(null);
+
+  // Subscribe to Supabase realtime waitlist updates for instant notifications
+  // when a user joins, leaves, or is connected from the queue.
+  useEffect(() => {
+    const astrologerId = user?.id;
+    if (!isAstrologer || !astrologerId) return;
+
+    // Clean up previous subscription
+    if (unsubRef.current) {
+      unsubRef.current();
+    }
+
+    unsubRef.current = supabaseRealtime.subscribeToWaitlistUpdates(
+      astrologerId,
+      (_update: WaitlistUpdatePayload) => {
+        // Invalidate the waitlist query so React Query refetches immediately
+        queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
+      },
+    );
+
+    return () => {
+      if (unsubRef.current) {
+        unsubRef.current();
+        unsubRef.current = null;
+      }
+    };
+  }, [isAstrologer, user?.id, queryClient]);
 
   return useQuery({
     queryKey: ASTROLOGER_QUERY_KEYS.waitlist,
@@ -254,13 +359,20 @@ export function useWaitlist() {
 
 export function useChatRequestActions() {
   const queryClient = useQueryClient();
+  const isProcessingRef = useRef(false);
 
   const acceptMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.acceptChatRequest(requestId),
+    mutationFn: (requestId: string) => {
+      if (isProcessingRef.current) return Promise.reject(new Error('Already processing'));
+      isProcessingRef.current = true;
+      return astrologerDashboardService.acceptChatRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
+    },
+    onSettled: () => {
+      setTimeout(() => { isProcessingRef.current = false; }, 1000);
     },
   });
 
@@ -328,13 +440,20 @@ export function useRejectRequest() {
 
 export function useCallRequestActions() {
   const queryClient = useQueryClient();
+  const isProcessingRef = useRef(false);
 
   const acceptMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      astrologerDashboardService.acceptCallRequest(requestId),
+    mutationFn: (requestId: string) => {
+      if (isProcessingRef.current) return Promise.reject(new Error('Already processing'));
+      isProcessingRef.current = true;
+      return astrologerDashboardService.acceptCallRequest(requestId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
+    },
+    onSettled: () => {
+      setTimeout(() => { isProcessingRef.current = false; }, 1000);
     },
   });
 
@@ -438,22 +557,35 @@ export function useSendMessageAstrologer(sessionId: string) {
 
 export function useQueueConnect() {
   const queryClient = useQueryClient();
+  const isConnectingRef = useRef(false);
 
   const connectChat = useMutation({
-    mutationFn: (queueId: string) =>
-      astrologerDashboardService.connectChatQueue(queueId),
+    mutationFn: (queueId: string) => {
+      if (isConnectingRef.current) return Promise.reject(new Error('Already connecting'));
+      isConnectingRef.current = true;
+      return astrologerDashboardService.connectChatQueue(queueId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeChat });
     },
+    onSettled: () => {
+      setTimeout(() => { isConnectingRef.current = false; }, 1000);
+    },
   });
 
   const connectCall = useMutation({
-    mutationFn: (queueId: string) =>
-      astrologerDashboardService.connectCallQueue(queueId),
+    mutationFn: (queueId: string) => {
+      if (isConnectingRef.current) return Promise.reject(new Error('Already connecting'));
+      isConnectingRef.current = true;
+      return astrologerDashboardService.connectCallQueue(queueId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.waitlist });
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.activeCall });
+    },
+    onSettled: () => {
+      setTimeout(() => { isConnectingRef.current = false; }, 1000);
     },
   });
 

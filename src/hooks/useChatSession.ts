@@ -56,6 +56,10 @@ export function useChatMessaging(sessionId: string, userId?: string) {
   const [astrologerTyping, setAstrologerTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fallback polling — activates when no broadcast received for 5s
+  const lastBroadcastRef = useRef<number>(Date.now());
+  const fallbackPollingRef = useRef<NodeJS.Timeout | null>(null);
+
   // ── Fetch initial messages from API (like mobile app) ──────────────
   const fetchMessages = useCallback(async () => {
     if (!sessionId) return;
@@ -106,11 +110,13 @@ export function useChatMessaging(sessionId: string, userId?: string) {
     const unsubMessages = supabaseRealtime.subscribeToChatMessages(
       sessionId,
       (payload: ChatMessagePayload) => {
+        lastBroadcastRef.current = Date.now(); // Track broadcast health
         const newMessage: ChatMessage = {
           id: payload.id,
           sessionId: payload.sessionId,
           senderId: payload.senderId,
           senderType: payload.senderType,
+          message: payload.message,
           content: payload.message,
           type: payload.type as 'text' | 'image' | 'audio',
           status: payload.isRead ? 'read' : 'delivered',
@@ -173,6 +179,42 @@ export function useChatMessaging(sessionId: string, userId?: string) {
       unsubMessage();
       unsubTyping();
       unsubStatus();
+    };
+  }, [sessionId]);
+
+  // ── Fallback polling: fetch messages if broadcast is silent for 5s ──
+  // Matches mobile app's fallback pattern for unreliable connections
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const FALLBACK_INTERVAL_MS = 5000;
+
+    fallbackPollingRef.current = setInterval(async () => {
+      const msSinceBroadcast = Date.now() - lastBroadcastRef.current;
+      if (msSinceBroadcast < FALLBACK_INTERVAL_MS) return; // Broadcast is working fine
+
+      // No broadcast in 5s — poll for new messages
+      try {
+        const response = await chatService.getMessages({ sessionId, limit: 20 });
+        const fetched = response.data?.messages || [];
+        if (fetched.length > 0) {
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const newMsgs = fetched.filter((m: ChatMessage) => !existingIds.has(m.id));
+            if (newMsgs.length === 0) return prev;
+            return [...prev, ...newMsgs.reverse()];
+          });
+        }
+      } catch {
+        // Network error — keep trying
+      }
+    }, FALLBACK_INTERVAL_MS);
+
+    return () => {
+      if (fallbackPollingRef.current) {
+        clearInterval(fallbackPollingRef.current);
+        fallbackPollingRef.current = null;
+      }
     };
   }, [sessionId]);
 

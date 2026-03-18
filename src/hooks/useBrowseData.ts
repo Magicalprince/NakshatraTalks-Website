@@ -1,5 +1,10 @@
 /**
  * Browse Data Hooks - React Query hooks for browse screens
+ *
+ * Matches mobile app's architecture for cross-device compatibility:
+ * - Periodic refetch (30s) as fallback when Supabase Broadcast is delayed
+ * - Real-time add/remove/update of astrologers via Supabase Broadcast
+ * - Type-aware cache updates (chat vs call availability)
  */
 
 import { useEffect } from 'react';
@@ -20,6 +25,10 @@ export const BROWSE_QUERY_KEYS = {
   reviews: (id: string) => ['astrologers', 'reviews', id] as const,
   availability: (id: string) => ['astrologers', 'availability', id] as const,
 };
+
+// Periodic refetch interval — ensures list stays fresh even if Supabase
+// Broadcast is delayed or the subscription silently drops.
+const BROWSE_REFETCH_INTERVAL_MS = 30_000;
 
 /**
  * Hook for fetching chat astrologers with infinite scroll
@@ -47,6 +56,8 @@ export function useChatAstrologers(
       return page < totalPages ? page + 1 : undefined;
     },
     initialPageParam: 1,
+    refetchInterval: BROWSE_REFETCH_INTERVAL_MS,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -76,6 +87,8 @@ export function useCallAstrologers(
       return page < totalPages ? page + 1 : undefined;
     },
     initialPageParam: 1,
+    refetchInterval: BROWSE_REFETCH_INTERVAL_MS,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -172,40 +185,101 @@ export function useAstrologerAvailability(id: string, date?: string) {
 // ─── Real-Time Availability via Supabase Broadcast ───────────────────
 
 /**
- * Helper to update an astrologer's availability status in React Query cache.
- * Used by the real-time hooks below.
+ * Type of the infinite query cache structure used by React Query.
+ */
+type InfiniteAstrologerCache = {
+  pages: Array<{ data: Astrologer[]; page: number; totalPages: number; totalItems: number; hasNext: boolean; hasPrev: boolean }>;
+  pageParams: unknown[];
+};
+
+/**
+ * Update, add, or remove an astrologer in the React Query infinite cache
+ * based on a real-time availability broadcast.
+ *
+ * Matches mobile app behaviour (useBrowseChatData.ts:235-285):
+ * - Astrologer exists + went offline for this type → update status in-place
+ * - Astrologer exists + came online → update status in-place
+ * - Astrologer NOT in cache + came online → add to the first page
+ *   so the user sees them immediately without waiting for refetch
+ *
+ * @param queryClient  - React Query client
+ * @param queryKeyPrefix - e.g. BROWSE_QUERY_KEYS.chatAstrologers
+ * @param payload - Supabase broadcast payload
+ * @param isAvailableForType - whether the astrologer is available for THIS page type
  */
 function updateAstrologerInCache(
   queryClient: ReturnType<typeof useQueryClient>,
   queryKeyPrefix: readonly string[],
   payload: AstrologerStatusPayload,
+  isAvailableForType: boolean,
 ) {
-  // Update all infinite query caches that match the prefix
-  queryClient.setQueriesData<{
-    pages: Array<{ data: Astrologer[] }>;
-    pageParams: unknown[];
-  }>(
+  queryClient.setQueriesData<InfiniteAstrologerCache>(
     { queryKey: queryKeyPrefix },
     (old) => {
-      if (!old?.pages) return old;
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
+      if (!old?.pages?.length) return old;
+
+      // Check if the astrologer already exists in any page
+      let found = false;
+      const updatedPages = old.pages.map((page) => {
+        // Guard: some pages may be null/undefined or lack a data array
+        if (!page?.data) return page;
+
+        return {
           ...page,
           data: page.data.map((astrologer) => {
             if (astrologer.id === payload.astrologerId) {
+              found = true;
               return {
                 ...astrologer,
-                isAvailable: payload.chatAvailable || payload.callAvailable,
-                isOnline: payload.chatAvailable || payload.callAvailable,
+                isAvailable: isAvailableForType,
+                isOnline: isAvailableForType,
                 chatAvailable: payload.chatAvailable,
                 callAvailable: payload.callAvailable,
+                ...(payload.name && { name: payload.name }),
+                ...(payload.profileImage && { profileImage: payload.profileImage, image: payload.profileImage }),
+                ...(payload.rating !== undefined && { rating: payload.rating }),
+                ...(payload.pricePerMinute !== undefined && { pricePerMinute: payload.pricePerMinute }),
+                ...(payload.chatPricePerMinute !== undefined && { chatPricePerMinute: payload.chatPricePerMinute, chatPrice: payload.chatPricePerMinute }),
+                ...(payload.callPricePerMinute !== undefined && { callPricePerMinute: payload.callPricePerMinute, callPrice: payload.callPricePerMinute }),
               };
             }
             return astrologer;
           }),
-        })),
-      };
+        };
+      });
+
+      // If astrologer was not in cache and came online, add to first page
+      // so the user sees them immediately (matches mobile app behaviour)
+      if (!found && isAvailableForType && payload.name && updatedPages[0]?.data) {
+        const newAstrologer: Partial<Astrologer> & { id: string; name: string; isAvailable: boolean } = {
+          id: payload.astrologerId,
+          name: payload.name,
+          isAvailable: true,
+          isOnline: true,
+          chatAvailable: payload.chatAvailable,
+          callAvailable: payload.callAvailable,
+          image: payload.profileImage || '',
+          profileImage: payload.profileImage,
+          rating: payload.rating ?? 0,
+          pricePerMinute: payload.pricePerMinute ?? 0,
+          chatPricePerMinute: payload.chatPricePerMinute,
+          callPricePerMinute: payload.callPricePerMinute,
+          chatPrice: payload.chatPricePerMinute,
+          callPrice: payload.callPricePerMinute,
+          specialization: [],
+          languages: [],
+          experience: 0,
+          totalCalls: 0,
+          isLive: false,
+        };
+
+        updatedPages[0] = {
+          ...updatedPages[0],
+          data: [newAstrologer as Astrologer, ...updatedPages[0].data],
+        };
+      }
+
+      return { ...old, pages: updatedPages };
     }
   );
 }
@@ -213,6 +287,9 @@ function updateAstrologerInCache(
 /**
  * Hook that subscribes to real-time chat astrologer availability changes.
  * When an astrologer toggles on/off on mobile → the browse-chat page updates instantly.
+ *
+ * Uses chatAvailable for the online status (not callAvailable), matching
+ * the mobile app's type-specific logic.
  */
 export function useRealtimeChatAvailability() {
   const queryClient = useQueryClient();
@@ -223,6 +300,7 @@ export function useRealtimeChatAvailability() {
         queryClient,
         BROWSE_QUERY_KEYS.chatAstrologers,
         payload,
+        payload.chatAvailable,
       );
     });
     return unsub;
@@ -232,6 +310,9 @@ export function useRealtimeChatAvailability() {
 /**
  * Hook that subscribes to real-time call astrologer availability changes.
  * When an astrologer toggles on/off on mobile → the browse-call page updates instantly.
+ *
+ * Uses callAvailable for the online status (not chatAvailable), matching
+ * the mobile app's type-specific logic.
  */
 export function useRealtimeCallAvailability() {
   const queryClient = useQueryClient();
@@ -242,6 +323,7 @@ export function useRealtimeCallAvailability() {
         queryClient,
         BROWSE_QUERY_KEYS.callAstrologers,
         payload,
+        payload.callAvailable,
       );
     });
     return unsub;

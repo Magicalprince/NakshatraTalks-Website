@@ -305,6 +305,20 @@ export interface PendingOrder {
 }
 
 // Chat Session Model
+export interface IntakeProfileInfo {
+  id: string;
+  name: string;
+  relation?: string;
+  dateOfBirth?: string;
+  date_of_birth?: string;
+  placeOfBirth?: string;
+  place_of_birth?: string;
+  timeOfBirth?: string | null;
+  time_of_birth?: string | null;
+  timeOfBirthUnknown?: boolean;
+  time_of_birth_unknown?: boolean;
+}
+
 export interface ChatSession {
   id: string;
   userId?: string;
@@ -320,6 +334,7 @@ export interface ChatSession {
   rating?: number | null;
   review?: string | null;
   tags?: string[];
+  intakeProfile?: IntakeProfileInfo | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -468,18 +483,22 @@ export interface AstrologerData {
 
 // Astrologer Stats Response (from GET /api/v1/astrologers/{id}/stats)
 export interface AstrologerStatsResponse {
-  totalSessions: number;
-  chatSessions: number;
-  callSessions: number;
-  videoSessions: number;
-  totalEarnings: number;
-  totalDuration: number;
-  avgDuration: number;
-  avgSessionDuration: number;
-  rating: number;
-  totalReviews: number;
-  ratingDistribution: Record<string, number>;
-  totalCalls: number;
+  // Backend returns both naming conventions — support all
+  totalSessions?: number;
+  totalConsultations?: number;
+  chatSessions?: number;
+  callSessions?: number;
+  videoSessions?: number;
+  totalEarnings?: number;
+  totalDuration?: number;
+  avgDuration?: number;
+  avgSessionDuration?: number;
+  averageSessionDuration?: number;
+  rating?: number;
+  averageRating?: number;
+  totalReviews?: number;
+  ratingDistribution?: Record<string, number>;
+  totalCalls?: number;
 }
 
 // Recent session from dashboard
@@ -561,7 +580,7 @@ export interface ToggleAvailabilityResponse {
 
 // Queue System Types
 export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'timeout' | 'cancelled' | 'missed' | 'session_ended';
-export type QueueStatus = 'waiting' | 'notified' | 'connected' | 'cancelled' | 'expired' | 'skipped';
+export type QueueStatus = 'waiting' | 'notified' | 'connected' | 'cancelled' | 'expired' | 'skipped' | 'rejected';
 export type SessionType = 'call' | 'chat';
 
 // User Info (for requests)
@@ -629,6 +648,7 @@ export interface ActiveSession {
   currentCost: number;
   twilioRoomName?: string;
   twilioToken?: string;
+  intakeProfile?: IntakeProfileInfo | null;
 }
 
 // End Session Response (Astrologer side)
@@ -678,6 +698,7 @@ export interface QueueEntry {
   estimatedWaitMinutes: number;
   expiresAt: string;
   remainingSeconds: number;
+  type?: SessionType;
 }
 
 // Queue Info Response

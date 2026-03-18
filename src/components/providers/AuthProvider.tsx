@@ -15,12 +15,15 @@
  * - Manages Supabase Realtime subscriptions for wallet + billing events
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
+import { useQueueStore } from '@/stores/queue-store';
 import { apiClient } from '@/lib/api/client';
 import { authService } from '@/lib/services/auth.service';
 import { socketService } from '@/lib/services/socket.service';
 import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
+import { chatService } from '@/lib/services/chat.service';
+import { callService } from '@/lib/services/call.service';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -82,11 +85,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
     restoreSession();
   }, [isHydrated, isAuthenticated, updateUser, updateAstrologer, logout]);
 
+  // Cleanup active sessions on logout to prevent billing leaks
+  // Matches mobile app's SESSION_CLEANUP event pattern
+  const cleanupActiveSessions = useCallback(async () => {
+    const queueState = useQueueStore.getState();
+
+    // End any active chat session
+    if (queueState.activeSessionId && queueState.activeSessionType === 'chat') {
+      try {
+        await chatService.endSession(queueState.activeSessionId);
+      } catch {
+        // Best effort — session may already be ended
+      }
+    }
+
+    // End any active call session
+    if (queueState.activeSessionId && queueState.activeSessionType === 'call') {
+      try {
+        await callService.endSession(queueState.activeSessionId);
+      } catch {
+        // Best effort
+      }
+    }
+
+    // Leave all queues
+    for (const queue of queueState.queues) {
+      try {
+        const service = queue.type === 'call' ? callService : chatService;
+        await service.leaveQueue(queue.queueId);
+      } catch {
+        // Best effort
+      }
+    }
+
+    // Clear all queue state
+    queueState.clearAll();
+  }, []);
+
   // Connect/disconnect Socket.io + Supabase Realtime based on auth state
+  const prevAuthRef = useRef(false);
   useEffect(() => {
     if (!isReady) return;
 
     if (isAuthenticated && user) {
+      prevAuthRef.current = true;
+
       // Socket.IO: connect and register in user/astrologer rooms
       socketService.setIdentity(user.id, astrologer?.id);
       socketService.connect();
@@ -105,10 +148,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         unsubWallet();
       };
     } else {
+      // User just logged out (was authenticated, now isn't)
+      if (prevAuthRef.current) {
+        prevAuthRef.current = false;
+        cleanupActiveSessions();
+      }
+
       socketService.disconnect();
       supabaseRealtime.removeAllChannels();
     }
-  }, [isReady, isAuthenticated, user, astrologer, updateWalletBalance]);
+  }, [isReady, isAuthenticated, user, astrologer, updateWalletBalance, cleanupActiveSessions]);
 
   // Cleanup on unmount
   useEffect(() => {

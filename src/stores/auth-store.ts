@@ -96,6 +96,10 @@ export const useAuthStore = create<AuthState>()(
       // Logout
       logout: () => {
         apiClient.clearAccessToken();
+        // Clear refresh token
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('nakshatratalks-refresh-token');
+        }
         set({
           user: null,
           astrologer: null,

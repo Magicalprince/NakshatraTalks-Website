@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { Astrologer, QueueEntry, RequestStatus, SessionType } from '@/types/api.types';
 
-export type ConnectionRequestStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'rejected' | 'timeout';
+export type ConnectionRequestStatus = 'idle' | 'connecting' | 'waiting' | 'connected' | 'rejected' | 'timeout' | 'queued';
 
 interface ActiveRequest {
   requestId: string;
@@ -190,10 +190,12 @@ export const useQueueStore = create<QueueState>((set, get) => ({
 
   // Session actions
   setActiveSession: (sessionId, type) => {
+    const currentRequest = get().activeRequest;
     set({
       activeSessionId: sessionId,
       activeSessionType: type,
-      activeRequest: null, // Clear request when session starts
+      // Preserve activeRequest so handleNavigateToSession can read sessionId
+      activeRequest: currentRequest ? { ...currentRequest, sessionId } : null,
     });
   },
 
