@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChatInterface } from '@/components/features/chat';
 import {
@@ -11,12 +11,13 @@ import {
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useQueueStore } from '@/stores/queue-store';
 import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
-import { useEffect } from 'react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { walletService } from '@/lib/services/wallet.service';
 
 export default function ChatSessionPage() {
   const params = useParams();
@@ -25,11 +26,21 @@ export default function ChatSessionPage() {
   const { addToast } = useUIStore();
   const user = useAuthStore((s) => s.user);
   const [showEndModal, setShowEndModal] = useState(false);
+  // Local ended state — set immediately when endSession API succeeds,
+  // so UI updates instantly without waiting for refetch (which may fall back to status: 'active')
+  const [isLocallyEnded, setIsLocallyEnded] = useState(false);
+
+  // Wallet balance for billing display
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // Auth check
   const { isReady } = useRequireAuth();
 
-  // Fetch session data (React Query — fine for session metadata)
+  // Astrologer data from queue store (passed during acceptance flow, like mobile app's route params)
+  const storeAstrologer = useQueueStore((s) => s.selectedAstrologer);
+  const storeRequest = useQueueStore((s) => s.activeRequest);
+
+  // Fetch session data (React Query — uses active session fallback if /sessions/:id doesn't exist)
   const {
     data: sessionData,
     isLoading: isSessionLoading,
@@ -51,9 +62,18 @@ export default function ChatSessionPage() {
   // End session mutation
   const { mutate: endSession } = useEndChatSession(sessionId);
 
-  // Extract session info
+  // Extract session info — merge API data with queue store data (like mobile app's route params)
   const session = sessionData?.session;
-  const astrologer = sessionData?.astrologer;
+  const astrologer = useMemo(() => {
+    const apiAstrologer = sessionData?.astrologer;
+    // Prefer API data, fall back to queue store data (matching mobile app navigation params pattern)
+    return {
+      id: apiAstrologer?.id || storeAstrologer?.id || storeRequest?.astrologerId || '',
+      name: apiAstrologer?.name || storeAstrologer?.name || storeRequest?.astrologerName || 'Astrologer',
+      image: apiAstrologer?.image || storeAstrologer?.profileImage || storeAstrologer?.image || storeRequest?.astrologerImage || '',
+      isOnline: apiAstrologer?.isOnline ?? true,
+    };
+  }, [sessionData?.astrologer, storeAstrologer, storeRequest]);
 
   // Handle send message
   const handleSendMessage = useCallback(
@@ -92,7 +112,18 @@ export default function ChatSessionPage() {
   const confirmEndSession = useCallback(() => {
     setShowEndModal(false);
     endSession(undefined, {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        // Set locally ended IMMEDIATELY so timer stops and UI updates instantly
+        // (refetchSession may fall through to last-resort data with status: 'active')
+        setIsLocallyEnded(true);
+
+        // Update wallet balance from end-session response if available
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = (response as any)?.data;
+        if (data?.remainingBalance != null) {
+          setWalletBalance(data.remainingBalance);
+        }
+
         addToast({
           type: 'success',
           title: 'Session Ended',
@@ -117,6 +148,105 @@ export default function ChatSessionPage() {
     }
   }, [astrologer?.id, router]);
 
+  // Notify backend that user has connected to the chat session (starts billing)
+  // Matches mobile app: calls connectToSession() on mount regardless of session data
+  const hasConnectedRef = useRef(false);
+  useEffect(() => {
+    if (!sessionId || hasConnectedRef.current) return;
+    hasConnectedRef.current = true;
+
+    (async () => {
+      try {
+        await (await import('@/lib/services/chat.service')).chatService.connectSession(sessionId);
+      } catch {
+        // Non-critical — billing may have already started
+      }
+    })();
+  }, [sessionId]);
+
+  // Fetch wallet balance on mount (matching mobile app's balance monitoring)
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await walletService.getBalance();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = response?.data ?? response as any;
+        const bal = data?.balance ?? data?.walletBalance ?? 0;
+        setWalletBalance(bal);
+      } catch {
+        // Non-critical — balance display will show 0
+      }
+    })();
+  }, []);
+
+  // Subscribe to wallet balance updates via Supabase Broadcast (matching mobile app)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubWallet = supabaseRealtime.subscribeToWalletUpdates(
+      user.id,
+      (payload) => {
+        if (payload.balance != null) {
+          setWalletBalance(payload.balance);
+        }
+      }
+    );
+
+    return () => {
+      unsubWallet();
+    };
+  }, [user?.id]);
+
+  // Subscribe to billing events (low balance, session ended by system)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubBilling = supabaseRealtime.subscribeToBillingEvents(
+      user.id,
+      {
+        onLowBalance: (payload) => {
+          addToast({
+            type: 'warning',
+            title: 'Low Balance',
+            message: payload.message || `Low balance! About ${payload.remainingMinutes ?? 0} minutes remaining.`,
+          });
+          if (payload.remainingBalance != null) {
+            setWalletBalance(payload.remainingBalance);
+          }
+        },
+        onCallEnded: (payload) => {
+          // 'call_ended' event is also used for chat sessions ending due to balance
+          setIsLocallyEnded(true);
+          if (payload.remainingBalance != null) {
+            setWalletBalance(payload.remainingBalance);
+          }
+          addToast({
+            type: 'info',
+            title: 'Session Ended',
+            message: payload.message || 'Session ended due to insufficient balance.',
+          });
+          refetchSession();
+        },
+        onCallEndedBalance: (payload) => {
+          setIsLocallyEnded(true);
+          if (payload.remainingBalance != null) {
+            setWalletBalance(payload.remainingBalance);
+          }
+          addToast({
+            type: 'info',
+            title: 'Session Ended',
+            message: 'Session ended due to insufficient balance.',
+          });
+          refetchSession();
+        },
+      }
+    );
+
+    return () => {
+      unsubBilling();
+    };
+  }, [user?.id, addToast, refetchSession]);
+
   // Subscribe to session status updates via Supabase Broadcast
   useEffect(() => {
     if (!sessionId) return;
@@ -125,6 +255,7 @@ export default function ChatSessionPage() {
       sessionId,
       (payload) => {
         if (payload.status === 'completed' || payload.status === 'cancelled') {
+          setIsLocallyEnded(true);
           addToast({
             type: 'info',
             title: 'Session Ended',
@@ -200,8 +331,8 @@ export default function ChatSessionPage() {
     );
   }
 
-  // Error state
-  if (sessionError || !session) {
+  // Error state — only show if we have an error AND no store data to fall back on
+  if ((sessionError || !session) && !storeAstrologer && !storeRequest) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-background-offWhite p-4">
         <div className="w-16 h-16 bg-status-error/10 rounded-full flex items-center justify-center mb-4">
@@ -228,28 +359,41 @@ export default function ChatSessionPage() {
     );
   }
 
+  // Derive session props — use API data when available, fall back to defaults
+  // isLocallyEnded overrides API status to ensure immediate UI update
+  const sessionStatus = isLocallyEnded ? 'completed' : (session?.status || 'active');
+
   // Build session summary for ended sessions
   const sessionSummary =
-    session.status !== 'active' && session.duration !== undefined && session.duration !== null
+    (session && session.status !== 'active' && session.duration !== undefined && session.duration !== null)
+    || isLocallyEnded
       ? {
-          duration: session.duration,
-          totalCost: session.totalCost || 0,
+          duration: session?.duration ?? 0,
+          totalCost: session?.totalCost || 0,
         }
       : undefined;
+  const sessionStartTime = session?.startTime || new Date().toISOString();
+  const pricePerMinute = session?.pricePerMinute
+    || storeAstrologer?.chatPricePerMinute
+    || storeAstrologer?.chatPrice
+    || storeAstrologer?.pricePerMinute
+    || storeRequest?.pricePerMinute
+    || 0;
 
   return (
     <div className="h-full">
       <ChatInterface
         sessionId={sessionId}
-        astrologerId={astrologer?.id || session.astrologerId}
-        astrologerName={astrologer?.name || session.astrologerName || 'Astrologer'}
-        astrologerImage={astrologer?.image}
-        isOnline={astrologer?.isOnline}
+        astrologerId={astrologer.id || session?.astrologerId || ''}
+        astrologerName={astrologer.name}
+        astrologerImage={astrologer.image}
+        isOnline={astrologer.isOnline}
         messages={messages}
         isLoading={isMessagesLoading}
-        sessionStatus={session.status}
-        sessionStartTime={session.startTime}
-        pricePerMinute={session.pricePerMinute}
+        sessionStatus={sessionStatus}
+        sessionStartTime={sessionStartTime}
+        pricePerMinute={pricePerMinute}
+        remainingBalance={walletBalance}
         sessionSummary={sessionSummary}
         isTyping={astrologerTyping}
         isEnding={sending}

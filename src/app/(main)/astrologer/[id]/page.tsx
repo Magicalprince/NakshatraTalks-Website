@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useAstrologerDetails, useAstrologerReviews, useAstrologerAvailability } from '@/hooks/useBrowseData';
+import { useQueueInfo, useJoinQueue } from '@/hooks/useQueue';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useQueueStore } from '@/stores/queue-store';
@@ -24,6 +25,8 @@ import {
   ThumbsUp,
   SearchX,
   ArrowLeft,
+  Loader2,
+  UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -90,6 +93,61 @@ export default function AstrologerDetailPage() {
   const totalConsultations = astrologer?.totalConsultations ?? astrologer?.totalCalls ?? 0;
   const chatPrice = astrologer?.chatPrice ?? astrologer?.chatPricePerMinute ?? astrologer?.pricePerMinute ?? 0;
   const callPrice = astrologer?.callPrice ?? astrologer?.callPricePerMinute ?? astrologer?.pricePerMinute ?? 0;
+
+  // Queue info & join hooks (enabled when astrologer is not online)
+  const { queueInfo: callQueueInfo } = useQueueInfo(id, 'call', { enabled: !isOnline });
+  const { queueInfo: chatQueueInfo } = useQueueInfo(id, 'chat', { enabled: !isOnline });
+  const { joinQueue: joinCallQueue, isJoining: isJoiningCall } = useJoinQueue('call');
+  const { joinQueue: joinChatQueue, isJoining: isJoiningChat } = useJoinQueue('chat');
+
+  /** Handle joining a queue when astrologer is busy. */
+  const handleJoinQueue = (type: 'chat' | 'call') => {
+    if (!isAuthenticated) {
+      addToast({
+        type: 'info',
+        title: 'Login Required',
+        message: `Please login to join the ${type} queue`,
+      });
+      router.push(`/login?redirect=/astrologer/${id}`);
+      return;
+    }
+
+    if (type === 'call') {
+      joinCallQueue(id, {
+        onSuccess: () => {
+          addToast({
+            type: 'success',
+            title: 'Joined Queue',
+            message: `You've been added to ${astrologer?.name}'s call queue. We'll notify you when it's your turn.`,
+          });
+        },
+        onError: (error: Error) => {
+          addToast({
+            type: 'error',
+            title: 'Failed to Join Queue',
+            message: error.message || 'Something went wrong. Please try again.',
+          });
+        },
+      });
+    } else {
+      joinChatQueue(id, {
+        onSuccess: () => {
+          addToast({
+            type: 'success',
+            title: 'Joined Queue',
+            message: `You've been added to ${astrologer?.name}'s chat queue. We'll notify you when it's your turn.`,
+          });
+        },
+        onError: (error: Error) => {
+          addToast({
+            type: 'error',
+            title: 'Failed to Join Queue',
+            message: error.message || 'Something went wrong. Please try again.',
+          });
+        },
+      });
+    }
+  };
 
   const handleAction = (type: 'chat' | 'call') => {
     if (!isAuthenticated) {
@@ -373,15 +431,51 @@ export default function AstrologerDetailPage() {
                           <span className="text-sm text-text-muted font-lexend">/min</span>
                         </div>
                       </div>
-                      <Button
-                        variant={isOnline ? 'primary' : 'outline'}
-                        className="w-full"
-                        disabled={!isOnline}
-                        onClick={() => handleAction('chat')}
-                        aria-label={isOnline ? `Start chat with ${astrologer.name}` : `${astrologer.name} is currently busy`}
-                      >
-                        {isOnline ? 'Start Chat' : 'Busy'}
-                      </Button>
+
+                      {/* Queue info when astrologer is busy */}
+                      {!isOnline && chatQueueInfo && (
+                        <div className="flex items-center justify-between text-xs text-text-muted mb-2 px-1">
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {chatQueueInfo.queueSize} {chatQueueInfo.queueSize === 1 ? 'user' : 'users'} waiting
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            ~{chatQueueInfo.estimatedWaitMinutes} min wait
+                          </span>
+                        </div>
+                      )}
+
+                      {isOnline ? (
+                        <Button
+                          variant="primary"
+                          className="w-full"
+                          onClick={() => handleAction('chat')}
+                          aria-label={`Start chat with ${astrologer.name}`}
+                        >
+                          Start Chat
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          disabled={isJoiningChat || (chatQueueInfo !== null && !chatQueueInfo.canJoinQueue)}
+                          onClick={() => handleJoinQueue('chat')}
+                          aria-label={`Join ${astrologer.name}'s chat queue`}
+                        >
+                          {isJoiningChat ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Joining...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4 mr-2" />
+                              Join Chat Queue
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
 
                     {/* Call */}
@@ -399,15 +493,51 @@ export default function AstrologerDetailPage() {
                           <span className="text-sm text-text-muted font-lexend">/min</span>
                         </div>
                       </div>
-                      <Button
-                        variant={isOnline ? 'primary' : 'outline'}
-                        className="w-full"
-                        disabled={!isOnline}
-                        onClick={() => handleAction('call')}
-                        aria-label={isOnline ? `Start call with ${astrologer.name}` : `${astrologer.name} is currently busy`}
-                      >
-                        {isOnline ? 'Start Call' : 'Busy'}
-                      </Button>
+
+                      {/* Queue info when astrologer is busy */}
+                      {!isOnline && callQueueInfo && (
+                        <div className="flex items-center justify-between text-xs text-text-muted mb-2 px-1">
+                          <span className="flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {callQueueInfo.queueSize} {callQueueInfo.queueSize === 1 ? 'user' : 'users'} waiting
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            ~{callQueueInfo.estimatedWaitMinutes} min wait
+                          </span>
+                        </div>
+                      )}
+
+                      {isOnline ? (
+                        <Button
+                          variant="primary"
+                          className="w-full"
+                          onClick={() => handleAction('call')}
+                          aria-label={`Start call with ${astrologer.name}`}
+                        >
+                          Start Call
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          disabled={isJoiningCall || (callQueueInfo !== null && !callQueueInfo.canJoinQueue)}
+                          onClick={() => handleJoinQueue('call')}
+                          aria-label={`Join ${astrologer.name}'s call queue`}
+                        >
+                          {isJoiningCall ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Joining...
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4 mr-2" />
+                              Join Call Queue
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>

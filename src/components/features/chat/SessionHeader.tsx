@@ -39,6 +39,7 @@ export function SessionHeader({
   onEndSession,
   className,
   isEnding = false,
+  isAstrologer = false,
   sessionEnded = false,
   totalCost = 0,
   remainingBalance = 0,
@@ -100,15 +101,18 @@ export function SessionHeader({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Calculate current cost from local timer (per-second precision, matching mobile app formula)
+  const currentCost = (duration / 60) * pricePerMinute;
+
   const calculateMinsRemaining = () => {
     if (pricePerMinute <= 0) return 0;
-    const effectiveBalance = Math.max(0, remainingBalance - runningCost);
+    // Use locally-computed currentCost for accurate remaining balance during active sessions
+    const effectiveBalance = Math.max(0, remainingBalance - currentCost);
     return Math.floor(effectiveBalance / pricePerMinute);
   };
 
   const minsRemaining = calculateMinsRemaining();
   const isLowBalance = minsRemaining <= 3 && !sessionEnded;
-  const currentCost = (duration / 60) * pricePerMinute;
 
   const handleBackPress = () => {
     if (onBackPress) {
@@ -218,24 +222,27 @@ export function SessionHeader({
                 </span>
               </div>
 
-              <span className="text-gray-300">|</span>
-
-              {/* Minutes Remaining */}
-              <div className="flex items-center gap-1">
-                {isLowBalance ? (
-                  <AlertTriangle className="w-3 h-3 text-red-500" strokeWidth={2} />
-                ) : (
-                  <Clock className="w-3 h-3 text-gray-400" strokeWidth={2} />
-                )}
-                <span
-                  className={cn(
-                    'text-[13px] font-lexend',
-                    isLowBalance ? 'text-red-500 font-semibold' : 'text-gray-500 font-medium'
-                  )}
-                >
-                  {minsRemaining} min left
-                </span>
-              </div>
+              {/* Minutes Remaining — only shown for user side, not astrologer */}
+              {!isAstrologer && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <div className="flex items-center gap-1">
+                    {isLowBalance ? (
+                      <AlertTriangle className="w-3 h-3 text-red-500" strokeWidth={2} />
+                    ) : (
+                      <Clock className="w-3 h-3 text-gray-400" strokeWidth={2} />
+                    )}
+                    <span
+                      className={cn(
+                        'text-[13px] font-lexend',
+                        isLowBalance ? 'text-red-500 font-semibold' : 'text-gray-500 font-medium'
+                      )}
+                    >
+                      {minsRemaining} min left
+                    </span>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

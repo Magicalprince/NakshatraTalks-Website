@@ -24,6 +24,8 @@ interface CallSummaryProps {
   totalCost: number;
   /** Label for the cost field — defaults to "Total Cost" (user side), use "Amount Received" for astrologer */
   costLabel?: string;
+  /** Hide rate/review for astrologer side */
+  isAstrologer?: boolean;
   onStartNewCall?: () => void;
   onClose?: () => void;
 }
@@ -38,6 +40,7 @@ export function CallSummary({
   durationFormatted,
   totalCost,
   costLabel = 'Total Cost',
+  isAstrologer = false,
   onStartNewCall,
   onClose,
 }: CallSummaryProps) {
@@ -117,16 +120,18 @@ export function CallSummary({
             </div>
           </div>
 
-          {/* Rate experience */}
-          <div className="text-center mb-5 p-3 bg-amber-500/[0.06] rounded-xl border border-amber-500/[0.1]">
-            <p className="text-xs text-white/50 mb-2">How was your experience?</p>
-            <Link href={`/rating/${sessionId}`}>
-              <button className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-full text-xs font-medium transition-colors">
-                <Star className="w-3.5 h-3.5" />
-                Rate & Review
-              </button>
-            </Link>
-          </div>
+          {/* Rate experience — only for users, not astrologers */}
+          {!isAstrologer && (
+            <div className="text-center mb-5 p-3 bg-amber-500/[0.06] rounded-xl border border-amber-500/[0.1]">
+              <p className="text-xs text-white/50 mb-2">How was your experience?</p>
+              <Link href={`/rating/${sessionId}`}>
+                <button className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-full text-xs font-medium transition-colors">
+                  <Star className="w-3.5 h-3.5" />
+                  Rate & Review
+                </button>
+              </Link>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="space-y-2.5">

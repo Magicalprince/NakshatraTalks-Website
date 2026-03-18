@@ -8,12 +8,13 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FilterSidebar } from '@/components/layout/FilterSidebar';
 import { ConnectionRequestModal } from '@/components/features/queue';
+import { IntakeProfileSelector } from '@/components/features/queue/IntakeProfileSelector';
 import { useChatAstrologers, useFilterOptions, useSearchAstrologers, useRealtimeChatAvailability } from '@/hooks/useBrowseData';
 import { useConnectionRequest } from '@/hooks/useConnectionRequest';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 import { AstrologerFilters, Astrologer } from '@/types/api.types';
-import { SlidersHorizontal, Search, X } from 'lucide-react';
+import { SlidersHorizontal, Search, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 
@@ -39,10 +40,15 @@ export default function BrowseChatPage() {
     requestStatus,
     selectedAstrologer: connectionAstrologer,
     activeRequest,
+    queueData,
     initiateRequest,
     handleCancel: handleCancelRequest,
     handleNavigateToSession,
     handleCloseModal,
+    handleJoinQueue,
+    showProfileSelector,
+    handleProfileSelected,
+    handleProfileSelectorClose,
   } = useConnectionRequest();
 
   const [filters, setFilters] = useState<AstrologerFilters>({});
@@ -58,7 +64,7 @@ export default function BrowseChatPage() {
   const [minRating, setMinRating] = useState(0);
 
   const {
-    data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage,
+    data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, refetch, isFetching,
   } = useChatAstrologers(filters, sortBy, sortOrder);
 
   const { data: filterOptions } = useFilterOptions();
@@ -192,6 +198,17 @@ export default function BrowseChatPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="flex-shrink-0 gap-1.5"
+                  onClick={() => refetch()}
+                  disabled={isFetching && !isFetchingNextPage}
+                  aria-label="Refresh astrologer list"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isFetching && !isFetchingNextPage ? 'animate-spin' : ''}`} />
+                  <span className="sr-only sm:not-sr-only">Refresh</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="lg:hidden flex-shrink-0 gap-1.5 relative"
                   onClick={() => setShowMobileFilters(true)}
                   aria-label={`Open filters${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
@@ -263,9 +280,21 @@ export default function BrowseChatPage() {
         onClose={handleCloseModal}
         onCancel={handleCancelRequest}
         onNavigateToSession={handleNavigateToSession}
+        onJoinQueue={handleJoinQueue}
         requestStatus={requestStatus}
         selectedAstrologer={connectionAstrologer}
         activeRequest={activeRequest}
+        astrologerId={connectionAstrologer?.id}
+        type="chat"
+        queueData={queueData}
+      />
+
+      {/* Intake Profile Selector — shown before chat request */}
+      <IntakeProfileSelector
+        isOpen={showProfileSelector}
+        onClose={handleProfileSelectorClose}
+        onSelect={handleProfileSelected}
+        astrologerName={connectionAstrologer?.name}
       />
     </div>
   );

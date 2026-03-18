@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Radio, Search, X, Eye, Clock, Sparkles } from 'lucide-react';
+import { Radio, Search, X, Eye, Clock, Sparkles, RefreshCw } from 'lucide-react';
 import { useHomeData } from '@/hooks/useHomeData';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
@@ -117,7 +117,8 @@ function LiveSessionCard({ session, index }: { session: LiveSession; index: numb
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function LiveSessionsPage() {
-  const { liveSessions, loading } = useHomeData();
+  const { liveSessions, loading, refetch } = useHomeData();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredSessions = useMemo(() => {
@@ -151,31 +152,48 @@ export default function LiveSessionsPage() {
             </p>
           </div>
 
-          {/* Search */}
-          <div className="relative flex items-center bg-white rounded-xl border border-gray-200 shadow-web-sm focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px_rgba(41,48,166,0.08)] transition-all duration-200 w-full sm:w-72">
-            <Search className="w-4 h-4 text-text-muted ml-4 flex-shrink-0" aria-hidden="true" />
-            <input
-              type="text"
-              placeholder="Search sessions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent px-3 py-2.5 outline-none text-sm font-nunito text-text-primary placeholder:text-text-muted"
-              aria-label="Search live sessions"
-            />
-            <AnimatePresence>
-              {searchQuery && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={() => setSearchQuery('')}
-                  className="mr-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                  aria-label="Clear search"
-                >
-                  <X className="w-4 h-4 text-text-muted" />
-                </motion.button>
-              )}
-            </AnimatePresence>
+          {/* Search & Refresh */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex items-center bg-white rounded-xl border border-gray-200 shadow-web-sm focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px_rgba(41,48,166,0.08)] transition-all duration-200 flex-1 sm:w-72">
+              <Search className="w-4 h-4 text-text-muted ml-4 flex-shrink-0" aria-hidden="true" />
+              <input
+                type="text"
+                placeholder="Search sessions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent px-3 py-2.5 outline-none text-sm font-nunito text-text-primary placeholder:text-text-muted"
+                aria-label="Search live sessions"
+              />
+              <AnimatePresence>
+                {searchQuery && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    onClick={() => setSearchQuery('')}
+                    className="mr-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4 text-text-muted" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-shrink-0 gap-1.5"
+              onClick={async () => {
+                setIsRefreshing(true);
+                await refetch();
+                setIsRefreshing(false);
+              }}
+              disabled={isRefreshing}
+              aria-label="Refresh live sessions"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="sr-only sm:not-sr-only">Refresh</span>
+            </Button>
           </div>
         </div>
 

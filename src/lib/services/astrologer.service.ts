@@ -10,6 +10,7 @@ import {
   ApiResponse,
   Astrologer,
   AstrologerFilters,
+  Pagination,
   PaginatedResponse,
   Review,
 } from '@/types/api.types';
@@ -21,6 +22,60 @@ export interface GetAstrologersParams {
   sortBy?: 'rating' | 'price' | 'experience' | 'orders' | 'price_per_minute' | 'total_calls' | 'chat_price_per_minute' | 'call_price_per_minute';
   sortOrder?: 'asc' | 'desc';
   search?: string;
+}
+
+/**
+ * Reshape the backend's flat response `{ success, data: T[], pagination }`
+ * into the `PaginatedResponse<T>` structure that React Query infinite scroll expects.
+ */
+function reshapeToPaginatedResponse<T>(
+  response: ApiResponse<T[]>,
+  page: number,
+  limit: number,
+): ApiResponse<PaginatedResponse<T>> {
+  const pagination: Pagination | undefined = response.pagination;
+  const items = response.data ?? [];
+
+  return {
+    success: response.success,
+    message: response.message,
+    data: {
+      data: items,
+      page: pagination?.currentPage ?? page,
+      limit: pagination?.itemsPerPage ?? limit,
+      totalPages: pagination?.totalPages ?? 1,
+      totalItems: pagination?.totalItems ?? items.length,
+      hasNext: pagination?.hasNext ?? false,
+      hasPrev: pagination?.hasPrev ?? false,
+    },
+  };
+}
+
+/**
+ * Normalize astrologer availability fields.
+ *
+ * The backend may return `chatAvailable`, `callAvailable`, `isAvailable`, or
+ * `isOnline` depending on the endpoint. The AstrologerCard checks
+ * `isOnline ?? isAvailable` to enable the action button. This ensures
+ * both fields are always set correctly based on the endpoint type.
+ */
+function normalizeAstrologerAvailability(
+  astrologers: Astrologer[],
+  type: 'chat' | 'call',
+): Astrologer[] {
+  return astrologers.map((a) => {
+    // For the "available" endpoints, the backend only returns available astrologers.
+    // Determine online status from type-specific field, then general fields, then default true.
+    const isOnlineForType = type === 'chat'
+      ? (a.chatAvailable ?? a.isOnline ?? a.isAvailable ?? true)
+      : (a.callAvailable ?? a.isOnline ?? a.isAvailable ?? true);
+
+    return {
+      ...a,
+      isOnline: isOnlineForType,
+      isAvailable: isOnlineForType,
+    };
+  });
 }
 
 class AstrologerService {
@@ -55,14 +110,20 @@ class AstrologerService {
       if (filters.minExperience) queryParams.minExperience = filters.minExperience;
     }
 
-    return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
+    const response = await apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.ASTROLOGERS.SEARCH,
       { params: queryParams }
     );
+
+    return reshapeToPaginatedResponse(response, page, limit);
   }
 
   /**
-   * Get astrologers available for chat
+   * Get astrologers available for chat.
+   *
+   * The backend returns `{ success, data: Astrologer[], pagination: { ... } }`
+   * (flat array + separate pagination), matching the mobile app's chat service.
+   * We reshape it into `PaginatedResponse` for React Query infinite scroll.
    */
   async getChatAstrologers(
     params: GetAstrologersParams = {}
@@ -74,7 +135,6 @@ class AstrologerService {
       limit,
       sortBy,
       order: sortOrder,
-      type: 'chat',
     };
 
     if (search) queryParams.q = search;
@@ -88,14 +148,24 @@ class AstrologerService {
     if (filters?.maxPrice) queryParams.maxPrice = filters.maxPrice;
     if (filters?.minPrice) queryParams.minPrice = filters.minPrice;
 
-    return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
+    // API returns { success, data: Astrologer[], pagination }
+    const response = await apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.CHAT.AVAILABLE_ASTROLOGERS,
       { params: queryParams }
     );
+
+    // Normalize isOnline/isAvailable from chatAvailable so card buttons are enabled
+    if (response.data) {
+      response.data = normalizeAstrologerAvailability(response.data, 'chat');
+    }
+
+    return reshapeToPaginatedResponse(response, page, limit);
   }
 
   /**
-   * Get astrologers available for call
+   * Get astrologers available for call.
+   *
+   * Same response shape as chat — flat array + separate pagination.
    */
   async getCallAstrologers(
     params: GetAstrologersParams = {}
@@ -120,10 +190,17 @@ class AstrologerService {
     if (filters?.maxPrice) queryParams.maxPrice = filters.maxPrice;
     if (filters?.minPrice) queryParams.minPrice = filters.minPrice;
 
-    return apiClient.get<ApiResponse<PaginatedResponse<Astrologer>>>(
+    const response = await apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.CALL.AVAILABLE_ASTROLOGERS,
       { params: queryParams }
     );
+
+    // Normalize isOnline/isAvailable from callAvailable so card buttons are enabled
+    if (response.data) {
+      response.data = normalizeAstrologerAvailability(response.data, 'call');
+    }
+
+    return reshapeToPaginatedResponse(response, page, limit);
   }
 
   /**
@@ -143,10 +220,12 @@ class AstrologerService {
     page = 1,
     limit = 10
   ): Promise<ApiResponse<PaginatedResponse<Review>>> {
-    return apiClient.get<ApiResponse<PaginatedResponse<Review>>>(
+    const response = await apiClient.get<ApiResponse<Review[]>>(
       API_ENDPOINTS.ASTROLOGERS.REVIEWS(id),
       { params: { page, limit } }
     );
+
+    return reshapeToPaginatedResponse(response, page, limit);
   }
 
   /**
@@ -171,13 +250,29 @@ class AstrologerService {
 
   /**
    * Get filter options (specializations, languages, etc.)
+   *
+   * The mobile app gets these from the search results response.
+   * The `/api/v1/astrologers/filters` endpoint may not exist on all backends,
+   * so we try it first and fall back to the search endpoint.
    */
   async getFilterOptions(): Promise<ApiResponse<{
     specializations: string[];
     languages: string[];
     priceRange: { min: number; max: number };
   }>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.FILTERS);
+    try {
+      return await apiClient.get(API_ENDPOINTS.ASTROLOGERS.FILTERS);
+    } catch {
+      // Endpoint doesn't exist — return empty so the UI uses its hardcoded defaults
+      return {
+        success: true,
+        data: {
+          specializations: [],
+          languages: [],
+          priceRange: { min: 0, max: 0 },
+        },
+      };
+    }
   }
 
   /**

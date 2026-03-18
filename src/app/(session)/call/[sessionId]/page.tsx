@@ -125,6 +125,32 @@ export default function CallSessionPage() {
     });
   }, []);
 
+  // Fallback: fetch Twilio token from API if not available in store
+  // This handles cases where the queue store credentials were cleared before navigation
+  const tokenFetchedRef = useRef(false);
+  useEffect(() => {
+    if (twilioToken && twilioRoomName) return; // Already have credentials
+    if (tokenFetchedRef.current || twilioConnectedRef.current) return; // Already fetching/connected
+    if (!sessionId) return;
+
+    tokenFetchedRef.current = true;
+
+    (async () => {
+      try {
+        const response = await callService.getTwilioToken(sessionId);
+        if (response.success && response.data) {
+          const { token, roomName } = response.data;
+          if (token && roomName) {
+            useQueueStore.getState().setTwilioCredentials(token, roomName);
+          }
+        }
+      } catch (err) {
+        tokenFetchedRef.current = false; // Allow retry
+        if (process.env.NODE_ENV === 'development') console.error('Failed to fetch Twilio token:', err);
+      }
+    })();
+  }, [sessionId, twilioToken, twilioRoomName]);
+
   // Connect to Twilio room — runs once when credentials are available
   useEffect(() => {
     // Guard: skip if no credentials, already connected, or already initiated
@@ -217,7 +243,7 @@ export default function CallSessionPage() {
     connectToRoom();
   }, [twilioToken, twilioRoomName, attachParticipantTracks, addToast]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — disconnect Twilio and clear credentials from store
   useEffect(() => {
     return () => {
       if (roomRef.current) {
@@ -225,6 +251,8 @@ export default function CallSessionPage() {
         roomRef.current = null;
       }
       localStream?.getTracks().forEach(track => track.stop());
+      // Clear Twilio credentials and active session from store
+      useQueueStore.getState().clearActiveSession();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

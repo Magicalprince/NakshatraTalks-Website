@@ -10,13 +10,13 @@
  */
 
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { ChatMessage } from '@/types/api.types';
+import { ChatMessage, IntakeProfileInfo } from '@/types/api.types';
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { TypingIndicator } from './TypingIndicator';
 import { SessionHeader } from './SessionHeader';
 import { SessionEndedActions } from './SessionEndedActions';
-import { ArrowDown, Loader2 } from 'lucide-react';
+import { ArrowDown, Loader2, User, Calendar, MapPin, Clock, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuthStore } from '@/stores/auth-store';
@@ -55,6 +55,7 @@ interface ChatInterfaceProps {
   onStartNewChat?: () => void;
   onSessionEnd?: () => void;
   onBackPress?: () => void;
+  intakeProfile?: IntakeProfileInfo | null;
 }
 
 export function ChatInterface({
@@ -80,20 +81,32 @@ export function ChatInterface({
   onEndSession,
   onLoadMore,
   onBackPress,
+  intakeProfile,
 }: ChatInterfaceProps) {
   const { user } = useAuthStore();
+  const [intakeProfileCollapsed, setIntakeProfileCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+  const isAutoScrollingRef = useRef(false);
   const prevMessagesLengthRef = useRef(0);
   const isSessionActive = sessionStatus === 'active';
   const isSessionEnded = sessionStatus === 'completed' || sessionStatus === 'cancelled';
 
-  const runningCost = sessionSummary?.totalCost || 0;
+  // Running cost: during active session, SessionHeader calculates it internally from duration.
+  // For ended sessions, use the backend's totalCost. For the remainingBalance calculation,
+  // we pass 0 during active sessions since SessionHeader computes currentCost from its own timer.
+  const runningCost = isSessionEnded ? (sessionSummary?.totalCost || 0) : 0;
 
-  // Scroll to bottom
+  // Scroll to bottom — sets guard to prevent scroll handler from overriding isNearBottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    isAutoScrollingRef.current = true;
     messagesEndRef.current?.scrollIntoView({ behavior });
+    // Reset guard after scroll animation completes
+    setTimeout(() => {
+      isAutoScrollingRef.current = false;
+      isNearBottomRef.current = true; // We just scrolled to bottom
+    }, behavior === 'instant' ? 50 : 500);
   }, []);
 
   // Track whether user is near bottom of the chat
@@ -102,6 +115,8 @@ export function ChatInterface({
     if (!container) return;
 
     const handleScrollTrack = () => {
+      // Don't update near-bottom state during programmatic auto-scroll
+      if (isAutoScrollingRef.current) return;
       const { scrollHeight, scrollTop, clientHeight } = container;
       isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 150;
     };
@@ -110,7 +125,8 @@ export function ChatInterface({
     return () => container.removeEventListener('scroll', handleScrollTrack);
   }, []);
 
-  // Auto-scroll: only when near bottom or on initial load
+  // Auto-scroll: only on initial load. New messages do NOT auto-scroll —
+  // user can scroll down manually or click the "scroll to bottom" button.
   useEffect(() => {
     if (messages.length === 0) return;
 
@@ -120,10 +136,8 @@ export function ChatInterface({
     if (isInitialLoad) {
       // Instant scroll on first load
       scrollToBottom('instant');
-    } else if (isNearBottomRef.current) {
-      // Smooth scroll only when user was already near bottom
-      scrollToBottom('smooth');
     }
+    // No auto-scroll on new messages — user controls scroll position
   }, [messages.length, scrollToBottom]);
 
   // Handle scroll for infinite loading
@@ -177,9 +191,10 @@ export function ChatInterface({
         pricePerMinute={pricePerMinute}
         onEndSession={isSessionActive ? onEndSession : undefined}
         isEnding={isEnding}
+        isAstrologer={isAstrologer}
         sessionEnded={isSessionEnded}
         totalCost={sessionSummary?.totalCost || 0}
-        remainingBalance={remainingBalance}
+        remainingBalance={isAstrologer ? 0 : remainingBalance}
         runningCost={runningCost}
         onBackPress={onBackPress}
       />
@@ -191,6 +206,73 @@ export function ChatInterface({
         onScroll={handleScroll}
       >
         <div className="max-w-3xl mx-auto px-4 py-4">
+          {/* Intake Profile Card (Astrologer View) */}
+          {intakeProfile && (
+            <div className="mb-4 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <button
+                onClick={() => setIntakeProfileCollapsed((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary/70" />
+                  <span className="text-sm font-semibold font-lexend text-gray-800">
+                    {intakeProfile.name}
+                    {intakeProfile.relation && (
+                      <span className="text-gray-400 font-normal ml-1">({intakeProfile.relation})</span>
+                    )}
+                  </span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    'w-4 h-4 text-gray-400 transition-transform duration-200',
+                    intakeProfileCollapsed && '-rotate-90'
+                  )}
+                />
+              </button>
+              {!intakeProfileCollapsed && (
+                <div className="px-4 pb-3 pt-0 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm font-lexend border-t border-gray-100">
+                  <div className="flex items-center gap-2 pt-3">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wide">Date of Birth</p>
+                      <p className="text-gray-700">
+                        {(() => {
+                          const dob = intakeProfile.dateOfBirth ?? intakeProfile.date_of_birth;
+                          if (!dob) return 'N/A';
+                          try {
+                            return new Date(dob).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+                          } catch {
+                            return dob;
+                          }
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 sm:pt-3">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wide">Place of Birth</p>
+                      <p className="text-gray-700">
+                        {intakeProfile.placeOfBirth ?? intakeProfile.place_of_birth ?? 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 sm:pt-3">
+                    <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wide">Time of Birth</p>
+                      <p className="text-gray-700">
+                        {(intakeProfile.timeOfBirthUnknown ?? intakeProfile.time_of_birth_unknown)
+                          ? 'Unknown'
+                          : (intakeProfile.timeOfBirth ?? intakeProfile.time_of_birth ?? 'N/A')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Loading More Indicator */}
           {isFetchingMore && (
             <div className="flex justify-center py-3">

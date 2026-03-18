@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useUIStore } from '@/stores/ui-store';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
-import { useChatSession } from '@/hooks/useChatSession';
-import { useCallSession } from '@/hooks/useCallSession';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { chatService } from '@/lib/services/chat.service';
+import { callService } from '@/lib/services/call.service';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { CheckCircle, AlertCircle } from 'lucide-react';
@@ -37,19 +37,36 @@ export default function RatingPage() {
   // Auth check
   const { isReady } = useRequireAuth();
 
-  // Try fetching as chat session first
+  // Fetch session data ONCE (no polling — prevents form reset while typing)
   const {
     data: chatSession,
     isLoading: isChatLoading,
     error: chatError,
-  } = useChatSession(sessionId);
+  } = useQuery({
+    queryKey: ['rating', 'chat', sessionId],
+    queryFn: async () => {
+      const res = await chatService.getSession(sessionId);
+      return res.data;
+    },
+    enabled: !!sessionId,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
-  // Try fetching as call session
   const {
     data: callSession,
     isLoading: isCallLoading,
     error: callError,
-  } = useCallSession(sessionId);
+  } = useQuery({
+    queryKey: ['rating', 'call', sessionId],
+    queryFn: async () => {
+      const res = await callService.getSession(sessionId);
+      return res.data;
+    },
+    enabled: !!sessionId && !!chatError,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   // Determine session type
   useEffect(() => {
@@ -70,7 +87,7 @@ export default function RatingPage() {
 
       return apiClient.post(endpoint, {
         rating: params.rating,
-        comment: params.comment,
+        review: params.comment, // Backend expects 'review', not 'comment'
         tags: params.tags,
       });
     },

@@ -68,8 +68,36 @@ class AstrologerDashboardService {
   }
 
   // ─── Stats (all-time totals) ──────────────────────────────────
+  // Backend returns averageRating/totalConsultations but frontend uses rating/totalSessions.
+  // Normalize here so dashboard code doesn't need to check both variants.
   async getStats(astrologerId: string): Promise<ApiResponse<AstrologerStatsResponse>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.STATS(astrologerId));
+    const raw = await apiClient.get(API_ENDPOINTS.ASTROLOGERS.STATS(astrologerId));
+
+    // Unwrap: apiClient may return { success, data } or raw data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let stats: any = raw;
+    if (stats && typeof stats === 'object' && 'success' in stats && 'data' in stats) {
+      stats = stats.data;
+    }
+    // Some endpoints double-wrap: { success, data: { success, data } }
+    if (stats && typeof stats === 'object' && 'success' in stats && 'data' in stats) {
+      stats = stats.data;
+    }
+
+    if (stats && typeof stats === 'object') {
+      // Normalize backend field names → frontend field names
+      if (stats.averageRating != null && stats.rating == null) {
+        stats.rating = stats.averageRating;
+      }
+      if (stats.totalConsultations != null && stats.totalSessions == null) {
+        stats.totalSessions = stats.totalConsultations;
+      }
+      if (stats.averageSessionDuration != null && stats.avgSessionDuration == null) {
+        stats.avgSessionDuration = stats.averageSessionDuration;
+      }
+    }
+
+    return { success: true, data: stats as AstrologerStatsResponse };
   }
 
   // ─── Availability ────────────────────────────────────────────────
@@ -122,27 +150,52 @@ class AstrologerDashboardService {
   }
 
   // ─── Active Sessions ────────────────────────────────────────────
-  // Backend returns { hasActiveChat/hasActiveCall, session? } — unwrap to return just session
+  // Backend may return { hasActiveChat, session } wrapper OR session directly.
+  // Defensive unwrapping handles both formats (matching chat.service.ts pattern).
   async getActiveChatSession(): Promise<ApiResponse<ActiveSession | null>> {
-    const response = await apiClient.get<ApiResponse<{ hasActiveChat: boolean; session?: ActiveSession }>>(
-      API_ENDPOINTS.ASTROLOGERS.ME.CHAT_ACTIVE
-    );
-    const data = response.data as unknown as { hasActiveChat?: boolean; session?: ActiveSession };
-    return {
-      ...response,
-      data: data?.hasActiveChat && data?.session ? data.session : null,
-    };
+    const response = await apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.CHAT_ACTIVE);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data = (response as any)?.data ?? response;
+
+    // Unwrap ApiResponse wrapper if present
+    if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+      data = data.data;
+    }
+
+    // Unwrap { hasActiveChat, session } wrapper if present
+    if (data && typeof data === 'object' && 'session' in data) {
+      data = data.session ?? null;
+    }
+
+    // If data has a sessionId, it IS the session
+    if (data && typeof data === 'object' && (data.sessionId || data.session_id || data.id)) {
+      return { success: true, data: data as ActiveSession };
+    }
+
+    return { success: true, data: null };
   }
 
   async getActiveCallSession(): Promise<ApiResponse<ActiveSession | null>> {
-    const response = await apiClient.get<ApiResponse<{ hasActiveCall: boolean; session?: ActiveSession }>>(
-      API_ENDPOINTS.ASTROLOGERS.ME.CALL_ACTIVE
-    );
-    const data = response.data as unknown as { hasActiveCall?: boolean; session?: ActiveSession };
-    return {
-      ...response,
-      data: data?.hasActiveCall && data?.session ? data.session : null,
-    };
+    const response = await apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.CALL_ACTIVE);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let data = (response as any)?.data ?? response;
+
+    // Unwrap ApiResponse wrapper if present
+    if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+      data = data.data;
+    }
+
+    // Unwrap { hasActiveCall, session } wrapper if present
+    if (data && typeof data === 'object' && 'session' in data) {
+      data = data.session ?? null;
+    }
+
+    // If data has a sessionId, it IS the session
+    if (data && typeof data === 'object' && (data.sessionId || data.session_id || data.id)) {
+      return { success: true, data: data as ActiveSession };
+    }
+
+    return { success: true, data: null };
   }
 
   // ─── End Sessions ───────────────────────────────────────────────

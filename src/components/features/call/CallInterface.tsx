@@ -45,6 +45,8 @@ interface CallInterfaceProps {
   isLoading?: boolean;
   /** Label for cost in summary — "Total Cost" (user side) or "Amount Received" (astrologer side) */
   costLabel?: string;
+  /** Hide rate/review in summary for astrologer side */
+  isAstrologer?: boolean;
 }
 
 export function CallInterface({
@@ -72,6 +74,7 @@ export function CallInterface({
   onClose,
   isLoading,
   costLabel,
+  isAstrologer = false,
 }: CallInterfaceProps) {
   const [showSummary, setShowSummary] = useState(false);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
@@ -135,6 +138,7 @@ export function CallInterface({
         durationFormatted={sessionSummary.durationFormatted}
         totalCost={sessionSummary.totalCost}
         costLabel={costLabel}
+        isAstrologer={isAstrologer}
         onStartNewCall={onStartNewCall}
         onClose={onClose || (() => setShowSummary(false))}
       />

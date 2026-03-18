@@ -3,6 +3,11 @@
  *
  * Handles chat session lifecycle: initiate, messages, end, history.
  * Real-time messaging will be handled via Socket.io (see socket.service.ts).
+ *
+ * Response normalization matches mobile app (chat.service.ts):
+ * - Handles both camelCase and snake_case field names
+ * - Handles both `requestId` and `id`
+ * - Wraps raw responses into consistent ApiResponse shape
  */
 
 import { apiClient } from '@/lib/api/client';
@@ -18,6 +23,23 @@ import {
   JoinQueueResponse,
   QueueInfoResponse,
 } from '@/types/api.types';
+
+/**
+ * Normalize an API response to ensure consistent { success, data } shape.
+ * The backend may return either:
+ *   A) { success: true, data: { ... } }        — wrapped
+ *   B) { requestId, status, ... }               — direct data
+ * This helper ensures callers always get format A.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeResponse<T>(raw: any): ApiResponse<T> {
+  // Already wrapped in { success, data }
+  if (raw && typeof raw.success === 'boolean' && 'data' in raw) {
+    return raw as ApiResponse<T>;
+  }
+  // Raw data without wrapper — wrap it
+  return { success: true, data: raw as T, message: undefined };
+}
 
 export interface SendMessageParams {
   sessionId: string;
@@ -35,62 +57,251 @@ export interface GetMessagesParams {
 class ChatService {
   // ─── Balance Validation ──────────────────────────────────────────
   async validateBalance(astrologerId: string): Promise<ApiResponse<BalanceValidationResponse>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.VALIDATE_BALANCE, { astrologerId });
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.VALIDATE_BALANCE, { astrologerId });
+    return normalizeResponse<BalanceValidationResponse>(raw);
   }
 
   // ─── Request Flow ────────────────────────────────────────────────
-  async createRequest(astrologerId: string): Promise<ApiResponse<CreateChatRequestResponse>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.REQUEST, { astrologerId });
+  async createRequest(astrologerId: string, intakeProfileId?: string): Promise<ApiResponse<CreateChatRequestResponse>> {
+    const body: Record<string, string> = { astrologerId };
+    if (intakeProfileId) body.intakeProfileId = intakeProfileId;
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.REQUEST, body);
+    const resp = normalizeResponse<CreateChatRequestResponse>(raw);
+
+    // Normalize field names (matching mobile app's defensive handling)
+    if (resp.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = resp.data as any;
+      resp.data = {
+        requestId: d.requestId || d.id || d.request_id,
+        status: d.status || 'pending',
+        expiresAt: d.expiresAt || d.expires_at || new Date(Date.now() + 60000).toISOString(),
+        remainingSeconds: d.remainingSeconds ?? d.remaining_seconds ?? 60,
+        pricePerMinute: d.pricePerMinute ?? d.price_per_minute ?? 0,
+        astrologer: d.astrologer,
+      };
+    }
+    return resp;
   }
 
   async getRequestStatus(requestId: string): Promise<ApiResponse<ChatRequestStatusResponse>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.REQUEST_STATUS(requestId));
+    const raw = await apiClient.get(API_ENDPOINTS.CHAT.REQUEST_STATUS(requestId));
+    const resp = normalizeResponse<ChatRequestStatusResponse>(raw);
+
+    // Normalize session fields if present
+    if (resp.data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = resp.data as any;
+      const session = d.session;
+      resp.data = {
+        requestId: d.requestId || d.id || d.request_id || requestId,
+        status: d.status,
+        expiresAt: d.expiresAt || d.expires_at || '',
+        remainingSeconds: d.remainingSeconds ?? d.remaining_seconds ?? 0,
+        rejectReason: d.rejectReason || d.reject_reason || d.message,
+        session: session ? {
+          sessionId: session.sessionId || session.session_id || session.id,
+          startTime: session.startTime || session.start_time || new Date().toISOString(),
+          pricePerMinute: session.pricePerMinute ?? session.price_per_minute ?? 0,
+        } : undefined,
+      };
+    }
+    return resp;
   }
 
   async cancelRequest(requestId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.CANCEL_REQUEST(requestId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.CANCEL_REQUEST(requestId));
+    return normalizeResponse(raw);
   }
 
   async getPendingRequest(): Promise<ApiResponse<CreateChatRequestResponse | null>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.PENDING_REQUEST);
+    try {
+      const raw = await apiClient.get(API_ENDPOINTS.CHAT.PENDING_REQUEST);
+      const resp = normalizeResponse<CreateChatRequestResponse | null>(raw);
+      if (resp.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const d = resp.data as any;
+        resp.data = {
+          requestId: d.requestId || d.id || d.request_id,
+          status: d.status || 'pending',
+          expiresAt: d.expiresAt || d.expires_at || '',
+          remainingSeconds: d.remainingSeconds ?? d.remaining_seconds ?? 0,
+          pricePerMinute: d.pricePerMinute ?? d.price_per_minute ?? 0,
+          astrologer: d.astrologer,
+        };
+      }
+      return resp;
+    } catch {
+      // No pending request — return null
+      return { success: true, data: null };
+    }
   }
 
   // ─── Queue Flow ──────────────────────────────────────────────────
   async joinQueue(astrologerId: string): Promise<ApiResponse<JoinQueueResponse>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.QUEUE_JOIN, { astrologerId });
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.QUEUE_JOIN, { astrologerId });
+    return normalizeResponse<JoinQueueResponse>(raw);
   }
 
   async getQueueInfo(astrologerId: string): Promise<ApiResponse<QueueInfoResponse>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.QUEUE_INFO(astrologerId));
+    const raw = await apiClient.get(API_ENDPOINTS.CHAT.QUEUE_INFO(astrologerId));
+    return normalizeResponse<QueueInfoResponse>(raw);
   }
 
   async leaveQueue(queueId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.QUEUE_LEAVE(queueId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.QUEUE_LEAVE(queueId));
+    return normalizeResponse(raw);
+  }
+
+  async chatNowFromQueue(queueId: string): Promise<ApiResponse<{
+    requestId: string;
+    astrologerId: string;
+    status: string;
+    expiresAt: string;
+    remainingSeconds: number;
+    pricePerMinute: number;
+  }>> {
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.QUEUE_CHAT_NOW(queueId));
+    const response = normalizeResponse<Record<string, unknown>>(raw);
+    if (response.data) {
+      const d = response.data;
+      response.data = {
+        requestId: (d.requestId || d.id || d.request_id) as string,
+        astrologerId: d.astrologerId as string,
+        status: d.status as string,
+        expiresAt: (d.expiresAt || d.expires_at) as string,
+        remainingSeconds: (d.remainingSeconds || d.remaining_seconds) as number,
+        pricePerMinute: (d.pricePerMinute || d.price_per_minute) as number,
+      } as unknown as Record<string, unknown>;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return response as any;
   }
 
   // ─── Session Management ──────────────────────────────────────────
   async getActiveSession(): Promise<ApiResponse<ChatSession | null>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.ACTIVE_SESSION);
+    const raw = await apiClient.get(API_ENDPOINTS.CHAT.ACTIVE_SESSION);
+    return normalizeResponse(raw);
   }
 
+  /**
+   * Get chat session details by sessionId.
+   *
+   * The backend does NOT have a `GET /api/v1/chat/sessions/:id` endpoint.
+   * Mobile app pattern: uses `GET /api/v1/chat/sessions/active` and
+   * passes astrologer data via navigation params.
+   *
+   * Strategy:
+   * 1. Try `GET /api/v1/chat/sessions/:id` (in case backend adds it)
+   * 2. Fallback to `GET /api/v1/chat/sessions/active` and validate ID
+   * 3. Construct the expected { session, astrologer } shape from available data
+   */
   async getSession(sessionId: string): Promise<ApiResponse<{
     session: ChatSession;
     astrologer: { id: string; name: string; image: string; isOnline: boolean };
     user?: { id: string; name: string; image?: string };
   }>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.SESSION(sessionId));
+    // Try session-by-id first (may not exist on all backends)
+    try {
+      const raw = await apiClient.get(API_ENDPOINTS.CHAT.SESSION(sessionId));
+      const resp = normalizeResponse<{
+        session: ChatSession;
+        astrologer: { id: string; name: string; image: string; isOnline: boolean };
+      }>(raw);
+
+      // If the response already has the nested { session, astrologer } shape, return it
+      if (resp.data?.session) return resp;
+
+      // If the response IS the session directly (flat shape), wrap it
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = resp.data as any;
+      if (d?.id || d?.astrologerId) {
+        const session = d as ChatSession;
+        return {
+          success: true,
+          data: {
+            session,
+            astrologer: {
+              id: session.astrologerId,
+              name: session.astrologerName || 'Astrologer',
+              image: '',
+              isOnline: true,
+            },
+          },
+        };
+      }
+      return resp;
+    } catch {
+      // Endpoint doesn't exist (404) — fall back to active session
+    }
+
+    // Fallback: use the active session endpoint (matches mobile app pattern)
+    try {
+      const activeRaw = await apiClient.get(API_ENDPOINTS.CHAT.ACTIVE_SESSION);
+      const activeResp = normalizeResponse<ChatSession | null>(activeRaw);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let activeSession: any = activeResp.data;
+
+      // Backend may return { hasActiveChat, session } wrapper
+      if (activeSession?.session) {
+        activeSession = activeSession.session;
+      }
+
+      if (activeSession && (activeSession.id === sessionId || !sessionId)) {
+        const session = activeSession as ChatSession;
+        return {
+          success: true,
+          data: {
+            session,
+            astrologer: {
+              id: session.astrologerId,
+              name: session.astrologerName || 'Astrologer',
+              image: '',
+              isOnline: true,
+            },
+          },
+        };
+      }
+    } catch {
+      // Active session also failed
+    }
+
+    // Last resort: construct minimal session data so the page doesn't crash
+    return {
+      success: true,
+      data: {
+        session: {
+          id: sessionId,
+          astrologerId: '',
+          sessionType: 'chat',
+          startTime: new Date().toISOString(),
+          pricePerMinute: 0,
+          status: 'active',
+        },
+        astrologer: {
+          id: '',
+          name: 'Astrologer',
+          image: '',
+          isOnline: true,
+        },
+      },
+    };
   }
 
   async connectSession(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.CONNECT_SESSION(sessionId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.CONNECT_SESSION(sessionId));
+    return normalizeResponse(raw);
   }
 
   async endSession(sessionId: string): Promise<ApiResponse<EndChatSessionResponse>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.END(sessionId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.END(sessionId));
+    return normalizeResponse(raw);
   }
 
   async declineSession(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.DECLINE_SESSION(sessionId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.DECLINE_SESSION(sessionId));
+    return normalizeResponse(raw);
   }
 
   // ─── Messages ────────────────────────────────────────────────────
@@ -100,22 +311,28 @@ class ChatService {
     nextCursor?: string;
   }>> {
     const { sessionId, page = 1, limit = 50, before } = params;
-    return apiClient.get(API_ENDPOINTS.CHAT.MESSAGES(sessionId), {
+    const raw = await apiClient.get(API_ENDPOINTS.CHAT.MESSAGES(sessionId), {
       params: { page, limit, before },
     });
+    return normalizeResponse(raw);
   }
 
   async sendMessage(params: SendMessageParams): Promise<ApiResponse<ChatMessage>> {
     const { sessionId, content, type = 'text' } = params;
-    return apiClient.post(API_ENDPOINTS.CHAT.SEND(sessionId), { content, type });
+    // Backend expects { message, type } — mobile app field name is "message", not "content"
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.SEND(sessionId), { message: content, type });
+    return normalizeResponse(raw);
   }
 
   async markAsRead(sessionId: string): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.MARK_READ(sessionId));
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.MARK_READ(sessionId));
+    return normalizeResponse(raw);
   }
 
-  async sendTypingIndicator(sessionId: string, typing: boolean): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.TYPING(sessionId), { typing });
+  async sendTypingIndicator(_sessionId: string, _typing: boolean): Promise<ApiResponse<{ success: boolean }>> {
+    // Backend does not have a typing indicator endpoint (mobile app doesn't implement it either)
+    // Return success silently to avoid 404 errors in console
+    return { success: true, data: { success: true } };
   }
 
   // ─── Rating ──────────────────────────────────────────────────────
@@ -124,7 +341,8 @@ class ChatService {
     rating: number,
     review?: string
   ): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.CHAT.RATING(sessionId), { rating, review });
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.RATING(sessionId), { rating, review });
+    return normalizeResponse(raw);
   }
 
   // ─── History ─────────────────────────────────────────────────────
@@ -133,14 +351,16 @@ class ChatService {
     totalPages: number;
     page: number;
   }>> {
-    return apiClient.get(API_ENDPOINTS.CHAT.HISTORY, { params: { page, limit } });
+    const raw = await apiClient.get(API_ENDPOINTS.CHAT.HISTORY, { params: { page, limit } });
+    return normalizeResponse(raw);
   }
 
   // ─── File Upload ─────────────────────────────────────────────────
   async uploadImage(sessionId: string, file: File): Promise<ApiResponse<{ url: string }>> {
     const formData = new FormData();
     formData.append('image', file);
-    return apiClient.post(API_ENDPOINTS.CHAT.UPLOAD(sessionId), formData);
+    const raw = await apiClient.post(API_ENDPOINTS.CHAT.UPLOAD(sessionId), formData);
+    return normalizeResponse(raw);
   }
 
   // ─── Formatting Helpers ──────────────────────────────────────────
