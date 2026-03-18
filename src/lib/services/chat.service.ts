@@ -187,55 +187,15 @@ class ChatService {
   /**
    * Get chat session details by sessionId.
    *
-   * The backend does NOT have a `GET /api/v1/chat/sessions/:id` endpoint.
-   * Mobile app pattern: uses `GET /api/v1/chat/sessions/active` and
-   * passes astrologer data via navigation params.
-   *
-   * Strategy:
-   * 1. Try `GET /api/v1/chat/sessions/:id` (in case backend adds it)
-   * 2. Fallback to `GET /api/v1/chat/sessions/active` and validate ID
-   * 3. Construct the expected { session, astrologer } shape from available data
+   * The backend does NOT have `GET /api/v1/chat/sessions/:id`.
+   * Uses `GET /api/v1/chat/sessions/active` (matching mobile app pattern).
    */
   async getSession(sessionId: string): Promise<ApiResponse<{
     session: ChatSession;
     astrologer: { id: string; name: string; image: string; isOnline: boolean };
     user?: { id: string; name: string; image?: string };
   }>> {
-    // Try session-by-id first (may not exist on all backends)
-    try {
-      const raw = await apiClient.get(API_ENDPOINTS.CHAT.SESSION(sessionId));
-      const resp = normalizeResponse<{
-        session: ChatSession;
-        astrologer: { id: string; name: string; image: string; isOnline: boolean };
-      }>(raw);
-
-      // If the response already has the nested { session, astrologer } shape, return it
-      if (resp.data?.session) return resp;
-
-      // If the response IS the session directly (flat shape), wrap it
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const d = resp.data as any;
-      if (d?.id || d?.astrologerId) {
-        const session = d as ChatSession;
-        return {
-          success: true,
-          data: {
-            session,
-            astrologer: {
-              id: session.astrologerId,
-              name: session.astrologerName || 'Astrologer',
-              image: '',
-              isOnline: true,
-            },
-          },
-        };
-      }
-      return resp;
-    } catch {
-      // Endpoint doesn't exist (404) — fall back to active session
-    }
-
-    // Fallback: use the active session endpoint (matches mobile app pattern)
+    // Use active session endpoint (the only one that exists on backend)
     try {
       const activeRaw = await apiClient.get(API_ENDPOINTS.CHAT.ACTIVE_SESSION);
       const activeResp = normalizeResponse<ChatSession | null>(activeRaw);

@@ -530,7 +530,7 @@ export default function LiveSessionViewerPage() {
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Say something..."
-            className="flex-1 bg-white/8 text-white rounded-full px-4 py-2.5 text-sm font-nunito outline-none focus:bg-white/12 focus:ring-1 focus:ring-primary/30 placeholder:text-white/30 transition-colors"
+            className="flex-1 bg-white/[0.08] text-white rounded-full px-4 py-2.5 text-sm font-nunito outline-none focus:bg-white/[0.12] focus:ring-1 focus:ring-primary/30 placeholder:text-white/30 transition-colors"
             disabled={isSendingMessage}
           />
           <button
