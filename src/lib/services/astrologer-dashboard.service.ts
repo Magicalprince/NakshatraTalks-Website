@@ -7,6 +7,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
+import { getOrCreateDeviceId } from '@/lib/device-id';
 import {
   ApiResponse,
   AvailabilityStatusResponse,
@@ -106,11 +107,13 @@ class AstrologerDashboardService {
   }
 
   async toggleAvailability(isAvailable: boolean): Promise<ApiResponse<ToggleAvailabilityResponse>> {
-    return apiClient.patch(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { isAvailable });
+    const device_id = getOrCreateDeviceId();
+    return apiClient.patch(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { isAvailable, device_id });
   }
 
   async sendHeartbeat(): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.HEARTBEAT);
+    const device_id = getOrCreateDeviceId();
+    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.HEARTBEAT, { device_id });
   }
 
   // ─── Incoming Requests ───────────────────────────────────────────

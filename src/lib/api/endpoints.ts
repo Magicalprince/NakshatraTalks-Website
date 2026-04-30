@@ -25,6 +25,10 @@ export const API_ENDPOINTS = {
   USER: {
     PROFILE: '/api/v1/users/profile',
     APP_STATE: '/api/v1/users/me/app-state',
+    // Multi-device foundation
+    DEVICE_REGISTER: '/api/v1/users/me/devices/register',
+    DEVICE_UNREGISTER: '/api/v1/users/me/devices/unregister',
+    USER_DISCONNECT: '/api/v1/users/me/user-disconnect',
   },
 
   // Astrologers
@@ -52,6 +56,10 @@ export const API_ENDPOINTS = {
       AVAILABILITY_STATUS: '/api/v1/astrologers/me/availability-status',
       HEARTBEAT: '/api/v1/astrologers/me/heartbeat',
       APP_STATE: '/api/v1/astrologers/me/app-state',
+      FORCE_OFFLINE: '/api/v1/astrologers/me/force-offline',
+      // Multi-device foundation
+      DEVICE_REGISTER: '/api/v1/astrologers/me/devices/register',
+      DEVICE_UNREGISTER: '/api/v1/astrologers/me/devices/unregister',
       INCOMING_ALL: '/api/v1/astrologer/incoming-all',
       CALL_INCOMING: '/api/v1/astrologer/call/incoming',
       CALL_ACTIVE: '/api/v1/astrologer/call/active',

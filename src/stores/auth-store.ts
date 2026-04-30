@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, AstrologerData } from '@/types/api.types';
 import { apiClient, authEvents } from '@/lib/api/client';
+import { unregisterDevice } from '@/lib/services/device.service';
 
 interface AuthState {
   // State
@@ -95,6 +96,15 @@ export const useAuthStore = create<AuthState>()(
 
       // Logout
       logout: () => {
+        // Unregister this device for multi-device tracking before clearing
+        // tokens — fire-and-forget so logout isn't blocked by network failure.
+        // Reads userType from current state since the param-less logout
+        // signature doesn't pass it through.
+        const currentType = get().userType;
+        if (currentType === 'astrologer' || currentType === 'user') {
+          unregisterDevice(currentType).catch(() => { /* swallow */ });
+        }
+
         apiClient.clearAccessToken();
         // Clear refresh token
         if (typeof window !== 'undefined') {
