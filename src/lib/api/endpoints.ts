@@ -60,6 +60,7 @@ export const API_ENDPOINTS = {
       // Multi-device foundation
       DEVICE_REGISTER: '/api/v1/astrologers/me/devices/register',
       DEVICE_UNREGISTER: '/api/v1/astrologers/me/devices/unregister',
+      DEVICE_STATE: '/api/v1/astrologers/me/devices/state',
       INCOMING_ALL: '/api/v1/astrologer/incoming-all',
       CALL_INCOMING: '/api/v1/astrologer/call/incoming',
       CALL_ACTIVE: '/api/v1/astrologer/call/active',

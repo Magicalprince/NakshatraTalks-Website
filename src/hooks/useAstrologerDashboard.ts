@@ -25,6 +25,7 @@ export const ASTROLOGER_QUERY_KEYS = {
   stats: ['astrologer', 'stats'] as const,
   dashboard: ['astrologer', 'dashboard'] as const,
   availability: ['astrologer', 'availability'] as const,
+  deviceState: ['astrologer', 'device-state'] as const,
   incomingRequests: ['astrologer', 'incoming'] as const,
   waitlist: ['astrologer', 'waitlist'] as const,
   activeChat: ['astrologer', 'active', 'chat'] as const,
@@ -163,6 +164,32 @@ export function useAvailabilityStatus() {
 
 export const useAstrologerAvailability = useAvailabilityStatus;
 
+/**
+ * Multi-device foundation: returns THIS browser's device row state.
+ * Used to drive the local toggle UI — independent of the aggregate
+ * `is_available` (which is OR-of-all-devices and would falsely flip
+ * the toggle UI when ANOTHER device toggles on).
+ *
+ * Polls every 30s, similar to availability.
+ */
+export function useDeviceState() {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery({
+    queryKey: ASTROLOGER_QUERY_KEYS.deviceState,
+    queryFn: async () => {
+      const response = await astrologerDashboardService.getDeviceState();
+      return response.data;
+    },
+    enabled: isAstrologer,
+    refetchInterval: 30000,
+    // 404 = device not registered yet — silently. Caller can fall back to
+    // the aggregate.
+    retry: false,
+  });
+}
+
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
   const updateAstrologer = useAuthStore((s) => s.updateAstrologer);
@@ -213,6 +240,10 @@ export function useToggleAvailability() {
     },
     onSettled: (_data, _error, isAvailable) => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
+      // Multi-device foundation: also refresh THIS device's row so the
+      // toggle UI reflects the new server state without waiting for the
+      // 30s background poll.
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.deviceState });
       // Refetch fresh data when going back online
       if (isAvailable) {
         queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
