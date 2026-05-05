@@ -62,6 +62,17 @@ export interface EarningsHistoryResponse {
   pagination: Pagination;
 }
 
+/**
+ * MD-6: Append device_id query param so the backend can apply the per-device
+ * eligibility gate (is_online=true AND toggle_on=true). Without this, the
+ * backend falls through to the legacy unfiltered behaviour.
+ */
+const withDeviceParam = (url: string): string => {
+  const deviceId = getOrCreateDeviceId();
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}device_id=${encodeURIComponent(deviceId)}`;
+};
+
 class AstrologerDashboardService {
   // ─── Dashboard (today's data + recent sessions) ────────────────
   async getDashboard(): Promise<ApiResponse<AstrologerDashboardResponse>> {
@@ -134,12 +145,12 @@ class AstrologerDashboardService {
 
   // ─── Incoming Requests ───────────────────────────────────────────
   async getIncomingRequests(): Promise<ApiResponse<IncomingRequestsResponse>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.INCOMING_ALL);
+    return apiClient.get(withDeviceParam(API_ENDPOINTS.ASTROLOGERS.ME.INCOMING_ALL));
   }
 
   // ─── Waitlist ────────────────────────────────────────────────────
   async getWaitlist(): Promise<ApiResponse<UnifiedWaitlistResponse>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.WAITLIST);
+    return apiClient.get(withDeviceParam(API_ENDPOINTS.ASTROLOGERS.ME.WAITLIST));
   }
 
   // ─── Chat Request Handling ───────────────────────────────────────
