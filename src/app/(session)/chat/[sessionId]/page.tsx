@@ -7,6 +7,7 @@ import {
   useChatSession,
   useChatMessaging,
   useEndChatSession,
+  useChatSessionDisconnectBeacon,
 } from '@/hooks/useChatSession';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useUIStore } from '@/stores/ui-store';
@@ -61,6 +62,11 @@ export default function ChatSessionPage() {
 
   // End session mutation
   const { mutate: endSession } = useEndChatSession(sessionId);
+
+  // T1.2: sendBeacon on tab close so the backend backdates last_message_at
+  // and schedules a 60s grace-period end of the chat session, instead of
+  // waiting up to 5 min for the abandoned-chat cron.
+  useChatSessionDisconnectBeacon(sessionId, user?.id);
 
   // Extract session info — merge API data with queue store data (like mobile app's route params)
   const session = sessionData?.session;
