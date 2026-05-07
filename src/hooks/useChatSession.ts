@@ -184,18 +184,17 @@ export function useChatMessaging(sessionId: string, userId?: string) {
     };
   }, [sessionId]);
 
-  // ── Fallback polling: fetch messages if broadcast is silent for 5s ──
-  // Matches mobile app's fallback pattern for unreliable connections
+  // ── Fallback polling: fetch messages every 5s unconditionally ──
+  // Previously suppressed when "broadcast was healthy" (msSinceBroadcast < 5s),
+  // but the website user's own echoed broadcast triggered the suppression even
+  // when the OTHER party's broadcast was failing. We now poll unconditionally;
+  // dedupe-by-id below makes it a no-op when realtime is also delivering.
   useEffect(() => {
     if (!sessionId) return;
 
     const FALLBACK_INTERVAL_MS = 5000;
 
     fallbackPollingRef.current = setInterval(async () => {
-      const msSinceBroadcast = Date.now() - lastBroadcastRef.current;
-      if (msSinceBroadcast < FALLBACK_INTERVAL_MS) return; // Broadcast is working fine
-
-      // No broadcast in 5s — poll for new messages
       try {
         const response = await chatService.getMessages({ sessionId, limit: 20 });
         const fetched = response.data?.messages || [];
