@@ -8,6 +8,7 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { FilterSidebar } from '@/components/layout/FilterSidebar';
 import { ConnectionRequestModal } from '@/components/features/queue';
+import { QueueConfirmDialog } from '@/components/QueueConfirmDialog';
 import { useCallAstrologers, useFilterOptions, useSearchAstrologers, useRealtimeCallAvailability } from '@/hooks/useBrowseData';
 import { useConnectionRequest } from '@/hooks/useConnectionRequest';
 import { useAuthStore } from '@/stores/auth-store';
@@ -45,6 +46,10 @@ export default function BrowseCallPage() {
     handleNavigateToSession,
     handleCloseModal,
     handleJoinQueue,
+    queueConfirmData,
+    queueJoinLoading,
+    confirmQueueJoin,
+    cancelQueueJoin,
   } = useConnectionRequest();
 
   const [filters, setFilters] = useState<AstrologerFilters>({});
@@ -283,6 +288,19 @@ export default function BrowseCallPage() {
         astrologerId={connectionAstrologer?.id}
         type="call"
         queueData={queueData}
+      />
+
+      {/* Queue-confirm dialog — shown when ASTROLOGER_BUSY response is received */}
+      <QueueConfirmDialog
+        open={!!queueConfirmData}
+        type={queueConfirmData?.type ?? 'call'}
+        astrologerName={queueConfirmData?.astrologer.name ?? ''}
+        currentQueueSize={queueConfirmData?.currentQueueSize ?? 0}
+        estimatedWaitMinutes={queueConfirmData?.estimatedWaitMinutes ?? 0}
+        canJoinQueue={queueConfirmData?.canJoinQueue ?? false}
+        loading={queueJoinLoading}
+        onConfirm={confirmQueueJoin}
+        onCancel={cancelQueueJoin}
       />
     </div>
   );

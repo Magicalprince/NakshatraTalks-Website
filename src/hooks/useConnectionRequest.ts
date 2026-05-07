@@ -53,6 +53,16 @@ export function useConnectionRequest() {
     estimatedWaitMinutes: number;
   } | null>(null);
 
+  // Phase 2 T10: queue-confirm dialog state for ASTROLOGER_BUSY responses
+  const [queueConfirmData, setQueueConfirmData] = useState<{
+    astrologer: Astrologer;
+    type: SessionType;
+    canJoinQueue: boolean;
+    currentQueueSize: number;
+    estimatedWaitMinutes: number;
+  } | null>(null);
+  const [queueJoinLoading, setQueueJoinLoading] = useState(false);
+
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef<string | null>(null);
   const supabaseUnsubRef = useRef<(() => void) | null>(null);
@@ -410,13 +420,20 @@ export function useConnectionRequest() {
         (apiErr?.message || '').toLowerCase().includes('busy') ||
         (apiErr?.message || '').toLowerCase().includes('another');
 
-      if (isBusy && details?.queueAvailable) {
-        // Astrologer is busy — offer queue join
+      if (isBusy && (details?.queueAvailable ?? details?.canJoinQueue)) {
+        // Phase 2 T10: open queue-confirm dialog instead of just showing
+        // an info toast. Customer can confirm to join the queue or cancel.
+        // (Backend payload includes both `queueAvailable` and `canJoinQueue`
+        // synonyms; accept either for forwards-compat.)
+        stopAll();
+        setIsModalOpen(false);
         setRequestStatus('rejected');
-        addToast({
-          type: 'info',
-          title: 'Astrologer Busy',
-          message: `Currently in another session. You can join the queue (${details.currentQueueSize || 0} waiting).`,
+        setQueueConfirmData({
+          astrologer,
+          type,
+          canJoinQueue: (details?.canJoinQueue ?? details?.queueAvailable ?? false) as boolean,
+          currentQueueSize: details?.currentQueueSize ?? 0,
+          estimatedWaitMinutes: details?.estimatedWaitMinutes ?? 0,
         });
       } else {
         setRequestStatus('rejected');
@@ -505,6 +522,28 @@ export function useConnectionRequest() {
     }
   }, [addToQueue, selectedAstrologer, setRequestStatus, startQueueListening, cancelPendingRequests, addToast]);
 
+  // Phase 2 T10: confirm queue join from QueueConfirmDialog
+  const confirmQueueJoin = useCallback(async () => {
+    if (!queueConfirmData) return;
+    setQueueJoinLoading(true);
+    try {
+      // Re-open the connection-request modal so the customer sees queue
+      // tracking after handleJoinQueue transitions status to 'queued'.
+      setIsModalOpen(true);
+      await handleJoinQueue(queueConfirmData.astrologer.id, queueConfirmData.type);
+      setQueueConfirmData(null);
+    } catch {
+      // handleJoinQueue surfaces its own toasts on failure; just close the dialog.
+      setQueueConfirmData(null);
+    } finally {
+      setQueueJoinLoading(false);
+    }
+  }, [queueConfirmData, handleJoinQueue]);
+
+  const cancelQueueJoin = useCallback(() => {
+    setQueueConfirmData(null);
+  }, []);
+
   // Cancel an active request or leave queue
   const handleCancel = useCallback(async () => {
     stopAll();
@@ -591,5 +630,10 @@ export function useConnectionRequest() {
     showProfileSelector,
     handleProfileSelected,
     handleProfileSelectorClose,
+    // Phase 2 T10: queue-confirm dialog (ASTROLOGER_BUSY response)
+    queueConfirmData,
+    queueJoinLoading,
+    confirmQueueJoin,
+    cancelQueueJoin,
   };
 }
