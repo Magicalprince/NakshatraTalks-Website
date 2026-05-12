@@ -9,6 +9,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button, OTPInput } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/lib/services/auth.service';
+import { registerDevice } from '@/lib/services/device.service';
 import { useUIStore } from '@/stores/ui-store';
 
 function VerifyOTPContent() {
@@ -74,6 +75,13 @@ function VerifyOTPContent() {
           accessToken: access_token,
           userType,
         });
+
+        // Register this browser as a device with the backend (multi-device
+        // foundation). Non-blocking — errors are swallowed inside the helper
+        // so login completes even if device registration fails.
+        if (userType === 'astrologer' || userType === 'user') {
+          registerDevice(userType).catch(() => { /* swallow */ });
+        }
 
         addToast({
           type: 'success',

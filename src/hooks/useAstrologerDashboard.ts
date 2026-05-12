@@ -7,6 +7,8 @@ import { astrologerDashboardService } from '@/lib/services/astrologer-dashboard.
 import type { EarningEntry } from '@/lib/services/astrologer-dashboard.service';
 import { liveSessionService } from '@/lib/services/live-session.service';
 import { useAuthStore } from '@/stores/auth-store';
+import { getOrCreateDeviceId, getDeviceToken } from '@/lib/device-id';
+import { API_CONFIG } from '@/lib/api/endpoints';
 import { useEffect, useRef, useCallback } from 'react';
 import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
 import type { WaitlistUpdatePayload, IncomingRequestPayload } from '@/lib/services/supabase-realtime.service';
@@ -23,6 +25,7 @@ export const ASTROLOGER_QUERY_KEYS = {
   stats: ['astrologer', 'stats'] as const,
   dashboard: ['astrologer', 'dashboard'] as const,
   availability: ['astrologer', 'availability'] as const,
+  deviceState: ['astrologer', 'device-state'] as const,
   incomingRequests: ['astrologer', 'incoming'] as const,
   waitlist: ['astrologer', 'waitlist'] as const,
   activeChat: ['astrologer', 'active', 'chat'] as const,
@@ -161,6 +164,32 @@ export function useAvailabilityStatus() {
 
 export const useAstrologerAvailability = useAvailabilityStatus;
 
+/**
+ * Multi-device foundation: returns THIS browser's device row state.
+ * Used to drive the local toggle UI — independent of the aggregate
+ * `is_available` (which is OR-of-all-devices and would falsely flip
+ * the toggle UI when ANOTHER device toggles on).
+ *
+ * Polls every 30s, similar to availability.
+ */
+export function useDeviceState() {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery({
+    queryKey: ASTROLOGER_QUERY_KEYS.deviceState,
+    queryFn: async () => {
+      const response = await astrologerDashboardService.getDeviceState();
+      return response.data;
+    },
+    enabled: isAstrologer,
+    refetchInterval: 30000,
+    // 404 = device not registered yet — silently. Caller can fall back to
+    // the aggregate.
+    retry: false,
+  });
+}
+
 export function useToggleAvailability() {
   const queryClient = useQueryClient();
   const updateAstrologer = useAuthStore((s) => s.updateAstrologer);
@@ -211,6 +240,10 @@ export function useToggleAvailability() {
     },
     onSettled: (_data, _error, isAvailable) => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.availability });
+      // Multi-device foundation: also refresh THIS device's row so the
+      // toggle UI reflects the new server state without waiting for the
+      // 30s background poll.
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.deviceState });
       // Refetch fresh data when going back online
       if (isAvailable) {
         queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.incomingRequests });
@@ -229,6 +262,7 @@ export const useUpdateAvailability = useToggleAvailability;
  * This prevents the toggle from turning off when astrologer switches tabs.
  */
 export function useHeartbeat(enabled = true) {
+  const astrologer = useAuthStore((s) => s.astrologer);
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
   const isVisibleRef = useRef(true);
 
@@ -276,6 +310,42 @@ export function useHeartbeat(enabled = true) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [enabled, startHeartbeat, stopHeartbeat]);
+
+  // beforeunload + pagehide: fire navigator.sendBeacon to /me/force-offline
+  // so this device's row flips offline immediately when the tab closes. Other
+  // live devices (mobile) keep the astrologer marked available — multi-device
+  // foundation handles the aggregate.
+  //
+  // sendBeacon cannot carry custom headers, so we authenticate via HMAC
+  // device_token in the URL query string. The backend's force-offline
+  // endpoint accepts both body and query.
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handler = () => {
+      const device_id = getOrCreateDeviceId();
+      const token = getDeviceToken();
+      const astrologer_id = astrologer?.id;
+      if (!device_id || !token || !astrologer_id) return;
+
+      try {
+        const url = new URL(`${API_CONFIG.BASE_URL}/api/v1/astrologers/me/force-offline`);
+        url.searchParams.set('device_id', device_id);
+        url.searchParams.set('token', token);
+        url.searchParams.set('astrologer_id', astrologer_id);
+        navigator.sendBeacon(url.toString());
+      } catch {
+        // sendBeacon may be unavailable in some embedded contexts; ignore.
+      }
+    };
+
+    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('pagehide', handler);
+    };
+  }, [enabled, astrologer?.id]);
 }
 
 export function useIncomingRequests() {

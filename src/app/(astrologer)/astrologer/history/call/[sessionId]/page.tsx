@@ -220,7 +220,7 @@ export default function AstrologerCallSessionPage() {
         // Confirm connection with backend — triggers billing when both parties confirm
         try {
           const confirmRes = await callService.confirmConnection(sessionId, room.sid);
-          if (confirmRes.data?.bothConnected) {
+          if (confirmRes.data?.bothConnected && process.env.NODE_ENV === 'development') {
             console.log('[AstrologerCall] Both parties connected — billing started');
           }
         } catch (err) {

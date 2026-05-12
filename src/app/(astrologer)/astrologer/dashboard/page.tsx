@@ -9,6 +9,7 @@ import {
   useAstrologerStats,
   useAstrologerDashboardData,
   useAstrologerAvailability,
+  useDeviceState,
   useToggleAvailability,
   useIncomingRequests,
   useAcceptChatRequest,
@@ -99,7 +100,13 @@ export default function AstrologerDashboardPage() {
   const [selectedTab, setSelectedTab] = useState<string>('all');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-  const isOnline = availability?.isAvailable ?? false;
+  // Multi-device foundation: drive the local toggle UI from THIS device's
+  // toggle_on (per-device intent), not the aggregate availability (which is
+  // OR-of-all-devices and would falsely flip the toggle UI when ANOTHER
+  // device toggles on). Falls back to aggregate if device-state hasn't
+  // landed yet (initial render or device-not-registered case).
+  const { data: deviceState } = useDeviceState();
+  const isOnline = deviceState?.toggle_on ?? availability?.isAvailable ?? false;
   const isAccepting = isAcceptingChat || isAcceptingCall;
 
   const requests = requestsData?.requests || [];

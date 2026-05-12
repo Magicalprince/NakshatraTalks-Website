@@ -15,6 +15,8 @@ import { ChatMessage } from '@/types/api.types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabaseRealtime, ChatMessagePayload } from '@/lib/services/supabase-realtime.service';
 import { socketService } from '@/lib/services/socket.service';
+import { getOrCreateDeviceId, getDeviceToken } from '@/lib/device-id';
+import { API_CONFIG } from '@/lib/api/endpoints';
 
 // Query keys (session & history still use React Query)
 export const CHAT_QUERY_KEYS = {
@@ -182,18 +184,17 @@ export function useChatMessaging(sessionId: string, userId?: string) {
     };
   }, [sessionId]);
 
-  // ── Fallback polling: fetch messages if broadcast is silent for 5s ──
-  // Matches mobile app's fallback pattern for unreliable connections
+  // ── Fallback polling: fetch messages every 5s unconditionally ──
+  // Previously suppressed when "broadcast was healthy" (msSinceBroadcast < 5s),
+  // but the website user's own echoed broadcast triggered the suppression even
+  // when the OTHER party's broadcast was failing. We now poll unconditionally;
+  // dedupe-by-id below makes it a no-op when realtime is also delivering.
   useEffect(() => {
     if (!sessionId) return;
 
     const FALLBACK_INTERVAL_MS = 5000;
 
     fallbackPollingRef.current = setInterval(async () => {
-      const msSinceBroadcast = Date.now() - lastBroadcastRef.current;
-      if (msSinceBroadcast < FALLBACK_INTERVAL_MS) return; // Broadcast is working fine
-
-      // No broadcast in 5s — poll for new messages
       try {
         const response = await chatService.getMessages({ sessionId, limit: 20 });
         const fetched = response.data?.messages || [];
@@ -371,4 +372,45 @@ export function useChatHistory() {
     },
     initialPageParam: 1,
   });
+}
+
+/**
+ * T1.2: Fire navigator.sendBeacon('/users/me/user-disconnect') on tab
+ * close so the backend immediately marks this device offline and (when
+ * a chat session is provided) backdates last_message_at to trigger the
+ * 60s grace-period end of the chat session. Mirrors the astrologer
+ * dashboard's beforeunload handler in useAstrologerDashboard.ts.
+ *
+ * sendBeacon cannot carry custom headers, so we authenticate via HMAC
+ * device_token in the URL query string. The backend's user-disconnect
+ * endpoint accepts both body and query.
+ */
+export function useChatSessionDisconnectBeacon(sessionId: string | undefined, userId: string | undefined) {
+  useEffect(() => {
+    if (!sessionId || !userId) return;
+
+    const handler = () => {
+      const device_id = getOrCreateDeviceId();
+      const device_token = getDeviceToken();
+      if (!device_id || !device_token) return;
+
+      try {
+        const url = new URL(`${API_CONFIG.BASE_URL}/api/v1/users/me/user-disconnect`);
+        url.searchParams.set('device_id', device_id);
+        url.searchParams.set('token', device_token);
+        url.searchParams.set('user_id', userId);
+        url.searchParams.set('session_id', sessionId);
+        navigator.sendBeacon(url.toString());
+      } catch {
+        // sendBeacon may be unavailable in some embedded contexts; ignore.
+      }
+    };
+
+    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('pagehide', handler);
+    };
+  }, [sessionId, userId]);
 }

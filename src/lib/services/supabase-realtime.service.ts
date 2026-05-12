@@ -27,6 +27,7 @@
  */
 
 import { getSupabaseClient } from '@/lib/supabase/client';
+import { getOrCreateDeviceId } from '@/lib/device-id';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // ─── Payload types (matching mobile app & backend) ───────────────────
@@ -473,7 +474,11 @@ class SupabaseRealtimeService {
     astrologerId: string,
     callback: EventCallback<IncomingRequestPayload>
   ): Unsubscribe {
-    const channelName = `astrologer-incoming-${astrologerId}`;
+    // Multi-device: backend now fans out one broadcast per toggle-on device
+    // (MD-5). Subscribe to THIS browser's specific channel only — without the
+    // device_id suffix the subscription would be silent.
+    const deviceId = getOrCreateDeviceId();
+    const channelName = `astrologer-incoming-${astrologerId}-${deviceId}`;
     return this.subscribeWithRetry(
       channelName,
       (client) => client

@@ -9,6 +9,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { FilterSidebar } from '@/components/layout/FilterSidebar';
 import { ConnectionRequestModal } from '@/components/features/queue';
 import { IntakeProfileSelector } from '@/components/features/queue/IntakeProfileSelector';
+import { QueueConfirmDialog } from '@/components/QueueConfirmDialog';
 import { useChatAstrologers, useFilterOptions, useSearchAstrologers, useRealtimeChatAvailability } from '@/hooks/useBrowseData';
 import { useConnectionRequest } from '@/hooks/useConnectionRequest';
 import { useAuthStore } from '@/stores/auth-store';
@@ -49,6 +50,10 @@ export default function BrowseChatPage() {
     showProfileSelector,
     handleProfileSelected,
     handleProfileSelectorClose,
+    queueConfirmData,
+    queueJoinLoading,
+    confirmQueueJoin,
+    cancelQueueJoin,
   } = useConnectionRequest();
 
   const [filters, setFilters] = useState<AstrologerFilters>({});
@@ -295,6 +300,19 @@ export default function BrowseChatPage() {
         onClose={handleProfileSelectorClose}
         onSelect={handleProfileSelected}
         astrologerName={connectionAstrologer?.name}
+      />
+
+      {/* Queue-confirm dialog — shown when ASTROLOGER_BUSY response is received */}
+      <QueueConfirmDialog
+        open={!!queueConfirmData}
+        type={queueConfirmData?.type ?? 'chat'}
+        astrologerName={queueConfirmData?.astrologer.name ?? ''}
+        currentQueueSize={queueConfirmData?.currentQueueSize ?? 0}
+        estimatedWaitMinutes={queueConfirmData?.estimatedWaitMinutes ?? 0}
+        canJoinQueue={queueConfirmData?.canJoinQueue ?? false}
+        loading={queueJoinLoading}
+        onConfirm={confirmQueueJoin}
+        onCancel={cancelQueueJoin}
       />
     </div>
   );

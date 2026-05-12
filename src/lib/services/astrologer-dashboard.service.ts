@@ -7,6 +7,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
+import { getOrCreateDeviceId } from '@/lib/device-id';
 import {
   ApiResponse,
   AvailabilityStatusResponse,
@@ -61,6 +62,17 @@ export interface EarningsHistoryResponse {
   pagination: Pagination;
 }
 
+/**
+ * MD-6: Append device_id query param so the backend can apply the per-device
+ * eligibility gate (is_online=true AND toggle_on=true). Without this, the
+ * backend falls through to the legacy unfiltered behaviour.
+ */
+const withDeviceParam = (url: string): string => {
+  const deviceId = getOrCreateDeviceId();
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}device_id=${encodeURIComponent(deviceId)}`;
+};
+
 class AstrologerDashboardService {
   // ─── Dashboard (today's data + recent sessions) ────────────────
   async getDashboard(): Promise<ApiResponse<AstrologerDashboardResponse>> {
@@ -106,21 +118,39 @@ class AstrologerDashboardService {
   }
 
   async toggleAvailability(isAvailable: boolean): Promise<ApiResponse<ToggleAvailabilityResponse>> {
-    return apiClient.patch(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { isAvailable });
+    const device_id = getOrCreateDeviceId();
+    return apiClient.patch(API_ENDPOINTS.ASTROLOGERS.ME.TOGGLE_AVAILABILITY, { isAvailable, device_id });
   }
 
   async sendHeartbeat(): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.HEARTBEAT);
+    const device_id = getOrCreateDeviceId();
+    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.HEARTBEAT, { device_id });
+  }
+
+  /**
+   * Returns THIS browser's device row state. Used by the dashboard to drive
+   * the local toggle UI from the per-device toggle_on value (multi-device
+   * foundation), not from the aggregate (which is OR-of-all-devices and
+   * would falsely flip the UI when ANOTHER device toggles on).
+   */
+  async getDeviceState(): Promise<ApiResponse<{
+    is_online: boolean;
+    toggle_on: boolean;
+    is_in_background: boolean;
+    last_heartbeat: string;
+  }>> {
+    const device_id = getOrCreateDeviceId();
+    return apiClient.get(`${API_ENDPOINTS.ASTROLOGERS.ME.DEVICE_STATE}?device_id=${encodeURIComponent(device_id)}`);
   }
 
   // ─── Incoming Requests ───────────────────────────────────────────
   async getIncomingRequests(): Promise<ApiResponse<IncomingRequestsResponse>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.INCOMING_ALL);
+    return apiClient.get(withDeviceParam(API_ENDPOINTS.ASTROLOGERS.ME.INCOMING_ALL));
   }
 
   // ─── Waitlist ────────────────────────────────────────────────────
   async getWaitlist(): Promise<ApiResponse<UnifiedWaitlistResponse>> {
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.ME.WAITLIST);
+    return apiClient.get(withDeviceParam(API_ENDPOINTS.ASTROLOGERS.ME.WAITLIST));
   }
 
   // ─── Chat Request Handling ───────────────────────────────────────

@@ -29,6 +29,8 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.backup
+.env*.bak
 
 # Vercel
 .vercel
@@ -45,6 +47,11 @@ next-env.d.ts
 
 # Claude
 .claude/
+
+# Playwright / test artifacts
+.playwright-mcp/
+test-results/
+playwright-report/
 
 # OS
 Thumbs.db
