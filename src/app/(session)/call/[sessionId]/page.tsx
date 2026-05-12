@@ -193,7 +193,7 @@ export default function CallSessionPage() {
         // Confirm connection with backend — triggers billing when both parties confirm
         try {
           const confirmRes = await callService.confirmConnection(sessionId, room.sid);
-          if (confirmRes.data?.bothConnected) {
+          if (confirmRes.data?.bothConnected && process.env.NODE_ENV === 'development') {
             console.log('[UserCall] Both parties connected — billing started');
           }
         } catch (err) {
