@@ -122,11 +122,11 @@ export default function RechargePage() {
 
   // Handle payment
   const handlePayment = async () => {
-    if (!finalAmount || finalAmount < 100) {
+    if (!finalAmount || finalAmount < 50) {
       addToast({
         type: 'error',
         title: 'Invalid Amount',
-        message: 'Please enter a valid amount (minimum \u20B9100)',
+        message: 'Please enter a valid amount (minimum \u20B950)',
       });
       return;
     }
@@ -150,12 +150,25 @@ export default function RechargePage() {
         throw new Error(response.message || 'Failed to initiate payment');
       }
 
-      const { orderId: razorpayOrderId, amount, currency } = response.data;
+      const {
+        orderId: razorpayOrderId,
+        keyId,
+        amountInPaise,
+        amount,
+        currency,
+        prefill,
+      } = response.data;
+
+      // The Razorpay key comes from the backend response (single source of
+      // truth) so the website needs no NEXT_PUBLIC_RAZORPAY_KEY_ID build var.
+      if (!keyId) {
+        throw new Error('Payment gateway is not configured. Please try again later.');
+      }
 
       // Open Razorpay checkout
       const razorpayOptions: RazorpayOptions = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
-        amount: amount * 100, // Razorpay expects amount in paise
+        key: keyId,
+        amount: amountInPaise ?? amount * 100, // backend sends paise; fall back just in case
         currency: currency || 'INR',
         name: 'NakshatraTalks',
         description: `Wallet Recharge - \u20B9${finalAmount}`,
@@ -182,7 +195,10 @@ export default function RechargePage() {
             setPaymentMessage('Payment verification failed. Please contact support.');
           }
         },
-        prefill: {},
+        prefill: {
+          contact: prefill?.contact,
+          email: prefill?.email,
+        },
         theme: {
           color: '#2930A6',
         },
@@ -371,7 +387,7 @@ export default function RechargePage() {
           <Button
             variant="primary"
             className="w-full h-14 text-lg gap-2 shadow-primary hover:shadow-[0_6px_20px_rgba(41,48,166,0.35)] transition-all duration-250"
-            disabled={!finalAmount || finalAmount < 100 || isInitiating || isVerifying}
+            disabled={!finalAmount || finalAmount < 50 || isInitiating || isVerifying}
             onClick={handlePayment}
             aria-label={finalAmount ? `Pay ${finalAmount} rupees` : 'Select an amount to proceed'}
           >

@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { walletService } from '@/lib/services/wallet.service';
-import { VerifyPaymentData, Transaction } from '@/types/api.types';
+import { VerifyPaymentData, Transaction, RechargeOption } from '@/types/api.types';
 import { useAuthStore } from '@/stores/auth-store';
 
 export const WALLET_QUERY_KEYS = {
@@ -46,7 +46,21 @@ export function useRechargeOptions() {
     queryKey: WALLET_QUERY_KEYS.rechargeOptions,
     queryFn: async () => {
       const response = await walletService.getRechargeOptions();
-      return response.data ?? [];
+      const raw = response.data as unknown;
+
+      // Backend returns { predefinedAmounts: number[], minAmount, maxAmount, currency }.
+      // Map it into the RechargeOption[] shape the grid expects.
+      if (raw && typeof raw === 'object' && 'predefinedAmounts' in raw) {
+        const amounts = (raw as { predefinedAmounts?: number[] }).predefinedAmounts ?? [];
+        return amounts.map((amount): RechargeOption => ({
+          id: String(amount),
+          amount,
+        }));
+      }
+
+      // Tolerate a future backend that already returns an array.
+      if (Array.isArray(raw)) return raw as RechargeOption[];
+      return [];
     },
     staleTime: 1000 * 60 * 60,
   });

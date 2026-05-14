@@ -139,7 +139,7 @@ interface CustomAmountInputProps {
 export function CustomAmountInput({
   value,
   onChange,
-  minAmount = 100,
+  minAmount = 50,
   maxAmount = 50000,
 }: CustomAmountInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
