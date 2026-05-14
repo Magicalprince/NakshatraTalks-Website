@@ -153,8 +153,18 @@ class ApiClient {
 
         // 401 Unauthorized → token refresh
         if (status === 401 && originalRequest && !originalRequest._retry) {
-          const isAuthEndpoint = originalRequest.url?.includes('/auth/');
-          if (isAuthEndpoint) {
+          // Only session-validation endpoints mean "your session expired".
+          // Login endpoints (send-otp / verify-otp / resend-otp) run before a
+          // session exists — a 401 there means "wrong/expired OTP", so let the
+          // backend's actual message fall through to the generic handler below.
+          const url = originalRequest.url || '';
+          const isLoginEndpoint =
+            url.includes('/auth/send-otp') ||
+            url.includes('/auth/verify-otp') ||
+            url.includes('/auth/resend-otp');
+          const isSessionEndpoint =
+            !isLoginEndpoint && url.includes('/auth/');
+          if (isSessionEndpoint) {
             this.clearAccessToken();
             authEvents.sessionInvalid('Auth endpoint returned 401');
             return Promise.reject(
