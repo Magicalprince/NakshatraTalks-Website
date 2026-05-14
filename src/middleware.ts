@@ -25,16 +25,19 @@ export function middleware(request: NextRequest) {
   );
 
   // Content Security Policy
+  // Razorpay checkout pulls scripts/iframes/requests from multiple subdomains
+  // (checkout., cdn., api., lumberjack.), so it needs https://*.razorpay.com
+  // allowed in script-src, frame-src and connect-src — not just checkout.
   response.headers.set(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.razorpay.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://api.nakshatratalks.com wss://api.nakshatratalks.com https: wss://*.twilio.com wss://*.chunderw-vpc-gll.twilio.com https://*.twilio.com wss://*.supabase.co",
-      "frame-src 'self' https://checkout.razorpay.com",
+      "connect-src 'self' https://api.nakshatratalks.com wss://api.nakshatratalks.com https: wss://*.twilio.com wss://*.chunderw-vpc-gll.twilio.com https://*.twilio.com wss://*.supabase.co https://*.razorpay.com",
+      "frame-src 'self' https://*.razorpay.com",
       "media-src 'self' blob: https://*.twilio.com",
     ].join('; ')
   );
