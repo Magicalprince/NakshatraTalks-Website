@@ -277,6 +277,11 @@ class AstrologerService {
 
   /**
    * Get astrologer availability / online status
+   *
+   * The `/api/v1/astrologers/:id/availability` endpoint is not present on the
+   * current backend (real-time availability comes through Supabase broadcast
+   * instead). Fall back to a safe default so the dashboard and detail pages
+   * don't error-loop on a 404 every 30s.
    */
   async getAstrologerAvailability(
     id: string,
@@ -284,7 +289,14 @@ class AstrologerService {
   ): Promise<ApiResponse<{ isOnline: boolean; isAvailableForChat: boolean; isAvailableForCall: boolean }>> {
     const params: Record<string, string> = {};
     if (date) params.date = date;
-    return apiClient.get(API_ENDPOINTS.ASTROLOGERS.AVAILABILITY(id), { params });
+    try {
+      return await apiClient.get(API_ENDPOINTS.ASTROLOGERS.AVAILABILITY(id), { params });
+    } catch {
+      return {
+        success: true,
+        data: { isOnline: false, isAvailableForChat: false, isAvailableForCall: false },
+      };
+    }
   }
 
   /**
