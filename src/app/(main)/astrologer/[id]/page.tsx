@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PriceLabel } from '@/components/common/PriceLabel';
 import {
   Star,
   MessageCircle,
@@ -91,9 +92,6 @@ export default function AstrologerDetailPage() {
   const specializations = astrologer?.specializations ?? astrologer?.specialization ?? [];
   const reviewCount = astrologer?.reviewCount ?? astrologer?.totalReviews ?? 0;
   const totalConsultations = astrologer?.totalConsultations ?? astrologer?.totalCalls ?? 0;
-  const chatPrice = astrologer?.chatPrice ?? astrologer?.chatPricePerMinute ?? astrologer?.pricePerMinute ?? 0;
-  const callPrice = astrologer?.callPrice ?? astrologer?.callPricePerMinute ?? astrologer?.pricePerMinute ?? 0;
-
   // Queue info & join hooks (enabled when astrologer is not online)
   const { queueInfo: callQueueInfo } = useQueueInfo(id, 'call', { enabled: !isOnline });
   const { queueInfo: chatQueueInfo } = useQueueInfo(id, 'chat', { enabled: !isOnline });
@@ -427,7 +425,12 @@ export default function AstrologerDetailPage() {
                         </div>
                         <div className="flex items-center gap-0.5">
                           <IndianRupee className="w-3.5 h-3.5 text-status-success" />
-                          <span className="text-lg font-bold text-text-primary font-lexend">{chatPrice}</span>
+                          <PriceLabel
+                            astrologer={astrologer ?? {}}
+                            type="chat"
+                            suffix=""
+                            className="text-lg font-bold text-text-primary font-lexend"
+                          />
                           <span className="text-sm text-text-muted font-lexend">/min</span>
                         </div>
                       </div>
@@ -489,7 +492,12 @@ export default function AstrologerDetailPage() {
                         </div>
                         <div className="flex items-center gap-0.5">
                           <IndianRupee className="w-3.5 h-3.5 text-status-success" />
-                          <span className="text-lg font-bold text-text-primary font-lexend">{callPrice}</span>
+                          <PriceLabel
+                            astrologer={astrologer ?? {}}
+                            type="call"
+                            suffix=""
+                            className="text-lg font-bold text-text-primary font-lexend"
+                          />
                           <span className="text-sm text-text-muted font-lexend">/min</span>
                         </div>
                       </div>

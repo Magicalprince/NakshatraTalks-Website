@@ -5,6 +5,7 @@ import { IndianRupee, Star, MessageCircle, Phone } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { cn } from '@/utils/cn';
+import { PriceLabel } from '@/components/common/PriceLabel';
 
 interface AstrologerCardProps {
   astrologer: Astrologer;
@@ -17,9 +18,7 @@ export function AstrologerCard({ astrologer, variant = 'chat', onAction, isLoadi
   const isOnline = astrologer.isOnline ?? astrologer.isAvailable;
   const profileImage = astrologer.profileImage ?? astrologer.image;
   const specializations = astrologer.specializations ?? astrologer.specialization ?? [];
-  const chatPrice = astrologer.chatPrice ?? astrologer.chatPricePerMinute ?? astrologer.pricePerMinute;
-  const callPrice = astrologer.callPrice ?? astrologer.callPricePerMinute ?? astrologer.pricePerMinute;
-  const price = variant === 'call' ? callPrice : chatPrice;
+  const priceType: 'chat' | 'call' = variant === 'call' ? 'call' : 'chat';
   const languages = astrologer.languages ?? [];
   const rating = astrologer.rating ?? 0;
   const totalCalls = astrologer.totalCalls ?? 0;
@@ -109,7 +108,12 @@ export function AstrologerCard({ astrologer, variant = 'chat', onAction, isLoadi
           <div className="flex items-center justify-between mt-auto pt-3">
             <div className="flex items-center bg-status-success/5 px-2 py-0.5 rounded-md">
               <IndianRupee className="w-3 h-3 text-status-success" />
-              <span className="text-sm font-bold text-status-success font-lexend">{price}</span>
+              <PriceLabel
+                astrologer={astrologer}
+                type={priceType}
+                suffix=""
+                className="text-sm font-bold text-status-success font-lexend"
+              />
               <span className="text-xs text-text-muted font-lexend">/min</span>
             </div>
 
