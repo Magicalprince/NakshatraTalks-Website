@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Star, IndianRupee, ChevronRight } from 'lucide-react';
 import { useHomeData } from '@/hooks/useHomeData';
 import { Button } from '@/components/ui';
+import { PriceLabel } from '@/components/common/PriceLabel';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -165,7 +166,7 @@ export function TopRatedAstrologers() {
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center gap-0.5 text-sm text-text-secondary font-lexend">
                         <IndianRupee className="w-3 h-3" />
-                        <span>{astrologer.pricePerMinute}/min</span>
+                        <PriceLabel astrologer={astrologer} type="chat" />
                       </div>
                       <Button
                         variant="primary"

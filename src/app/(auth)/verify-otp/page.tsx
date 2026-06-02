@@ -54,8 +54,14 @@ function VerifyOTPContent() {
     setError('');
   };
 
-  const handleVerify = async () => {
-    if (!otp || otp.length < 6) {
+  const handleVerify = async (valueArg?: unknown) => {
+    // OTPInput's onComplete passes the fresh 6-digit string; the Button's
+    // onClick passes a React event. Only trust a string argument — otherwise
+    // fall back to state. Reading `otp` from the closure alone is stale when
+    // fired via onComplete, because setOtp() hasn't applied yet in that tick.
+    const code = typeof valueArg === 'string' ? valueArg : otp;
+
+    if (!code || code.length < 6) {
       setError('Please enter the 6-digit OTP sent to your phone');
       return;
     }
@@ -64,7 +70,7 @@ function VerifyOTPContent() {
     setError('');
 
     try {
-      const response = await authService.verifyOtp({ phone, otp });
+      const response = await authService.verifyOtp({ phone, otp: code });
 
       if (response.success && response.data) {
         const { user, astrologer, access_token, userType } = response.data;

@@ -5,6 +5,9 @@ import { MotionConfig } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { SalaryModeProvider } from '@/contexts/SalaryModeContext';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.nakshatratalks.com';
 
 const ReactQueryDevtools = dynamic(
   () =>
@@ -68,7 +71,9 @@ export function Providers({ children }: ProvidersProps) {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         <AuthProvider>
-          {children}
+          <SalaryModeProvider apiBaseUrl={API_BASE_URL}>
+            {children}
+          </SalaryModeProvider>
         </AuthProvider>
       </MotionConfig>
       {showDevtools && <ReactQueryDevtools initialIsOpen={false} />}
