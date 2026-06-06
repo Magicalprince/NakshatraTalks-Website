@@ -239,12 +239,20 @@ class AstrologerService {
   }
 
   /**
-   * Search astrologers by query
+   * Search astrologers by query.
+   *
+   * Accepts an AbortSignal so React Query can cancel in-flight searches when
+   * the debounced query changes mid-flight (avoids races where a stale
+   * response overwrites a fresh one).
    */
-  async searchAstrologers(query: string, limit = 20): Promise<ApiResponse<Astrologer[]>> {
+  async searchAstrologers(
+    query: string,
+    limit = 20,
+    signal?: AbortSignal,
+  ): Promise<ApiResponse<Astrologer[]>> {
     return apiClient.get<ApiResponse<Astrologer[]>>(
       API_ENDPOINTS.ASTROLOGERS.SEARCH,
-      { params: { q: query, limit } }
+      { params: { q: query, limit }, signal }
     );
   }
 

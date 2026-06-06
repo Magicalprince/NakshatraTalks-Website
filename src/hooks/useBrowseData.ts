@@ -7,7 +7,7 @@
  * - Type-aware cache updates (chat vs call availability)
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { astrologerService, GetAstrologersParams } from '@/lib/services/astrologer.service';
 import { AstrologerFilters, Astrologer } from '@/types/api.types';
@@ -120,16 +120,30 @@ export function useFilterOptions() {
 }
 
 /**
- * Hook for searching astrologers
+ * Hook for searching astrologers.
+ *
+ * Debounces the input by 500ms (matches mobile useBrowseChatData.ts) so a
+ * fast typer only triggers one API call after they pause, rather than one
+ * per keystroke. Passes React Query's AbortSignal through to the service so
+ * in-flight requests for stale queries are cancelled.
  */
+const SEARCH_DEBOUNCE_MS = 500;
+
 export function useSearchAstrologers(query: string, enabled: boolean = true) {
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   return useQuery({
-    queryKey: BROWSE_QUERY_KEYS.search(query),
-    queryFn: async () => {
-      const response = await astrologerService.searchAstrologers(query);
+    queryKey: BROWSE_QUERY_KEYS.search(debouncedQuery),
+    queryFn: async ({ signal }) => {
+      const response = await astrologerService.searchAstrologers(debouncedQuery, 20, signal);
       return response.data;
     },
-    enabled: enabled && query.length >= 2,
+    enabled: enabled && debouncedQuery.length >= 2,
   });
 }
 

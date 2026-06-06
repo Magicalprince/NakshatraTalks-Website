@@ -26,13 +26,16 @@ export default function ChatSessionPage() {
   const sessionId = params.sessionId as string;
   const { addToast } = useUIStore();
   const user = useAuthStore((s) => s.user);
+  const updateWalletBalance = useAuthStore((s) => s.updateWalletBalance);
   const [showEndModal, setShowEndModal] = useState(false);
   // Local ended state — set immediately when endSession API succeeds,
   // so UI updates instantly without waiting for refetch (which may fall back to status: 'active')
   const [isLocallyEnded, setIsLocallyEnded] = useState(false);
 
-  // Wallet balance for billing display
-  const [walletBalance, setWalletBalance] = useState<number>(0);
+  // Wallet balance comes from the auth store — AuthProvider owns the
+  // Supabase wallet-broadcast subscription app-wide. Re-subscribing here
+  // would clobber it (only one subscriber per channel name).
+  const walletBalance = user?.walletBalance ?? 0;
 
   // Auth check
   const { isReady } = useRequireAuth();
@@ -127,7 +130,7 @@ export default function ChatSessionPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = (response as any)?.data;
         if (data?.remainingBalance != null) {
-          setWalletBalance(data.remainingBalance);
+          updateWalletBalance(data.remainingBalance);
         }
 
         addToast({
@@ -170,7 +173,9 @@ export default function ChatSessionPage() {
     })();
   }, [sessionId]);
 
-  // Fetch wallet balance on mount (matching mobile app's balance monitoring)
+  // Fetch wallet balance on mount and seed the auth store. AuthProvider
+  // subscribes to wallet-balance broadcasts app-wide, so we don't subscribe
+  // here — we just need a fresh value on session entry.
   useEffect(() => {
     (async () => {
       try {
@@ -178,30 +183,12 @@ export default function ChatSessionPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data = response?.data ?? response as any;
         const bal = data?.balance ?? data?.walletBalance ?? 0;
-        setWalletBalance(bal);
+        updateWalletBalance(bal);
       } catch {
-        // Non-critical — balance display will show 0
+        // Non-critical — balance display falls back to the cached value
       }
     })();
-  }, []);
-
-  // Subscribe to wallet balance updates via Supabase Broadcast (matching mobile app)
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const unsubWallet = supabaseRealtime.subscribeToWalletUpdates(
-      user.id,
-      (payload) => {
-        if (payload.balance != null) {
-          setWalletBalance(payload.balance);
-        }
-      }
-    );
-
-    return () => {
-      unsubWallet();
-    };
-  }, [user?.id]);
+  }, [updateWalletBalance]);
 
   // Subscribe to billing events (low balance, session ended by system)
   useEffect(() => {
@@ -217,14 +204,14 @@ export default function ChatSessionPage() {
             message: payload.message || `Low balance! About ${payload.remainingMinutes ?? 0} minutes remaining.`,
           });
           if (payload.remainingBalance != null) {
-            setWalletBalance(payload.remainingBalance);
+            updateWalletBalance(payload.remainingBalance);
           }
         },
         onCallEnded: (payload) => {
           // 'call_ended' event is also used for chat sessions ending due to balance
           setIsLocallyEnded(true);
           if (payload.remainingBalance != null) {
-            setWalletBalance(payload.remainingBalance);
+            updateWalletBalance(payload.remainingBalance);
           }
           addToast({
             type: 'info',
@@ -236,7 +223,7 @@ export default function ChatSessionPage() {
         onCallEndedBalance: (payload) => {
           setIsLocallyEnded(true);
           if (payload.remainingBalance != null) {
-            setWalletBalance(payload.remainingBalance);
+            updateWalletBalance(payload.remainingBalance);
           }
           addToast({
             type: 'info',

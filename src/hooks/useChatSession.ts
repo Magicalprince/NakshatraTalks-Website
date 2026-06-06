@@ -17,6 +17,7 @@ import { supabaseRealtime, ChatMessagePayload } from '@/lib/services/supabase-re
 import { socketService } from '@/lib/services/socket.service';
 import { getOrCreateDeviceId, getDeviceToken } from '@/lib/device-id';
 import { API_CONFIG } from '@/lib/api/endpoints';
+import { getErrorMessage } from '@/lib/api/error';
 
 // Query keys (session & history still use React Query)
 export const CHAT_QUERY_KEYS = {
@@ -76,7 +77,7 @@ export function useChatMessaging(sessionId: string, userId?: string) {
       setMessages(fetched.reverse());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load messages');
+      setError(getErrorMessage(err, 'Failed to load messages'));
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +97,7 @@ export function useChatMessaging(sessionId: string, userId?: string) {
         await chatService.sendMessage({ sessionId, content: content.trim(), type });
         // Message will arrive via Supabase broadcast — don't add locally
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to send message');
+        setError(getErrorMessage(err, 'Failed to send message'));
         throw err; // Re-throw so caller can show toast
       } finally {
         setSending(false);

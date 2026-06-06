@@ -22,6 +22,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { chatService } from '@/lib/services/chat.service';
 import { callService } from '@/lib/services/call.service';
 import { ApiError } from '@/lib/api/client';
+import { getErrorMessage } from '@/lib/api/error';
 import { supabaseRealtime, RequestStatusPayload, SessionReadyPayload } from '@/lib/services/supabase-realtime.service';
 import { Astrologer, SessionType } from '@/types/api.types';
 
@@ -437,7 +438,7 @@ export function useConnectionRequest() {
         });
       } else {
         setRequestStatus('rejected');
-        const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Connection failed';
+        const message = getErrorMessage(err, 'Connection failed');
         addToast({ type: 'error', title: 'Error', message });
       }
     }
@@ -517,7 +518,7 @@ export function useConnectionRequest() {
         });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to join queue';
+      const message = getErrorMessage(err, 'Failed to join queue');
       addToast({ type: 'error', title: 'Error', message });
     }
   }, [addToQueue, selectedAstrologer, setRequestStatus, startQueueListening, cancelPendingRequests, addToast]);

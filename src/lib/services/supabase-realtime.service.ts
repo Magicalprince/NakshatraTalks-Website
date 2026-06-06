@@ -216,6 +216,21 @@ class SupabaseRealtimeService {
     setup: (client: ReturnType<typeof getSupabaseClient> & object) => RealtimeChannel,
     retryFn: () => Unsubscribe
   ): Unsubscribe {
+    // Duplicate-subscriber detection. A Supabase RealtimeChannel can't have
+    // event handlers added after .subscribe(), so two subscribers to the same
+    // logical channel name with different callbacks would clobber each other.
+    // The existing channel is torn down before the new one is created (so the
+    // newer caller wins), but the previous caller's callback silently dies —
+    // see the wallet-updates bug where chat-page subscription killed
+    // AuthProvider's app-wide wallet listener.
+    if (process.env.NODE_ENV !== 'production' && this.channels.has(channelName)) {
+      console.warn(
+        `[Realtime] Duplicate subscribe to "${channelName}". The previous ` +
+        `subscriber's callback will be lost. If two components need this ` +
+        `broadcast, route one of them through a shared store instead of ` +
+        `subscribing twice.`,
+      );
+    }
     this.removeChannel(channelName);
 
     const client = getSupabaseClient();
