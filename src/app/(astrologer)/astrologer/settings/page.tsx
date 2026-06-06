@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -23,10 +23,17 @@ import {
 import { motion } from 'framer-motion';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { useEarningsSummary, useUpdatePayoutDetails } from '@/hooks/useAstrologerDashboard';
+import { useSalaryMode } from '@/contexts/SalaryModeContext';
+
+const UPI_REGEX = /^[a-zA-Z0-9._-]+@[a-zA-Z][a-zA-Z0-9]+$/;
 
 export default function AstrologerSettingsPage() {
   const { logout } = useAuthStore();
   const { addToast } = useUIStore();
+  const salaryMode = useSalaryMode();
+  const { data: summary } = useEarningsSummary();
+  const updatePayoutDetails = useUpdatePayoutDetails();
   const [notifications, setNotifications] = useState({
     newRequests: true,
     sessionReminders: true,
@@ -39,7 +46,24 @@ export default function AstrologerSettingsPage() {
     accountNumber: '',
     ifscCode: '',
     bankName: '',
+    upiId: '',
   });
+
+  // Prefill from the earnings summary whenever the modal opens. The summary
+  // is also the source of truth the WithdrawModal reads from, so the two
+  // surfaces never disagree on what's saved.
+  useEffect(() => {
+    if (showBankModal && summary) {
+      setBankDetails({
+        accountName: summary.accountHolderName ?? '',
+        accountNumber: summary.accountNumber ?? '',
+        ifscCode: summary.ifscCode ?? '',
+        bankName: summary.bankName ?? '',
+        upiId: summary.upiId ?? '',
+      });
+      setBankErrors({});
+    }
+  }, [showBankModal, summary]);
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -47,21 +71,66 @@ export default function AstrologerSettingsPage() {
 
   const [bankErrors, setBankErrors] = useState<Record<string, string>>({});
 
+  /**
+   * Either bank OR UPI is sufficient — the WithdrawModal lets the astrologer
+   * pick at withdraw time. We only validate fields the astrologer actually
+   * filled in, matching the mobile BankDetails screen's "save anything,
+   * require at least one method" behaviour.
+   */
   const validateBankDetails = () => {
     const errors: Record<string, string> = {};
-    if (!bankDetails.accountName.trim()) errors.accountName = 'Account holder name is required';
-    if (!bankDetails.accountNumber.trim() || !/^\d{9,18}$/.test(bankDetails.accountNumber.trim())) errors.accountNumber = 'Enter a valid account number (9-18 digits)';
-    if (!bankDetails.ifscCode.trim() || !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankDetails.ifscCode.trim())) errors.ifscCode = 'Enter a valid IFSC code (e.g. SBIN0001234)';
-    if (!bankDetails.bankName.trim()) errors.bankName = 'Bank name is required';
+    const hasAnyBankField =
+      bankDetails.accountName.trim() ||
+      bankDetails.accountNumber.trim() ||
+      bankDetails.ifscCode.trim() ||
+      bankDetails.bankName.trim();
+    const hasUpi = bankDetails.upiId.trim();
+
+    if (!hasAnyBankField && !hasUpi) {
+      errors.upiId = 'Add a UPI ID or fill in bank details';
+      return errors;
+    }
+
+    if (hasAnyBankField) {
+      if (!bankDetails.accountName.trim()) errors.accountName = 'Account holder name is required';
+      if (!bankDetails.accountNumber.trim() || !/^\d{9,18}$/.test(bankDetails.accountNumber.trim()))
+        errors.accountNumber = 'Enter a valid account number (9-18 digits)';
+      if (!bankDetails.ifscCode.trim() || !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankDetails.ifscCode.trim()))
+        errors.ifscCode = 'Enter a valid IFSC code (e.g. SBIN0001234)';
+      if (!bankDetails.bankName.trim()) errors.bankName = 'Bank name is required';
+    }
+    if (hasUpi && !UPI_REGEX.test(bankDetails.upiId.trim())) {
+      errors.upiId = 'Enter a valid UPI ID (e.g. name@bank)';
+    }
     return errors;
   };
 
-  const handleSaveBankDetails = () => {
+  const handleSaveBankDetails = async () => {
     const errors = validateBankDetails();
     setBankErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    // Would call API to save bank details
-    setShowBankModal(false);
+
+    try {
+      await updatePayoutDetails.mutateAsync({
+        bankName: bankDetails.bankName.trim() || undefined,
+        accountHolderName: bankDetails.accountName.trim() || undefined,
+        accountNumber: bankDetails.accountNumber.trim() || undefined,
+        ifscCode: bankDetails.ifscCode.trim().toUpperCase() || undefined,
+        upiId: bankDetails.upiId.trim() || undefined,
+      });
+      addToast({
+        type: 'success',
+        title: 'Payout details saved',
+        message: 'You can now request a withdrawal from the Earnings page.',
+      });
+      setShowBankModal(false);
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: 'Save failed',
+        message: err instanceof Error ? err.message : 'Could not save payout details.',
+      });
+    }
   };
 
   const notificationItems = [
@@ -105,23 +174,26 @@ export default function AstrologerSettingsPage() {
             </Card>
           </motion.div>
 
-          {/* Payment */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <SectionHeader icon={CreditCard} title="Payment" />
-            <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
-              <SettingRow
-                icon={CreditCard}
-                label="Bank Account"
-                description="Add or update bank details for payouts"
-                onClick={() => setShowBankModal(true)}
-                isLast={true}
-              />
-            </Card>
-          </motion.div>
+          {/* Payment (hidden for salary-mode astrologers — they're paid a
+              fixed salary by the platform, not by per-session payouts) */}
+          {!salaryMode.enabled && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <SectionHeader icon={CreditCard} title="Payment" />
+              <Card className="p-0 overflow-hidden shadow-web-sm" padding="none">
+                <SettingRow
+                  icon={CreditCard}
+                  label="Payout details"
+                  description="Bank account, UPI ID, and how you get paid"
+                  onClick={() => setShowBankModal(true)}
+                  isLast={true}
+                />
+              </Card>
+            </motion.div>
+          )}
 
           {/* Security */}
           <motion.div
@@ -204,47 +276,94 @@ export default function AstrologerSettingsPage() {
           </motion.div>
         </div>
 
-        {/* Bank Details Modal */}
+        {/* Bank / UPI Details Modal */}
         <Modal
           isOpen={showBankModal}
-          onClose={() => setShowBankModal(false)}
-          title="Bank Account Details"
+          onClose={() => {
+            if (!updatePayoutDetails.isPending) setShowBankModal(false);
+          }}
+          title="Payout Details"
+          description="Add a bank account, a UPI ID, or both. You'll pick which to use at withdraw time."
+          size="md"
         >
           <div className="space-y-4">
             <Input
               label="Account Holder Name"
               value={bankDetails.accountName}
-              onChange={(e) => { setBankDetails({ ...bankDetails, accountName: e.target.value }); setBankErrors((prev) => ({ ...prev, accountName: '' })); }}
+              onChange={(e) => {
+                setBankDetails({ ...bankDetails, accountName: e.target.value });
+                setBankErrors((prev) => ({ ...prev, accountName: '' }));
+              }}
               placeholder="Enter account holder name"
               error={bankErrors.accountName}
             />
             <Input
               label="Account Number"
+              type="password"
               value={bankDetails.accountNumber}
-              onChange={(e) => { setBankDetails({ ...bankDetails, accountNumber: e.target.value.replace(/\D/g, '') }); setBankErrors((prev) => ({ ...prev, accountNumber: '' })); }}
+              onChange={(e) => {
+                setBankDetails({ ...bankDetails, accountNumber: e.target.value.replace(/\D/g, '') });
+                setBankErrors((prev) => ({ ...prev, accountNumber: '' }));
+              }}
               placeholder="Enter account number"
               error={bankErrors.accountNumber}
             />
             <Input
               label="IFSC Code"
               value={bankDetails.ifscCode}
-              onChange={(e) => { setBankDetails({ ...bankDetails, ifscCode: e.target.value.toUpperCase() }); setBankErrors((prev) => ({ ...prev, ifscCode: '' })); }}
+              onChange={(e) => {
+                setBankDetails({ ...bankDetails, ifscCode: e.target.value.toUpperCase() });
+                setBankErrors((prev) => ({ ...prev, ifscCode: '' }));
+              }}
               placeholder="e.g. SBIN0001234"
               error={bankErrors.ifscCode}
             />
             <Input
               label="Bank Name"
               value={bankDetails.bankName}
-              onChange={(e) => { setBankDetails({ ...bankDetails, bankName: e.target.value }); setBankErrors((prev) => ({ ...prev, bankName: '' })); }}
+              onChange={(e) => {
+                setBankDetails({ ...bankDetails, bankName: e.target.value });
+                setBankErrors((prev) => ({ ...prev, bankName: '' }));
+              }}
               placeholder="Enter bank name"
               error={bankErrors.bankName}
             />
 
+            <div className="my-2 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs text-text-muted">or</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+
+            <Input
+              label="UPI ID"
+              value={bankDetails.upiId}
+              onChange={(e) => {
+                setBankDetails({ ...bankDetails, upiId: e.target.value });
+                setBankErrors((prev) => ({ ...prev, upiId: '' }));
+              }}
+              placeholder="name@bank"
+              error={bankErrors.upiId}
+            />
+
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowBankModal(false); setBankErrors({}); }}>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowBankModal(false);
+                  setBankErrors({});
+                }}
+                disabled={updatePayoutDetails.isPending}
+              >
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleSaveBankDetails}>
+              <Button
+                className="flex-1"
+                onClick={handleSaveBankDetails}
+                isLoading={updatePayoutDetails.isPending}
+                disabled={updatePayoutDetails.isPending}
+              >
                 Save Details
               </Button>
             </div>

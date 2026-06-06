@@ -36,6 +36,8 @@ export const ASTROLOGER_QUERY_KEYS = {
   liveActiveSession: ['astrologer', 'live', 'active'] as const,
   earningsSummary: ['astrologer', 'earnings', 'summary'] as const,
   earningsHistory: (sessionType?: string) => ['astrologer', 'earnings', 'history', sessionType ?? 'all'] as const,
+  withdrawalHistory: ['astrologer', 'withdrawals'] as const,
+  withdrawalDetail: (id: string) => ['astrologer', 'withdrawals', id] as const,
 };
 
 export function useAstrologerStats() {
@@ -752,6 +754,78 @@ export function useCancelLiveSession() {
       liveSessionService.deleteSession(sessionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.liveScheduledSessions });
+    },
+  });
+}
+
+// ─── Withdrawals (payouts) ──────────────────────────────────────────
+
+/**
+ * Paginated withdrawal history. Refetches every 60s so an admin-side
+ * approval or status flip surfaces without a full page reload.
+ */
+export function useWithdrawalHistory(page = 1, limit = 20) {
+  const { user } = useAuthStore();
+  const isAstrologer = user?.role === 'astrologer';
+
+  return useQuery({
+    queryKey: [...ASTROLOGER_QUERY_KEYS.withdrawalHistory, page, limit],
+    queryFn: async () => {
+      const { earningsService } = await import('@/lib/services/earnings.service');
+      return earningsService.getWithdrawalHistory(page, limit);
+    },
+    enabled: isAstrologer,
+    refetchInterval: 60000,
+  });
+}
+
+export function useWithdrawalDetail(id: string | undefined) {
+  return useQuery({
+    queryKey: id ? ASTROLOGER_QUERY_KEYS.withdrawalDetail(id) : ['astrologer', 'withdrawals', 'none'],
+    queryFn: async () => {
+      if (!id) throw new Error('Missing withdrawal id');
+      const { earningsService } = await import('@/lib/services/earnings.service');
+      return earningsService.getWithdrawalById(id);
+    },
+    enabled: !!id,
+    refetchInterval: 60000,
+  });
+}
+
+/**
+ * Submit a withdrawal request. On success, invalidates the summary (so
+ * availableBalance reflects the new in-flight amount) AND the withdrawal
+ * history (so the new row appears at the top of the list).
+ */
+export function useRequestWithdrawal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (req: { amount: number; bankAccountId?: string; upiId?: string; notes?: string }) => {
+      const { earningsService } = await import('@/lib/services/earnings.service');
+      return earningsService.requestWithdrawal(req);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.earningsSummary });
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.withdrawalHistory });
+    },
+  });
+}
+
+export function useUpdatePayoutDetails() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      bankName?: string;
+      accountHolderName?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      upiId?: string;
+    }) => {
+      const { earningsService } = await import('@/lib/services/earnings.service');
+      return earningsService.updatePayoutDetails(payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASTROLOGER_QUERY_KEYS.earningsSummary });
     },
   });
 }

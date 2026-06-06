@@ -23,11 +23,19 @@ import {
 } from '@/types/api.types';
 
 // ─── Earnings Types ─────────────────────────────────────────────
+// totalWithdrawn / availableBalance / inFlightWithdrawals come from the
+// recompute-aware backend response — without them the earnings header would
+// show fully-earned and the WithdrawModal would have no honest cap. The
+// bank/UPI fields are returned alongside the totals so the WithdrawModal
+// can render its method picker without an extra round-trip.
 export interface EarningsSummaryResponse {
   totalEarnings: number;
   thisMonthEarnings: number;
   todayEarnings: number;
   pendingEarnings: number;
+  totalWithdrawn?: number;
+  availableBalance?: number;
+  inFlightWithdrawals?: number;
   currency: string;
   commissionRate: number;
   stats: {
@@ -37,6 +45,11 @@ export interface EarningsSummaryResponse {
     activeSessions: number;
   };
   last7Days: Array<{ date: string; earnings: number; sessions: number }>;
+  bankName?: string | null;
+  accountHolderName?: string | null;
+  accountNumber?: string | null;
+  ifscCode?: string | null;
+  upiId?: string | null;
 }
 
 export interface EarningEntry {
