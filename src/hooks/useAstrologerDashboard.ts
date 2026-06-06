@@ -291,11 +291,19 @@ export function useHeartbeat(enabled = true) {
     if (!enabled) return;
 
     startHeartbeat(10000);
+    // Sync initial foreground state so backend doesn't inherit a stale
+    // is_in_background=true from a previous session on this device.
+    astrologerDashboardService.updateAppState(false).catch(() => { /* swallow */ });
 
     // Slow heartbeat when tab hidden (25s stays under backend's 30s timeout),
-    // resume fast (10s) when tab visible again
+    // resume fast (10s) when tab visible again. Also tell the backend so the
+    // 10-minute background TTL can fire — without this, a backgrounded tab
+    // would keep the astrologer "online" until they actually close it.
     const handleVisibilityChange = () => {
       isVisibleRef.current = document.visibilityState === 'visible';
+      astrologerDashboardService
+        .updateAppState(!isVisibleRef.current)
+        .catch(() => { /* swallow — heartbeat cadence still updates separately */ });
       if (isVisibleRef.current) {
         startHeartbeat(10000); // Fast heartbeat when visible
       } else {
