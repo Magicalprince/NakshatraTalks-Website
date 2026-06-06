@@ -128,6 +128,20 @@ class AstrologerDashboardService {
   }
 
   /**
+   * Tell the backend whether this device's tab is currently in the background.
+   * The backend uses this to apply the 10-minute background TTL: a tab that
+   * stays hidden for 10 minutes without coming back will be marked offline
+   * automatically (matches mobile's MainActivity foreground tracking).
+   *
+   * Without this signal, a web astrologer who tabs away from the dashboard
+   * stays "online" forever until they actually close the tab.
+   */
+  async updateAppState(isInBackground: boolean): Promise<ApiResponse<{ success: boolean }>> {
+    const device_id = getOrCreateDeviceId();
+    return apiClient.post(API_ENDPOINTS.ASTROLOGERS.ME.APP_STATE, { isInBackground, device_id });
+  }
+
+  /**
    * Returns THIS browser's device row state. Used by the dashboard to drive
    * the local toggle UI from the per-device toggle_on value (multi-device
    * foundation), not from the aggregate (which is OR-of-all-devices and
