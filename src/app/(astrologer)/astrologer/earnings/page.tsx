@@ -22,11 +22,15 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  ArrowUpFromLine,
 } from 'lucide-react';
+import Link from 'next/link';
 import { formatCurrency } from '@/utils/format-currency';
 import { motion } from 'framer-motion';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { WithdrawModal } from '@/components/features/astrologer/earnings/WithdrawModal';
+import { useSalaryMode } from '@/contexts/SalaryModeContext';
 
 type SessionFilter = 'all' | 'chat' | 'call';
 
@@ -65,9 +69,11 @@ const INITIAL_LIMIT = 20;
 const EXPANDED_LIMIT = 100; // Backend max is 100
 
 export default function AstrologerEarningsPage() {
+  const salaryMode = useSalaryMode();
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
   const [viewAll, setViewAll] = useState(false);
   const [page, setPage] = useState(1);
+  const [showWithdraw, setShowWithdraw] = useState(false);
 
   const limit = viewAll ? EXPANDED_LIMIT : INITIAL_LIMIT;
 
@@ -106,8 +112,36 @@ export default function AstrologerEarningsPage() {
           { label: 'Earnings' },
         ]} />
 
-        <h1 className="text-2xl font-bold text-text-primary font-lexend mb-1">Earnings</h1>
-        <p className="text-text-secondary text-sm mb-6">Track your income and session history</p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-lexend mb-1 text-2xl font-bold text-text-primary">Earnings</h1>
+            <p className="text-sm text-text-secondary">Track your income and session history</p>
+          </div>
+          {!salaryMode.enabled && (
+            <div className="flex gap-2">
+              <Link href="/astrologer/payouts">
+                <Button variant="ghost" size="md">
+                  Payout history
+                </Button>
+              </Link>
+              <Button
+                onClick={() => setShowWithdraw(true)}
+                disabled={
+                  summaryLoading ||
+                  (summary?.availableBalance ?? 0) < 100 ||
+                  !(
+                    (summary?.accountNumber && summary?.ifscCode) ||
+                    summary?.upiId
+                  )
+                }
+                size="md"
+              >
+                <ArrowUpFromLine className="mr-2 h-4 w-4" />
+                Withdraw
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* 2-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -368,6 +402,24 @@ export default function AstrologerEarningsPage() {
           </div>
         </div>
       </PageContainer>
+
+      {!salaryMode.enabled && (
+        <WithdrawModal
+          isOpen={showWithdraw}
+          onClose={() => setShowWithdraw(false)}
+          availableBalance={summary?.availableBalance ?? 0}
+          totalWithdrawn={summary?.totalWithdrawn ?? 0}
+          savedMethods={{
+            accountNumber: summary?.accountNumber,
+            ifscCode: summary?.ifscCode,
+            bankName: summary?.bankName,
+            upiId: summary?.upiId,
+          }}
+          onWithdrawSuccess={() => {
+            // useRequestWithdrawal invalidates the summary + history queries
+          }}
+        />
+      )}
     </div>
   );
 }
