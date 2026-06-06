@@ -1,0 +1,99 @@
+name: Deploy Website to Production
+
+# Build-on-server flow: every push to main SSHes to the production host,
+# pulls the new commit, rebuilds nakshatra-website:latest in place, and
+# restarts the container. No registry round-trip — the host already has
+# git + docker, and the website image is single-tenant.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SSH_HOST     — production host (e.g. 13.204.193.212)
+#   SSH_USERNAME — SSH login (ubuntu)
+#   SSH_KEY      — private key matching the host's authorized_keys (the
+#                  same nakshatra.pem the backend deploy uses)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+
+  deploy:
+    needs: type-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on production host
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          # Generous timeout — Next.js builds can take 4-6 minutes on the
+          # t3.medium prod host. Don't let appleboy/ssh-action time out
+          # mid-build (default is 10 minutes; we want headroom).
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+
+            REPO_DIR=/home/ubuntu/apps/NakshatraTalks-Website
+            COMPOSE_DIR=/home/ubuntu/nakshatra
+
+            echo "→ Pulling latest main into $REPO_DIR"
+            cd "$REPO_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "→ Building nakshatra-website:latest"
+            # Save current image id for rollback in case the new container
+            # fails to start. Tagged as :previous so we can flip back fast.
+            PREVIOUS=$(docker inspect --format='{{.Id}}' nakshatra-website:latest 2>/dev/null || echo "none")
+            if [ "$PREVIOUS" != "none" ]; then
+              docker tag nakshatra-website:latest nakshatra-website:previous
+            fi
+
+            docker build -t nakshatra-website:latest .
+
+            echo "→ Restarting nakshatra-website container"
+            cd "$COMPOSE_DIR"
+            docker compose up -d nakshatra-website
+
+            echo "→ Waiting for container to settle"
+            # No HEALTHCHECK in the Dockerfile yet, so probe Next.js's bound
+            # port via the nginx upstream from the host. The website container
+            # is on the nakshatra-net network and exposes 3000 internally.
+            for i in $(seq 1 24); do
+              STATUS=$(docker inspect --format='{{.State.Status}}' nakshatra-website 2>/dev/null || echo "missing")
+              if [ "$STATUS" = "running" ]; then
+                # Hit the Next.js process directly inside the container — if
+                # the JS app booted, this returns 200/3xx. If it crashed,
+                # docker exec fails fast and we keep retrying until timeout.
+                if docker exec nakshatra-website wget -q -O- --spider http://localhost:3000/ >/dev/null 2>&1; then
+                  echo "✓ Container healthy after ${i} attempts"
+                  echo "✓ Deploy succeeded"
+                  exit 0
+                fi
+              fi
+              echo "  attempt $i/24 — status=$STATUS, waiting…"
+              sleep 5
+            done
+
+            echo "✗ Health check failed — rolling back to previous image"
+            docker logs nakshatra-website --tail 30 || true
+            if [ "$PREVIOUS" != "none" ]; then
+              docker tag nakshatra-website:previous nakshatra-website:latest
+              docker compose up -d nakshatra-website
+              echo "✗ Rolled back to previous image"
+            fi
+            exit 1
