@@ -31,6 +31,8 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { WithdrawModal } from '@/components/features/astrologer/earnings/WithdrawModal';
 import { useSalaryMode } from '@/contexts/SalaryModeContext';
+import { useAuthStore } from '@/stores/auth-store';
+import { AlertCircle } from 'lucide-react';
 
 type SessionFilter = 'all' | 'chat' | 'call';
 
@@ -70,6 +72,7 @@ const EXPANDED_LIMIT = 100; // Backend max is 100
 
 export default function AstrologerEarningsPage() {
   const salaryMode = useSalaryMode();
+  const astrologer = useAuthStore((s) => s.astrologer);
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
   const [viewAll, setViewAll] = useState(false);
   const [page, setPage] = useState(1);
@@ -88,6 +91,31 @@ export default function AstrologerEarningsPage() {
   const pagination = historyResult?.pagination;
   const totalItems = pagination?.totalItems ?? 0;
   const hasMore = !viewAll && (pagination?.hasNext || totalItems > INITIAL_LIMIT);
+
+  // Saved payout methods come from /auth/me (auth-store), not from the
+  // earnings summary (which doesn't carry them server-side). Mirrors the
+  // payouts page so the Withdraw button on this page enables/disables for
+  // the same reason as the one on /payouts.
+  const savedMethods = {
+    accountNumber: astrologer?.accountNumber ?? summary?.accountNumber,
+    ifscCode: astrologer?.ifscCode ?? summary?.ifscCode,
+    bankName: astrologer?.bankName ?? summary?.bankName,
+    upiId: astrologer?.upiId ?? summary?.upiId,
+  };
+  const hasAnyMethod = !!(savedMethods.accountNumber && savedMethods.ifscCode) || !!savedMethods.upiId;
+  const availableBalance = summary?.availableBalance ?? 0;
+  const isBalanceTooLow = !summaryLoading && availableBalance < 100;
+  const isMissingMethod = !summaryLoading && !hasAnyMethod;
+  // Render a single, specific reason directly on the Earnings header so the
+  // astrologer doesn't have to navigate to /payouts to find out why the
+  // Withdraw button is greyed out (the original UX bug).
+  const withdrawDisabledReason: string | null = summaryLoading
+    ? null
+    : isMissingMethod
+      ? 'Add bank details or a UPI ID in Settings to start withdrawing.'
+      : isBalanceTooLow
+        ? `You need at least ₹100 available to withdraw (currently ${formatCurrency(availableBalance)}).`
+        : null;
 
   const handleViewAll = () => {
     setViewAll(true);
@@ -118,27 +146,44 @@ export default function AstrologerEarningsPage() {
             <p className="text-sm text-text-secondary">Track your income and session history</p>
           </div>
           {!salaryMode.enabled && (
-            <div className="flex gap-2">
-              <Link href="/astrologer/payouts">
-                <Button variant="ghost" size="md">
-                  Payout history
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex gap-2">
+                <Link href="/astrologer/payouts">
+                  <Button variant="outline" size="md">
+                    Payout history
+                  </Button>
+                </Link>
+                <Button
+                  onClick={() => setShowWithdraw(true)}
+                  disabled={summaryLoading || withdrawDisabledReason !== null}
+                  size="md"
+                >
+                  <ArrowUpFromLine className="mr-2 h-4 w-4" />
+                  Withdraw
                 </Button>
-              </Link>
-              <Button
-                onClick={() => setShowWithdraw(true)}
-                disabled={
-                  summaryLoading ||
-                  (summary?.availableBalance ?? 0) < 100 ||
-                  !(
-                    (summary?.accountNumber && summary?.ifscCode) ||
-                    summary?.upiId
-                  )
-                }
-                size="md"
-              >
-                <ArrowUpFromLine className="mr-2 h-4 w-4" />
-                Withdraw
-              </Button>
+              </div>
+              {/* Inline reason — saves the astrologer from clicking through to
+                  /payouts just to find out WHY Withdraw is disabled. The mobile
+                  app shows this in the modal; on web the modal won't open at
+                  all when disabled, so the explanation has to live here. */}
+              {withdrawDisabledReason && (
+                <div className="flex max-w-xs items-start gap-1.5 text-right text-xs text-amber-700">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="leading-snug">
+                    {isMissingMethod ? (
+                      <>
+                        Add bank details or a UPI ID in{' '}
+                        <Link href="/astrologer/settings" className="font-medium underline">
+                          Settings
+                        </Link>{' '}
+                        to start withdrawing.
+                      </>
+                    ) : (
+                      withdrawDisabledReason
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -407,14 +452,9 @@ export default function AstrologerEarningsPage() {
         <WithdrawModal
           isOpen={showWithdraw}
           onClose={() => setShowWithdraw(false)}
-          availableBalance={summary?.availableBalance ?? 0}
+          availableBalance={availableBalance}
           totalWithdrawn={summary?.totalWithdrawn ?? 0}
-          savedMethods={{
-            accountNumber: summary?.accountNumber,
-            ifscCode: summary?.ifscCode,
-            bankName: summary?.bankName,
-            upiId: summary?.upiId,
-          }}
+          savedMethods={savedMethods}
           onWithdrawSuccess={() => {
             // useRequestWithdrawal invalidates the summary + history queries
           }}

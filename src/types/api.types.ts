@@ -133,6 +133,14 @@ export interface Astrologer {
   reviewCount?: number;  // Alias for totalReviews
   totalConsultations?: number;  // Alias for totalCalls
   isVerified?: boolean;  // Verification status
+  // Payout details — populated by /auth/me from the astrologers row.
+  // WithdrawModal reads from here, not from the earnings summary (which
+  // doesn't carry them). Camel-cased to match the backend response shape.
+  bankName?: string | null;
+  accountHolderName?: string | null;
+  accountNumber?: string | null;
+  ifscCode?: string | null;
+  upiId?: string | null;
 }
 
 // Astrologer Filters for search/browse
@@ -479,6 +487,14 @@ export interface AstrologerData {
   status: 'pending' | 'approved' | 'rejected' | 'inactive';
   createdAt: string;
   updatedAt: string;
+  // Payout details — included in /auth/me when the astrologer has saved them.
+  // The earnings summary endpoint does NOT carry these fields, so anything
+  // payout-related on web reads from here.
+  bankName?: string | null;
+  accountHolderName?: string | null;
+  accountNumber?: string | null;
+  ifscCode?: string | null;
+  upiId?: string | null;
 }
 
 // Astrologer Stats Response (from GET /api/v1/astrologers/{id}/stats)
