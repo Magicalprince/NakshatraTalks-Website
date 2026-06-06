@@ -229,12 +229,15 @@ export const API_ENDPOINTS = {
     DELETE: (kundliId: string) => `/api/v1/kundli/${kundliId}`,
   },
 
-  // Astrologer Earnings
+  // Astrologer Earnings + Withdrawals
   EARNINGS: {
     SUMMARY: '/api/v1/astrologer/earnings/summary',
     HISTORY: '/api/v1/astrologer/earnings/history',
     DETAILS: (id: string) => `/api/v1/astrologer/earnings/details/${id}`,
     WITHDRAW_REQUEST: '/api/v1/astrologer/earnings/withdraw',
+    WITHDRAWALS_LIST: '/api/v1/astrologer/earnings/withdrawals',
+    WITHDRAWAL_DETAIL: (id: string) => `/api/v1/astrologer/earnings/withdrawals/${id}`,
+    PAYOUT_DETAILS: '/api/v1/astrologer/profile/payout-details',
   },
 
   // Kundli Matching
