@@ -15,6 +15,7 @@ import { SectionHeader, EmptyState } from '@/components/shared';
 import { WithdrawModal } from '@/components/features/astrologer/earnings/WithdrawModal';
 import { useEarningsSummary, useWithdrawalHistory } from '@/hooks/useAstrologerDashboard';
 import { useSalaryMode } from '@/contexts/SalaryModeContext';
+import { useAuthStore } from '@/stores/auth-store';
 import { formatCurrency } from '@/utils/format-currency';
 import type { WithdrawalStatus } from '@/lib/services/earnings.service';
 
@@ -49,6 +50,7 @@ function formatDate(iso: string): string {
 export default function AstrologerPayoutsPage() {
   const router = useRouter();
   const salaryMode = useSalaryMode();
+  const astrologer = useAuthStore((s) => s.astrologer);
   const [page, setPage] = useState(1);
   const [showWithdraw, setShowWithdraw] = useState(false);
 
@@ -91,11 +93,17 @@ export default function AstrologerPayoutsPage() {
   const availableBalance = summary?.availableBalance ?? 0;
   const totalWithdrawn = summary?.totalWithdrawn ?? 0;
 
+  // Saved payout methods come from the auth-store astrologer (hydrated by
+  // /auth/me). The earnings summary endpoint doesn't carry these fields,
+  // so the previous read from `summary` always saw undefined and blocked
+  // withdrawals even when the astrologer had saved details on mobile.
+  // Summary is kept as a defensive fallback in case any future deploy
+  // does include them.
   const savedMethods = {
-    accountNumber: summary?.accountNumber,
-    ifscCode: summary?.ifscCode,
-    bankName: summary?.bankName,
-    upiId: summary?.upiId,
+    accountNumber: astrologer?.accountNumber ?? summary?.accountNumber,
+    ifscCode: astrologer?.ifscCode ?? summary?.ifscCode,
+    bankName: astrologer?.bankName ?? summary?.bankName,
+    upiId: astrologer?.upiId ?? summary?.upiId,
   };
   const hasAnyMethod = !!(savedMethods.accountNumber && savedMethods.ifscCode) || !!savedMethods.upiId;
 

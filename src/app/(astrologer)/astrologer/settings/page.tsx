@@ -30,6 +30,8 @@ const UPI_REGEX = /^[a-zA-Z0-9._-]+@[a-zA-Z][a-zA-Z0-9]+$/;
 
 export default function AstrologerSettingsPage() {
   const { logout } = useAuthStore();
+  const astrologer = useAuthStore((s) => s.astrologer);
+  const updateAstrologer = useAuthStore((s) => s.updateAstrologer);
   const { addToast } = useUIStore();
   const salaryMode = useSalaryMode();
   const { data: summary } = useEarningsSummary();
@@ -49,21 +51,23 @@ export default function AstrologerSettingsPage() {
     upiId: '',
   });
 
-  // Prefill from the earnings summary whenever the modal opens. The summary
-  // is also the source of truth the WithdrawModal reads from, so the two
-  // surfaces never disagree on what's saved.
+  // Prefill from the auth-store astrologer (hydrated by /auth/me) when the
+  // modal opens, with a secondary read from the earnings summary in case any
+  // future deploy decides to return them there. The earnings summary endpoint
+  // does NOT carry these fields today, so reading from auth-store is what
+  // makes the form show what the astrologer already saved on mobile.
   useEffect(() => {
-    if (showBankModal && summary) {
+    if (showBankModal) {
       setBankDetails({
-        accountName: summary.accountHolderName ?? '',
-        accountNumber: summary.accountNumber ?? '',
-        ifscCode: summary.ifscCode ?? '',
-        bankName: summary.bankName ?? '',
-        upiId: summary.upiId ?? '',
+        accountName: astrologer?.accountHolderName ?? summary?.accountHolderName ?? '',
+        accountNumber: astrologer?.accountNumber ?? summary?.accountNumber ?? '',
+        ifscCode: astrologer?.ifscCode ?? summary?.ifscCode ?? '',
+        bankName: astrologer?.bankName ?? summary?.bankName ?? '',
+        upiId: astrologer?.upiId ?? summary?.upiId ?? '',
       });
       setBankErrors({});
     }
-  }, [showBankModal, summary]);
+  }, [showBankModal, astrologer, summary]);
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -111,12 +115,23 @@ export default function AstrologerSettingsPage() {
     if (Object.keys(errors).length > 0) return;
 
     try {
-      await updatePayoutDetails.mutateAsync({
+      const payload = {
         bankName: bankDetails.bankName.trim() || undefined,
         accountHolderName: bankDetails.accountName.trim() || undefined,
         accountNumber: bankDetails.accountNumber.trim() || undefined,
         ifscCode: bankDetails.ifscCode.trim().toUpperCase() || undefined,
         upiId: bankDetails.upiId.trim() || undefined,
+      };
+      await updatePayoutDetails.mutateAsync(payload);
+      // Optimistically mirror the saved fields onto the auth-store astrologer
+      // so the Earnings/Payouts screens unblock without waiting for a fresh
+      // /auth/me. The backend has the authoritative state; this is a UI cache.
+      updateAstrologer({
+        bankName: payload.bankName ?? null,
+        accountHolderName: payload.accountHolderName ?? null,
+        accountNumber: payload.accountNumber ?? null,
+        ifscCode: payload.ifscCode ?? null,
+        upiId: payload.upiId ?? null,
       });
       addToast({
         type: 'success',
