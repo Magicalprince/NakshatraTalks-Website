@@ -92,6 +92,23 @@ export interface UpdateProfileData {
   maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed';
 }
 
+/**
+ * Canonical session-count breakdown surfaced by every astrologer-returning
+ * backend endpoint after the cross-platform data unification (Phase A).
+ * Mirrors server/src/utils/astrologer-stats.util.ts:AstrologerSessionStats.
+ *
+ * Display sessionStats.completedSessions as "Total Consultations" — the
+ * unified label across mobile / admin / website.
+ */
+export interface SessionStats {
+  totalSessions: number;
+  completedSessions: number;
+  chatSessions: number;
+  callSessions: number;
+  cancelledSessions: number;
+  failedToConnectSessions: number;
+}
+
 // Astrologer Model
 export interface Astrologer {
   id: string;
@@ -107,7 +124,13 @@ export interface Astrologer {
   education?: string[];
   pricePerMinute: number;
   rating: number;
+  /**
+   * Legacy field — backend now populates from
+   * sessionStats.completedSessions so the two never disagree. Prefer
+   * sessionStats in new UI code.
+   */
   totalCalls: number;
+  sessionStats?: SessionStats;
   totalReviews?: number;
   isAvailable: boolean;
   isLive: boolean;
@@ -478,6 +501,7 @@ export interface AstrologerData {
   callPricePerMinute: number;
   rating: number;
   totalCalls: number;
+  sessionStats?: SessionStats;
   totalReviews: number;
   isAvailable: boolean;
   chatAvailable: boolean;
