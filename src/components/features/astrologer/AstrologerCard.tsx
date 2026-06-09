@@ -21,7 +21,10 @@ export function AstrologerCard({ astrologer, variant = 'chat', onAction, isLoadi
   const priceType: 'chat' | 'call' = variant === 'call' ? 'call' : 'chat';
   const languages = astrologer.languages ?? [];
   const rating = astrologer.rating ?? 0;
-  const totalCalls = astrologer.totalCalls ?? 0;
+  // Prefer the canonical derived count from backend's sessionStats; fall
+  // back to legacy totalCalls (now also derived backend-side, so both
+  // produce the same number — just future-proofing the call sites).
+  const consultations = astrologer.sessionStats?.completedSessions ?? astrologer.totalCalls ?? 0;
   const experience = astrologer.experience ?? 0;
   const actionLabel = variant === 'call' ? 'Call' : 'Chat';
   const ActionIcon = variant === 'call' ? Phone : MessageCircle;
@@ -101,7 +104,7 @@ export function AstrologerCard({ astrologer, variant = 'chat', onAction, isLoadi
 
           {/* Stats row */}
           <div className="flex items-center gap-3 mt-2 text-xs text-text-muted font-lexend">
-            <span>{totalCalls.toLocaleString()} orders</span>
+            <span>{consultations.toLocaleString()} consultations</span>
           </div>
 
           {/* Price & CTA — pushed to bottom */}

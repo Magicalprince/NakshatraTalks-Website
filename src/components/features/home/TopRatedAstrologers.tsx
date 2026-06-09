@@ -158,7 +158,7 @@ export function TopRatedAstrologers() {
                         )}
                       </div>
                       <span className="text-xs text-text-muted">
-                        {astrologer.totalCalls || 0} consultations
+                        {astrologer.sessionStats?.completedSessions ?? astrologer.totalCalls ?? 0} consultations
                       </span>
                     </div>
 

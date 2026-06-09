@@ -91,7 +91,13 @@ export default function AstrologerDetailPage() {
   const profileImage = astrologer?.profileImage ?? astrologer?.image;
   const specializations = astrologer?.specializations ?? astrologer?.specialization ?? [];
   const reviewCount = astrologer?.reviewCount ?? astrologer?.totalReviews ?? 0;
-  const totalConsultations = astrologer?.totalConsultations ?? astrologer?.totalCalls ?? 0;
+  // Prefer canonical derived sessionStats.completedSessions; fall back to
+  // older alias chains for resilience against partial deploys.
+  const totalConsultations =
+    astrologer?.sessionStats?.completedSessions
+    ?? astrologer?.totalConsultations
+    ?? astrologer?.totalCalls
+    ?? 0;
   // Queue info & join hooks (enabled when astrologer is not online)
   const { queueInfo: callQueueInfo } = useQueueInfo(id, 'call', { enabled: !isOnline });
   const { queueInfo: chatQueueInfo } = useQueueInfo(id, 'chat', { enabled: !isOnline });
