@@ -21,9 +21,11 @@ import {
 } from '@/hooks/useAstrologerDashboard';
 import { astrologerDashboardService } from '@/lib/services/astrologer-dashboard.service';
 import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { supabaseRealtime, ChatMessagePayload } from '@/lib/services/supabase-realtime.service';
 import { ChatMessage } from '@/types/api.types';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ScreenCaptureGuard } from '@/components/privacy/ScreenCaptureGuard';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
@@ -328,8 +330,17 @@ export default function AstrologerChatSessionPage() {
     );
   }
 
+  // Watermark with astrologer's own phone — if a leak occurs, the
+  // identifier is in the screenshot. Auth store holds the logged-in
+  // identity for both customer and astrologer userTypes.
+  const watermarkLabel = (() => {
+    const phone = useAuthStore.getState().user?.phone;
+    return phone ? `NakshatraTalks · ${phone}` : 'NakshatraTalks · Private';
+  })();
+
   return (
     <div className="h-[calc(100vh-80px)]">
+      <ScreenCaptureGuard watermarkLabel={watermarkLabel} />
       <ChatInterface
         sessionId={sessionId}
         userName={sessionUser?.name || 'User'}

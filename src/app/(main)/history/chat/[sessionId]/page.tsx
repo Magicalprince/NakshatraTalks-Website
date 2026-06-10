@@ -8,6 +8,7 @@ import { chatService } from '@/lib/services/chat.service';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 import { useAuthStore } from '@/stores/auth-store';
 import { ChatMessage, ChatSession } from '@/types/api.types';
+import { ScreenCaptureGuard } from '@/components/privacy/ScreenCaptureGuard';
 
 interface SessionData {
   session: ChatSession;
@@ -178,9 +179,16 @@ export default function ChatHistoryViewPage() {
 
   const session = sessionData?.session;
   const astrologer = sessionData?.astrologer;
+  const watermarkLabel = user?.phone
+    ? `NakshatraTalks · ${user.phone}`
+    : 'NakshatraTalks · Private';
 
   return (
     <div className="min-h-screen bg-background-offWhite flex flex-col">
+      {/* Screenshot protection — best-effort on web; see jsdoc for honest
+          platform limits. Real prevention only works on mobile (Android
+          FLAG_SECURE), so this is friction + watermark, not security. */}
+      <ScreenCaptureGuard watermarkLabel={watermarkLabel} />
       {/* --- Header --- */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
