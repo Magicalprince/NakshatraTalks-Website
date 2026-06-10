@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import { walletService } from '@/lib/services/wallet.service';
+import { ScreenCaptureGuard } from '@/components/privacy/ScreenCaptureGuard';
 
 export default function ChatSessionPage() {
   const params = useParams();
@@ -27,6 +28,11 @@ export default function ChatSessionPage() {
   const { addToast } = useUIStore();
   const user = useAuthStore((s) => s.user);
   const updateWalletBalance = useAuthStore((s) => s.updateWalletBalance);
+  const watermarkLabel = useMemo(() => {
+    const phone = user?.phone;
+    if (!phone) return 'NakshatraTalks · Private';
+    return `NakshatraTalks · ${phone}`;
+  }, [user?.phone]);
   const [showEndModal, setShowEndModal] = useState(false);
   // Local ended state — set immediately when endSession API succeeds,
   // so UI updates instantly without waiting for refetch (which may fall back to status: 'active')
@@ -375,6 +381,7 @@ export default function ChatSessionPage() {
 
   return (
     <div className="h-full">
+      <ScreenCaptureGuard watermarkLabel={watermarkLabel} />
       <ChatInterface
         sessionId={sessionId}
         astrologerId={astrologer.id || session?.astrologerId || ''}

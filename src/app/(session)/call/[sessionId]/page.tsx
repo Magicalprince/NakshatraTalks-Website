@@ -14,6 +14,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useQueueStore } from '@/stores/queue-store';
 import { supabaseRealtime } from '@/lib/services/supabase-realtime.service';
+import { ScreenCaptureGuard } from '@/components/privacy/ScreenCaptureGuard';
 import { socketService } from '@/lib/services/socket.service';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -548,30 +549,38 @@ export default function CallSessionPage() {
     );
   }
 
+  const watermarkLabel = (() => {
+    const phone = useAuthStore.getState().user?.phone;
+    return phone ? `NakshatraTalks · ${phone}` : 'NakshatraTalks · Private';
+  })();
+
   return (
-    <CallInterface
-      sessionId={sessionId}
-      astrologerId={astrologer?.id || session?.astrologerId || ''}
-      astrologerName={astrologer?.name || session?.astrologerName || 'Astrologer'}
-      astrologerImage={astrologer?.image}
-      callType={callType}
-      status={callStatus}
-      duration={formattedDuration}
-      cost={formattedCost}
-      localStream={localStream}
-      remoteStream={remoteStream}
-      isLocalVideoEnabled={isVideoEnabled}
-      isRemoteVideoEnabled={true}
-      isMuted={isMuted}
-      isSpeakerOn={isSpeakerOn}
-      sessionSummary={sessionSummary || undefined}
-      onToggleMute={handleToggleMute}
-      onToggleVideo={handleToggleVideo}
-      onToggleSpeaker={handleToggleSpeaker}
-      onEndCall={handleEndCall}
-      onFlipCamera={handleFlipCamera}
-      onStartNewCall={handleStartNewCall}
-      isLoading={isSessionLoading}
-    />
+    <>
+      <ScreenCaptureGuard watermarkLabel={watermarkLabel} />
+      <CallInterface
+        sessionId={sessionId}
+        astrologerId={astrologer?.id || session?.astrologerId || ''}
+        astrologerName={astrologer?.name || session?.astrologerName || 'Astrologer'}
+        astrologerImage={astrologer?.image}
+        callType={callType}
+        status={callStatus}
+        duration={formattedDuration}
+        cost={formattedCost}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        isLocalVideoEnabled={isVideoEnabled}
+        isRemoteVideoEnabled={true}
+        isMuted={isMuted}
+        isSpeakerOn={isSpeakerOn}
+        sessionSummary={sessionSummary || undefined}
+        onToggleMute={handleToggleMute}
+        onToggleVideo={handleToggleVideo}
+        onToggleSpeaker={handleToggleSpeaker}
+        onEndCall={handleEndCall}
+        onFlipCamera={handleFlipCamera}
+        onStartNewCall={handleStartNewCall}
+        isLoading={isSessionLoading}
+      />
+    </>
   );
 }
