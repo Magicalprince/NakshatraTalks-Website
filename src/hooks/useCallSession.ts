@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { callService } from '@/lib/services/call.service';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChatSession } from '@/types/api.types';
 
 // Query keys
 export const CALL_QUERY_KEYS = {
@@ -140,8 +141,20 @@ export function useCallHistory() {
   return useInfiniteQuery({
     queryKey: CALL_QUERY_KEYS.history,
     queryFn: async ({ pageParam = 1 }) => {
+      // Same response-shape normalization as useChatHistory — backend
+      // returns { data: ChatSession[], pagination } but the page component
+      // expects { sessions, page, totalPages } per page. Pre-existing bug
+      // — both screens showed empty even for active users.
       const response = await callService.getCallHistory(pageParam, 20);
-      return response.data;
+      const rawData = response.data as unknown;
+      const sessions = Array.isArray(rawData) ? (rawData as ChatSession[]) : [];
+      const pagination = (response as { pagination?: { currentPage?: number; totalPages?: number } })
+        .pagination;
+      return {
+        sessions,
+        page: pagination?.currentPage ?? (pageParam as number),
+        totalPages: pagination?.totalPages ?? 1,
+      };
     },
     getNextPageParam: (lastPage) => {
       if (!lastPage) return undefined;
