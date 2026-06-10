@@ -68,7 +68,7 @@ const FAQ_DATA = [
     category: 'consultations' as FAQCategory,
     question: 'What if my call or chat gets disconnected?',
     answer:
-      'If your session gets disconnected due to technical issues, the unused balance for that session will be automatically refunded to your wallet within 24 hours. You can check your transaction history in the wallet section.',
+      'If your session gets disconnected unexpectedly, the unused balance for that session is reconciled to your wallet automatically. The adjustment usually appears in your wallet transaction history within a few minutes of the session ending. For other concerns about your session, please use the Report option below to contact our support team.',
   },
   {
     id: '4',
@@ -76,13 +76,6 @@ const FAQ_DATA = [
     question: 'How accurate are the horoscope predictions?',
     answer:
       'Our daily horoscope predictions are prepared by experienced astrologers based on Vedic astrology principles. While astrology provides guidance based on planetary positions, remember that your actions and decisions also shape your destiny.',
-  },
-  {
-    id: '5',
-    category: 'payments' as FAQCategory,
-    question: 'Can I get a refund for my consultation?',
-    answer:
-      'Refunds are processed automatically for technical disconnections. For other concerns about your consultation experience, please use the Report option below to contact our support team with details of your issue.',
   },
   {
     id: '6',
@@ -190,7 +183,6 @@ function ReportForm() {
     'Technical Issue',
     'Payment Problem',
     'Consultation Concern',
-    'Refund Request',
     'Account Issue',
     'Other',
   ];
