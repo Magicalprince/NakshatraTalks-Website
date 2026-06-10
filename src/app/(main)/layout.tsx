@@ -29,7 +29,7 @@ export default function MainLayout({
   const queueUpdatesUnsubRef = useRef<(() => void) | null>(null);
 
   // Redirect astrologers away from user-side pages to their dashboard
-  const publicPaths = ['/horoscope', '/kundli', '/privacy', '/terms', '/refund', '/support'];
+  const publicPaths = ['/horoscope', '/kundli', '/privacy', '/terms', '/support'];
   const isPublicPage = publicPaths.some((p) => pathname.startsWith(p));
   const isAstrologerOnUserPage = isHydrated && isAuthenticated && userType === 'astrologer' && !isPublicPage;
 
