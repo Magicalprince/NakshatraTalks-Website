@@ -11,7 +11,7 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { chatService } from '@/lib/services/chat.service';
-import { ChatMessage } from '@/types/api.types';
+import { ChatMessage, ChatSession } from '@/types/api.types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabaseRealtime, ChatMessagePayload } from '@/lib/services/supabase-realtime.service';
 import { socketService } from '@/lib/services/socket.service';
@@ -363,8 +363,27 @@ export function useChatHistory() {
   return useInfiniteQuery({
     queryKey: CHAT_QUERY_KEYS.history,
     queryFn: async ({ pageParam = 1 }) => {
+      // Backend `getChatHistory` returns { success, data: ChatSession[],
+      // pagination: {currentPage, totalPages, ...} }. chatService.getChatHistory
+      // normalizes the wrapper so we get { data, pagination } here. The page
+      // component expects shape { sessions, page, totalPages } per page —
+      // hence the remap. Without it `page?.sessions` is always undefined
+      // and the screen shows "No Chat History" even for users with 200+
+      // sessions. (Pre-existing bug — surfaced 2026-06-10 for user
+      // +919345364408 with 212 completed chats.)
       const response = await chatService.getChatHistory(pageParam, 20);
-      return response.data;
+      // The service typed `data` as { sessions, totalPages, page } but
+      // the backend actually returns an array as `data`. Force the cast
+      // until the service signature is updated to match reality.
+      const rawData = response.data as unknown;
+      const sessions = Array.isArray(rawData) ? (rawData as ChatSession[]) : [];
+      const pagination = (response as { pagination?: { currentPage?: number; totalPages?: number } })
+        .pagination;
+      return {
+        sessions,
+        page: pagination?.currentPage ?? (pageParam as number),
+        totalPages: pagination?.totalPages ?? 1,
+      };
     },
     getNextPageParam: (lastPage) => {
       if (!lastPage) return undefined;
