@@ -358,7 +358,20 @@ export interface ChatSession {
   sessionType: 'chat' | 'call' | 'video';
   startTime: string;
   endTime?: string | null;
+  /**
+   * Session length in MINUTES (backend converts seconds → minutes for API
+   * convenience — see server/src/controllers/chat.controller.ts
+   * getChatHistory: `duration: s.duration ? s.duration / 60 : null`).
+   * For sub-minute precision use durationSeconds.
+   */
   duration?: number | null;
+  /**
+   * Raw session length in SECONDS — what's stored in chat_sessions.duration.
+   * Backend exposes this alongside `duration` for clients that need
+   * second-level precision (e.g. "0m 59s" instead of "0.98m"). Always
+   * prefer this for display formatting.
+   */
+  durationSeconds?: number | null;
   pricePerMinute: number;
   totalCost?: number | null;
   status: 'active' | 'completed' | 'cancelled';

@@ -49,10 +49,16 @@ const ACTIVE_TAB = 'call';
 
 type CallQuality = 'excellent' | 'good' | 'fair';
 
-function getCallQuality(duration: number | null | undefined): CallQuality {
-  // Visual-only quality indicator based on duration as a heuristic
-  if (!duration || duration < 120) return 'fair';
-  if (duration < 600) return 'good';
+/**
+ * Visual-only quality indicator based on call length.
+ * Takes total seconds — thresholds: <2 min = fair, <10 min = good,
+ * otherwise excellent. Caller passes the canonical durationSeconds
+ * value (or NULL when not available, in which case we treat as 'fair'
+ * so the badge doesn't lie about long calls).
+ */
+function getCallQuality(durationSeconds: number | null | undefined): CallQuality {
+  if (!durationSeconds || durationSeconds < 120) return 'fair';
+  if (durationSeconds < 600) return 'good';
   return 'excellent';
 }
 
@@ -329,11 +335,25 @@ export default function CallHistoryPage() {
 // ─── Call History Card Component ─────────────────────────────────────────────
 
 function CallHistoryCard({ session, index }: { session: ChatSession; index: number }) {
-  const formatDuration = (seconds: number | null | undefined) => {
-    if (!seconds) return '--';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+  /**
+   * Same duration normalization as the chat history card. Backend's
+   * `duration` is in MINUTES, `durationSeconds` is the raw value.
+   * Previous version used `Math.floor(duration / 60)` which produced
+   * "0m 4s" for a 4-minute call.
+   */
+  const totalSeconds =
+    typeof session.durationSeconds === 'number'
+      ? Math.round(session.durationSeconds)
+      : typeof session.duration === 'number'
+        ? Math.round(session.duration * 60)
+        : null;
+
+  const formatDuration = () => {
+    if (!totalSeconds || totalSeconds <= 0) return '--';
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins === 0) return `${secs}s`;
+    return secs === 0 ? `${mins}m` : `${mins}m ${secs}s`;
   };
 
   const formatDate = (dateStr: string) => {
@@ -354,7 +374,7 @@ function CallHistoryCard({ session, index }: { session: ChatSession; index: numb
   };
 
   const isVideoCall = session.sessionType === 'video';
-  const callQuality = getCallQuality(session.duration);
+  const callQuality = getCallQuality(totalSeconds);
 
   return (
     <motion.div
@@ -413,7 +433,7 @@ function CallHistoryCard({ session, index }: { session: ChatSession; index: numb
           {/* Duration Badge */}
           <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
             <Clock className="w-3 h-3" aria-hidden="true" />
-            {formatDuration(session.duration)}
+            {formatDuration()}
           </span>
 
           {/* Cost Badge */}

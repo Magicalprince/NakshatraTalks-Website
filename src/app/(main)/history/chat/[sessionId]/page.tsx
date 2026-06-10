@@ -86,11 +86,23 @@ export default function ChatHistoryViewPage() {
     });
   };
 
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  /**
+   * Normalize backend's `duration` (MINUTES) into a "Xm Ys" string.
+   * Prefers durationSeconds if present for sub-minute precision.
+   * Older code assumed seconds — see history/chat/page.tsx for the same fix.
+   */
+  const formatDuration = (s: ChatSession): string => {
+    const totalSeconds =
+      typeof s.durationSeconds === 'number'
+        ? Math.round(s.durationSeconds)
+        : typeof s.duration === 'number'
+          ? Math.round(s.duration * 60)
+          : null;
+    if (!totalSeconds || totalSeconds <= 0) return '--';
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
     if (mins === 0) return `${secs}s`;
-    return `${mins}m ${secs}s`;
+    return secs === 0 ? `${mins}m` : `${mins}m ${secs}s`;
   };
 
   const isCurrentUser = (msg: ChatMessage): boolean => {
@@ -281,7 +293,7 @@ export default function ChatHistoryViewPage() {
             {session.duration != null && (
               <div className="flex items-center gap-1.5">
                 <Clock className="w-4 h-4" />
-                <span>Duration: {formatDuration(session.duration)}</span>
+                <span>Duration: {formatDuration(session)}</span>
               </div>
             )}
             {session.totalCost != null && (
