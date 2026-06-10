@@ -275,11 +275,29 @@ export default function ChatHistoryPage() {
 // ─── History Card Component ──────────────────────────────────────────────────
 
 function HistoryCard({ session, index }: { session: ChatSession; index: number }) {
-  const formatDuration = (seconds: number | null | undefined) => {
-    if (!seconds) return '--';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+  /**
+   * Format the session length. Backend returns:
+   *   - `duration` — MINUTES (with decimal — e.g. 1.0166... for a 61s chat)
+   *   - `durationSeconds` — raw SECONDS
+   *
+   * The card previously did `Math.floor(duration / 60)` treating `duration`
+   * as seconds, producing nonsense ("0m 1s" for a 1-minute chat). Prefer
+   * `durationSeconds` for "Xm Ys" formatting; fall back to converting
+   * `duration` (minutes) back to seconds for older API responses that
+   * might not include the raw field.
+   */
+  const formatDuration = (s: ChatSession) => {
+    const totalSeconds =
+      typeof s.durationSeconds === 'number'
+        ? Math.round(s.durationSeconds)
+        : typeof s.duration === 'number'
+          ? Math.round(s.duration * 60)
+          : null;
+    if (!totalSeconds || totalSeconds <= 0) return '--';
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins === 0) return `${secs}s`;
+    return secs === 0 ? `${mins}m` : `${mins}m ${secs}s`;
   };
 
   const formatDate = (dateStr: string) => {
@@ -305,7 +323,13 @@ function HistoryCard({ session, index }: { session: ChatSession; index: number }
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 30 }}
     >
-      <Link href={`/chat/${session.id}`} className="block group" aria-label={`Chat with ${session.astrologerName || 'Astrologer'} on ${formatDate(session.startTime)}`}>
+      {/* History card links to the READ-ONLY transcript page, not the
+          live session UI. Previously this pointed at /chat/[id] which is
+          the active-session screen (with a running timer, message
+          composer, billing tick) — wrong for past sessions. The transcript
+          page lives at app/(main)/history/chat/[sessionId]/page.tsx and
+          fetches messages + session metadata in read-only form. */}
+      <Link href={`/history/chat/${session.id}`} className="block group" aria-label={`Chat with ${session.astrologerName || 'Astrologer'} on ${formatDate(session.startTime)}`}>
         <Card className="p-4 border border-gray-100 hover:border-primary/15 hover:shadow-web-md transition-all duration-250 cursor-pointer card-hover-lift">
           <div className="flex items-center gap-3">
             <div className="relative flex-shrink-0">
@@ -333,7 +357,7 @@ function HistoryCard({ session, index }: { session: ChatSession; index: number }
             {/* Duration Badge */}
             <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
               <Clock className="w-3 h-3" aria-hidden="true" />
-              {formatDuration(session.duration)}
+              {formatDuration(session)}
             </span>
 
             {/* Cost Badge */}
